@@ -378,14 +378,18 @@ public class SweetHome3D extends HomeApplication {
 
     // If Sweet Home 3D is launched from outside of Java Web Start
     if (ServiceManager.getServiceNames() == null) {
-      // Try to call single instance server
-      if (StandaloneSingleInstanceService.callSingleInstanceServer(args, getClass())) {
-        // If single instance server was successfully called, exit application
-        System.exit(0);
+      if (System.getProperty("com.eteks.sweethome3d.noSingleInstance") == null) {
+        // Try to call single instance server
+        if (StandaloneSingleInstanceService.callSingleInstanceServer(args, getClass())) {
+          // If single instance server was successfully called, exit application
+          System.exit(0);
+        } else {
+          // Display splash screen
+          SwingTools.showSplashScreenWindow(SweetHome3D.class.getResource("resources/splashScreen.jpg"));
+          // Create JNLP services required by Sweet Home 3D
+          ServiceManager.setServiceManagerStub(new StandaloneServiceManager(getClass()));
+        }
       } else {
-        // Display splash screen
-        SwingTools.showSplashScreenWindow(SweetHome3D.class.getResource("resources/splashScreen.jpg"));
-        // Create JNLP services required by Sweet Home 3D
         ServiceManager.setServiceManagerStub(new StandaloneServiceManager(getClass()));
       }
     }

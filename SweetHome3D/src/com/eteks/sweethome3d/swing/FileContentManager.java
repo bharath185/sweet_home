@@ -1129,7 +1129,7 @@ public class FileContentManager implements ContentManager {
 
       public int updateChildren(File [] childDirectories) {
         if (this.children == null) {
-          this.children = new Vector<File>(childDirectories.length); 
+          this.children = new Vector(childDirectories.length); 
         }          
         synchronized (this.children) {
           removeAllChildren();

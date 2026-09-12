@@ -1,0 +1,11 @@
+services:
+  sweethome3d-web:
+    build: .
+    image: sweethome3d-web:latest
+    container_name: sweethome3d-web
+    ports:
+      - "5800:5800" # Browser Web Access (noVNC)
+      - "5900:5900" # Direct VNC (Optional)
+    volumes:
+      - ./projects:/root/.eteks/sweethome3d:rw
+    restart: unless-stopped

@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sweet Home 3D - WebGL Design Studio</title>
+
+  <!-- SweetHome3DJS Core Engine & Dependencies -->
+  <script src="lib/big.min.js"></script>
+  <script src="lib/gl-matrix-min.js"></script>
+  <script src="lib/jszip.min.js"></script>
+  <script src="lib/jsXmlSaxParser.min.js"></script>
+
+  <script src="src/core.js"></script>
+  <script src="src/URLContent.js"></script>
+  <script src="src/scene3d.js"></script>
+  <script src="src/HTMLCanvas3D.js"></script>
+  <script src="src/ModelManager.js"></script>
+  <script src="src/ModelLoader.js"></script>
+  <script src="src/OBJLoader.js"></script>
+  <script src="src/Max3DSLoader.js"></script>
+  <script src="src/DAELoader.js"></script>
+  <script src="src/Triangulator.js"></script>
+
+  <script src="lib/generated/geom.js"></script>
+  <script src="lib/generated/batik-svgpathparser.js"></script>
+  <script src="lib/generated/SweetHome3D.js"></script>
+
+  <script src="src/HomeRecorder.js"></script>
+  <script src="src/HomeComponent3D.js"></script>
+  <script src="src/Object3DBranch.js"></script>
+  <script src="src/HomePieceOfFurniture3D.js"></script>
+  <script src="src/Room3D.js"></script>
+  <script src="src/Wall3D.js"></script>
+  <script src="src/Ground3D.js"></script>
+  <script src="src/Label3D.js"></script>
+  <script src="src/TextureManager.js"></script>
+  <script src="src/UserPreferences.js"></script>
+  <script src="src/LengthUnit.js"></script>
+  <script src="src/viewHome.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #121214;
+      --panel-bg: #18181b;
+      --panel-border: #27272a;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --text: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --sidebar-width: 280px;
+      --inspector-width: 260px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg-dark); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    header {
+      height: 52px;
+      background: var(--panel-bg);
+      border-bottom: 1px solid var(--panel-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 20;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; }
+    .badge { background: #10b981; color: white; font-size: 0.65rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; }
+
+    .top-tools { display: flex; align-items: center; gap: 8px; }
+    .tool-btn {
+      background: #27272a;
+      color: var(--text);
+      border: 1px solid #3f3f46;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+    .tool-btn:hover { background: #3f3f46; }
+    .tool-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+    .tool-btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+
+    #app-body { flex: 1; display: flex; position: relative; overflow: hidden; }
+
+    /* Left Sidebar - Furniture Catalog */
+    #catalog-sidebar {
+      width: var(--sidebar-width);
+      background: var(--panel-bg);
+      border-right: 1px solid var(--panel-border);
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+    }
+    .search-box { padding: 10px; border-bottom: 1px solid var(--panel-border); }
+    .search-input { width: 100%; background: #27272a; border: 1px solid #3f3f46; border-radius: 6px; padding: 6px 10px; color: white; font-size: 0.85rem; outline: none; }
+    .category-filter { display: flex; gap: 4px; padding: 8px 10px; overflow-x: auto; border-bottom: 1px solid var(--panel-border); }
+    .cat-tag { font-size: 0.75rem; background: #27272a; color: var(--text-muted); padding: 3px 8px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+    .cat-tag.active { background: var(--accent); color: white; }
+
+    .catalog-list { flex: 1; overflow-y: auto; padding: 10px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .catalog-item {
+      background: #202024;
+      border: 1px solid #2e2e34;
+      border-radius: 8px;
+      padding: 8px;
+      text-align: center;
+      cursor: grab;
+      transition: transform 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+    .catalog-item:hover { transform: translateY(-2px); border-color: var(--accent); }
+    .catalog-item img { width: 48px; height: 48px; object-fit: contain; margin-bottom: 6px; }
+    .catalog-item .item-name { font-size: 0.75rem; font-weight: 500; color: #e4e4e7; line-height: 1.2; }
+    .catalog-item .item-dims { font-size: 0.65rem; color: #71717a; margin-top: 2px; }
+
+    /* Workspaces Area (2D + 3D) */
+    #workspace-area { flex: 1; display: flex; position: relative; }
+
+    /* 2D Plan Viewport */
+    #plan-container {
+      flex: 1;
+      height: 100%;
+      position: relative;
+      background: #18181b;
+      border-right: 1px solid var(--panel-border);
+      overflow: hidden;
+    }
+    #plan-canvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
+    .viewport-overlay-label {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(24, 24, 27, 0.85);
+      border: 1px solid #3f3f46;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #38bdf8;
+      pointer-events: none;
+    }
+
+    /* 3D WebGL Viewport */
+    #three3d-container {
+      flex: 1;
+      height: 100%;
+      position: relative;
+      background: #0f172a;
+      overflow: hidden;
+    }
+    #three3d-canvas { width: 100%; height: 100%; display: block; outline: none; }
+
+    /* Right Inspector Panel */
+    #inspector-sidebar {
+      width: var(--inspector-width);
+      background: var(--panel-bg);
+      border-left: 1px solid var(--panel-border);
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      gap: 14px;
+      overflow-y: auto;
+    }
+    .inspector-title { font-size: 0.85rem; font-weight: 700; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #27272a; padding-bottom: 6px; }
+    .prop-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; }
+    .prop-row label { color: #a1a1aa; }
+    .prop-input { width: 80px; background: #27272a; border: 1px solid #3f3f46; border-radius: 4px; padding: 4px 6px; color: white; font-size: 0.8rem; text-align: right; }
+    .color-picker { width: 32px; height: 26px; border: none; border-radius: 4px; cursor: pointer; background: transparent; }
+
+    .split-btn-group { display: flex; gap: 4px; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+      <span>Sweet Home 3D</span>
+      <span class="badge">WebGL Studio</span>
+    </div>
+
+    <!-- Drawing & CAD Mode Tools -->
+    <div class="top-tools">
+      <button id="tool-select" class="tool-btn active" onclick="setMode('select')">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3l7 18 3-7 7-3L3 3z"/></svg>
+        Select
+      </button>
+      <button id="tool-wall" class="tool-btn" onclick="setMode('wall')">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        Draw Wall
+      </button>
+      <button id="tool-room" class="tool-btn" onclick="setMode('room')">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+        Draw Room
+      </button>
+      <button id="tool-delete" class="tool-btn" onclick="deleteSelected()">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        Delete
+      </button>
+      <button id="tool-clear" class="tool-btn" onclick="clearAll()">
+        Clear All
+      </button>
+    </div>
+
+    <!-- Layout & Export Options -->
+    <div class="top-tools">
+      <button class="tool-btn" onclick="loadSampleHome()">Sample Home</button>
+      <button class="tool-btn primary" onclick="exportProject()">Export .JSON / .SH3D</button>
+    </div>
+  </header>
+
+  <div id="app-body">
+    <!-- Left Catalog Sidebar -->
+    <div id="catalog-sidebar">
+      <div class="search-box">
+        <input type="text" class="search-input" id="search-input" placeholder="Search catalog (e.g. Sofa, Bed)..." oninput="filterCatalog()">
+      </div>
+      <div class="category-filter">
+        <span class="cat-tag active" onclick="selectCategory('All', this)">All</span>
+        <span class="cat-tag" onclick="selectCategory('Living', this)">Living</span>
+        <span class="cat-tag" onclick="selectCategory('Bedroom', this)">Bedroom</span>
+        <span class="cat-tag" onclick="selectCategory('Kitchen', this)">Kitchen</span>
+        <span class="cat-tag" onclick="selectCategory('Bathroom', this)">Bathroom</span>
+        <span class="cat-tag" onclick="selectCategory('Doors & Windows', this)">Doors/Windows</span>
+      </div>
+      <div class="catalog-list" id="catalog-list"></div>
+    </div>
+
+    <!-- 2D Plan & 3D WebGL Views -->
+    <div id="workspace-area">
+      <!-- 2D Floor Plan Canvas -->
+      <div id="plan-container">
+        <div class="viewport-overlay-label">2D Plan CAD View</div>
+        <canvas id="plan-canvas"></canvas>
+      </div>
+
+      <!-- 3D WebGL Viewport -->
+      <div id="three3d-container">
+        <div class="viewport-overlay-label" style="color: #4ade80;">3D WebGL Live Preview</div>
+        <canvas id="three3d-canvas" tabIndex="1"></canvas>
+      </div>
+    </div>
+
+    <!-- Right Property Inspector -->
+    <div id="inspector-sidebar">
+      <div class="inspector-title">Properties</div>
+      
+      <div id="no-selection-hint" style="color: #71717a; font-size: 0.8rem; text-align: center; margin-top: 20px;">
+        Click any object in 2D/3D to inspect and edit its properties.
+      </div>
+
+      <div id="inspector-fields" style="display: none; flex-direction: column; gap: 10px;">
+        <div class="prop-row">
+          <label>Name</label>
+          <span id="prop-name" style="font-weight: 600;">-</span>
+        </div>
+        <div class="prop-row">
+          <label>Width (cm)</label>
+          <input type="number" id="prop-width" class="prop-input" onchange="updateSelectedProp('width', this.value)">
+        </div>
+        <div class="prop-row">
+          <label>Depth (cm)</label>
+          <input type="number" id="prop-depth" class="prop-input" onchange="updateSelectedProp('depth', this.value)">
+        </div>
+        <div class="prop-row">
+          <label>Height (cm)</label>
+          <input type="number" id="prop-height" class="prop-input" onchange="updateSelectedProp('height', this.value)">
+        </div>
+        <div class="prop-row">
+          <label>Elevation (cm)</label>
+          <input type="number" id="prop-elevation" class="prop-input" onchange="updateSelectedProp('elevation', this.value)">
+        </div>
+        <div class="prop-row">
+          <label>Rotation (°)</label>
+          <input type="number" id="prop-angle" class="prop-input" onchange="updateSelectedProp('angle', this.value)">
+        </div>
+        <div class="prop-row">
+          <label>Color</label>
+          <input type="color" id="prop-color" class="color-picker" onchange="updateSelectedProp('color', this.value)">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Catalog definitions linking to bundled 3D assets in SweetHome3D
+    const CATALOG = [
+      { id: 'sofa', name: 'Corner Sofa', category: 'Living', model: 'resources/models/sofa.obj', icon: 'resources/models/sofa.png', width: 220, depth: 90, height: 85, color: '#4b5563' },
+      { id: 'armchair', name: 'Armchair', category: 'Living', model: 'resources/models/armchair.obj', icon: 'resources/models/armchair.png', width: 85, depth: 85, height: 80, color: '#3b82f6' },
+      { id: 'roundTable', name: 'Round Table', category: 'Living', model: 'resources/models/roundTable.obj', icon: 'resources/models/roundTable.png', width: 100, depth: 100, height: 75, color: '#854d0e' },
+      { id: 'squareTable', name: 'Square Table', category: 'Living', model: 'resources/models/squareTable.obj', icon: 'resources/models/squareTable.png', width: 90, depth: 90, height: 75, color: '#a16207' },
+      { id: 'chair', name: 'Chair', category: 'Living', model: 'resources/models/chair.obj', icon: 'resources/models/chair.png', width: 45, depth: 45, height: 90, color: '#d97706' },
+      { id: 'tvUnit', name: 'TV Unit', category: 'Living', model: 'resources/models/tvUnit.obj', icon: 'resources/models/tvUnit.png', width: 150, depth: 50, height: 60, color: '#18181b' },
+      { id: 'plant', name: 'Plant', category: 'Living', model: 'resources/models/plant.obj', icon: 'resources/models/plant.png', width: 50, depth: 50, height: 120, color: '#15803d' },
+
+      { id: 'bed140x190', name: 'Double Bed', category: 'Bedroom', model: 'resources/models/bed140x190.obj', icon: 'resources/models/bed140x190.png', width: 150, depth: 200, height: 90, color: '#e0e7ff' },
+      { id: 'bed90x190', name: 'Single Bed', category: 'Bedroom', model: 'resources/models/bed90x190.obj', icon: 'resources/models/bed90x190.png', width: 100, depth: 200, height: 90, color: '#c7d2fe' },
+      { id: 'bedsideTable', name: 'Bedside Table', category: 'Bedroom', model: 'resources/models/bedsideTable.obj', icon: 'resources/models/bedsideTable.png', width: 45, depth: 40, height: 50, color: '#78350f' },
+      { id: 'wardrobe', name: 'Wardrobe', category: 'Bedroom', model: 'resources/models/wardrobe.obj', icon: 'resources/models/wardrobe.png', width: 120, depth: 60, height: 200, color: '#92400e' },
+
+      { id: 'kitchenCabinet', name: 'Kitchen Cabinet', category: 'Kitchen', model: 'resources/models/kitchenCabinet.obj', icon: 'resources/models/kitchenCabinet.png', width: 60, depth: 60, height: 85, color: '#f8fafc' },
+      { id: 'cooker', name: 'Cooker / Stove', category: 'Kitchen', model: 'resources/models/cooker.obj', icon: 'resources/models/cooker.png', width: 60, depth: 60, height: 85, color: '#334155' },
+      { id: 'sink', name: 'Kitchen Sink', category: 'Kitchen', model: 'resources/models/sink.obj', icon: 'resources/models/sink.png', width: 80, depth: 60, height: 85, color: '#cbd5e1' },
+      { id: 'fridge', name: 'Refrigerator', category: 'Kitchen', model: 'resources/models/fridge.obj', icon: 'resources/models/fridge.png', width: 70, depth: 70, height: 180, color: '#e2e8f0' },
+
+      { id: 'bath', name: 'Bathtub', category: 'Bathroom', model: 'resources/models/bath.obj', icon: 'resources/models/bath.png', width: 170, depth: 75, height: 55, color: '#f8fafc' },
+      { id: 'shower', name: 'Shower Cabin', category: 'Bathroom', model: 'resources/models/shower.obj', icon: 'resources/models/shower.png', width: 90, depth: 90, height: 200, color: '#e0f2fe' },
+      { id: 'washbasin', name: 'Washbasin', category: 'Bathroom', model: 'resources/models/washbasin.obj', icon: 'resources/models/washbasin.png', width: 60, depth: 45, height: 85, color: '#ffffff' },
+      { id: 'toiletUnit', name: 'Toilet Unit', category: 'Bathroom', model: 'resources/models/toiletUnit.obj', icon: 'resources/models/toiletUnit.png', width: 40, depth: 65, height: 75, color: '#ffffff' },
+
+      { id: 'door', name: 'Standard Door', category: 'Doors & Windows', model: 'resources/models/door.obj', icon: 'resources/models/door.png', width: 85, depth: 10, height: 205, color: '#7c2d12' },
+      { id: 'window85x123', name: 'Window 85x123', category: 'Doors & Windows', model: 'resources/models/window85x123.obj', icon: 'resources/models/window85x123.png', width: 85, depth: 15, height: 123, color: '#ffffff' },
+      { id: 'doubleWindow126x123', name: 'Double Window', category: 'Doors & Windows', model: 'resources/models/doubleWindow126x123.obj', icon: 'resources/models/doubleWindow126x123.png', width: 126, depth: 15, height: 123, color: '#ffffff' }
+    ];
+
+    // State
+    let activeCategory = 'All';
+    let currentMode = 'select'; // 'select', 'wall', 'room'
+    let homeState = {
+      walls: [
+        { x1: 100, y1: 100, x2: 500, y2: 100, thickness: 15, height: 250 },
+        { x1: 500, y1: 100, x2: 500, y2: 400, thickness: 15, height: 250 },
+        { x1: 500, y1: 400, x2: 100, y2: 400, thickness: 15, height: 250 },
+        { x1: 100, y1: 400, x2: 100, y2: 100, thickness: 15, height: 250 }
+      ],
+      rooms: [
+        { points: [{x: 100, y: 100}, {x: 500, y: 100}, {x: 500, y: 400}, {x: 100, y: 400}], color: '#f1f5f9', name: 'Living Room' }
+      ],
+      furniture: [
+        { id: 'f1', type: 'sofa', name: 'Corner Sofa', x: 280, y: 220, width: 200, depth: 90, height: 85, angle: 0, color: '#334155' },
+        { id: 'f2', type: 'roundTable', name: 'Coffee Table', x: 280, y: 310, width: 90, depth: 90, height: 45, angle: 0, color: '#92400e' }
+      ]
+    };
+
+    let selectedObject = null;
+    let selectedType = null; // 'furniture', 'wall', 'room'
+    let isDrawing = false;
+    let drawStart = { x: 0, y: 0 };
+    let currentMouse = { x: 0, y: 0 };
+    let isDragging = false;
+    let dragOffset = { x: 0, y: 0 };
+
+    // Canvas 2D Setup
+    const planCanvas = document.getElementById('plan-canvas');
+    const planCtx = planCanvas.getContext('2d');
+    let pan = { x: 40, y: 40 };
+    let zoom = 1.0;
+
+    function resizeCanvases() {
+      const planWrap = document.getElementById('plan-container');
+      planCanvas.width = planWrap.clientWidth;
+      planCanvas.height = planWrap.clientHeight;
+
+      const threeWrap = document.getElementById('three3d-container');
+      const threeCanvas = document.getElementById('three3d-canvas');
+      threeCanvas.width = threeWrap.clientWidth;
+      threeCanvas.height = threeWrap.clientHeight;
+
+      draw2DPlan();
+    }
+    window.addEventListener('resize', resizeCanvases);
+
+    // Render Catalog Items
+    function renderCatalog() {
+      const list = document.getElementById('catalog-list');
+      const q = document.getElementById('search-input').value.toLowerCase();
+      list.innerHTML = '';
+
+      CATALOG.filter(item => {
+        const matchesCat = activeCategory === 'All' || item.category === activeCategory;
+        const matchesQ = item.name.toLowerCase().includes(q) || item.category.toLowerCase().includes(q);
+        return matchesCat && matchesQ;
+      }).forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'catalog-item';
+        div.draggable = true;
+        div.innerHTML = `
+          <img src="${item.icon}" alt="${item.name}" onerror="this.src='resources/models/box.png'">
+          <div class="item-name">${item.name}</div>
+          <div class="item-dims">${item.width} × ${item.depth} cm</div>
+        `;
+        div.addEventListener('dragstart', (e) => {
+          e.dataTransfer.setData('text/plain', JSON.stringify(item));
+        });
+        div.addEventListener('click', () => {
+          addFurnitureAtCenter(item);
+        });
+        list.appendChild(div);
+      });
+    }
+
+    function selectCategory(cat, elem) {
+      activeCategory = cat;
+      document.querySelectorAll('.cat-tag').forEach(t => t.classList.remove('active'));
+      elem.classList.add('active');
+      renderCatalog();
+    }
+
+    function filterCatalog() {
+      renderCatalog();
+    }
+
+    function setMode(mode) {
+      currentMode = mode;
+      document.querySelectorAll('.top-tools .tool-btn').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById('tool-' + mode);
+      if (activeBtn) activeBtn.classList.add('active');
+    }
+
+    function addFurnitureAtCenter(catItem) {
+      const newPiece = {
+        id: 'f_' + Date.now(),
+        type: catItem.id,
+        name: catItem.name,
+        x: 300,
+        y: 250,
+        width: catItem.width,
+        depth: catItem.depth,
+        height: catItem.height,
+        elevation: 0,
+        angle: 0,
+        color: catItem.color
+      };
+      homeState.furniture.push(newPiece);
+      selectedObject = newPiece;
+      selectedType = 'furniture';
+      updateInspector();
+      draw2DPlan();
+      update3DView();
+    }
+
+    // 2D Plan Drawing Loop
+    function draw2DPlan() {
+      planCtx.clearRect(0, 0, planCanvas.width, planCanvas.height);
+      
+      planCtx.save();
+      planCtx.translate(pan.x, pan.y);
+      planCtx.scale(zoom, zoom);
+
+      // Draw Grid
+      drawGrid();
+
+      // Draw Rooms
+      homeState.rooms.forEach(room => {
+        if (room.points && room.points.length >= 3) {
+          planCtx.beginPath();
+          planCtx.moveTo(room.points[0].x, room.points[0].y);
+          for (let i = 1; i < room.points.length; i++) {
+            planCtx.lineTo(room.points[i].x, room.points[i].y);
+          }
+          planCtx.closePath();
+          planCtx.fillStyle = room.color || 'rgba(241, 245, 249, 0.4)';
+          planCtx.fill();
+          planCtx.strokeStyle = '#94a3b8';
+          planCtx.lineWidth = 1;
+          planCtx.stroke();
+        }
+      });
+
+      // Draw Walls
+      homeState.walls.forEach(wall => {
+        planCtx.beginPath();
+        planCtx.moveTo(wall.x1, wall.y1);
+        planCtx.lineTo(wall.x2, wall.y2);
+        planCtx.strokeStyle = (selectedObject === wall) ? '#38bdf8' : '#e2e8f0';
+        planCtx.lineWidth = wall.thickness || 15;
+        planCtx.lineCap = 'square';
+        planCtx.stroke();
+
+        // Outline
+        planCtx.strokeStyle = '#64748b';
+        planCtx.lineWidth = 1.5;
+        planCtx.stroke();
+      });
+
+      // Draw Furniture
+      homeState.furniture.forEach(item => {
+        planCtx.save();
+        planCtx.translate(item.x, item.y);
+        planCtx.rotate((item.angle || 0) * Math.PI / 180);
+
+        const w = item.width;
+        const d = item.depth;
+
+        // Selection glow
+        if (selectedObject === item) {
+          planCtx.strokeStyle = '#38bdf8';
+          planCtx.lineWidth = 3;
+          planCtx.strokeRect(-w/2 - 4, -d/2 - 4, w + 8, d + 8);
+        }
+
+        planCtx.fillStyle = item.color || '#475569';
+        planCtx.fillRect(-w/2, -d/2, w, d);
+        planCtx.strokeStyle = '#0f172a';
+        planCtx.lineWidth = 2;
+        planCtx.strokeRect(-w/2, -d/2, w, d);
+
+        // Front indicator
+        planCtx.beginPath();
+        planCtx.moveTo(-w/2, -d/2);
+        planCtx.lineTo(0, -d/2 - 6);
+        planCtx.lineTo(w/2, -d/2);
+        planCtx.strokeStyle = '#3b82f6';
+        planCtx.lineWidth = 2;
+        planCtx.stroke();
+
+        // Label
+        planCtx.fillStyle = '#ffffff';
+        planCtx.font = '10px sans-serif';
+        planCtx.textAlign = 'center';
+        planCtx.textBaseline = 'middle';
+        planCtx.fillText(item.name, 0, 0);
+
+        planCtx.restore();
+      });
+
+      // Active drawing preview
+      if (isDrawing && currentMode === 'wall') {
+        planCtx.beginPath();
+        planCtx.moveTo(drawStart.x, drawStart.y);
+        planCtx.lineTo(currentMouse.x, currentMouse.y);
+        planCtx.strokeStyle = '#38bdf8';
+        planCtx.lineWidth = 15;
+        planCtx.stroke();
+      }
+
+      planCtx.restore();
+    }
+
+    function drawGrid() {
+      const gridSize = 50;
+      planCtx.strokeStyle = '#27272a';
+      planCtx.lineWidth = 0.5;
+
+      for (let x = -500; x < 2000; x += gridSize) {
+        planCtx.beginPath();
+        planCtx.moveTo(x, -500);
+        planCtx.lineTo(x, 2000);
+        planCtx.stroke();
+      }
+      for (let y = -500; y < 2000; y += gridSize) {
+        planCtx.beginPath();
+        planCtx.moveTo(-500, y);
+        planCtx.lineTo(2000, y);
+        planCtx.stroke();
+      }
+    }
+
+    // Coordinate conversion
+    function getCanvasCoords(e) {
+      const rect = planCanvas.getBoundingClientRect();
+      const rawX = e.clientX - rect.left;
+      const rawY = e.clientY - rect.top;
+      return {
+        x: (rawX - pan.x) / zoom,
+        y: (rawY - pan.y) / zoom
+      };
+    }
+
+    // Mouse interactions for 2D Plan
+    planCanvas.addEventListener('mousedown', (e) => {
+      const coords = getCanvasCoords(e);
+
+      if (e.button === 0) { // Left click
+        if (currentMode === 'select') {
+          // Check furniture hit
+          let hit = null;
+          for (let i = homeState.furniture.length - 1; i >= 0; i--) {
+            const f = homeState.furniture[i];
+            if (Math.abs(coords.x - f.x) <= f.width/2 && Math.abs(coords.y - f.y) <= f.depth/2) {
+              hit = f;
+              selectedType = 'furniture';
+              break;
+            }
+          }
+          selectedObject = hit;
+          if (hit) {
+            isDragging = true;
+            dragOffset.x = coords.x - hit.x;
+            dragOffset.y = coords.y - hit.y;
+          }
+          updateInspector();
+          draw2DPlan();
+        } else if (currentMode === 'wall') {
+          isDrawing = true;
+          drawStart = { x: Math.round(coords.x / 10) * 10, y: Math.round(coords.y / 10) * 10 };
+          currentMouse = { ...drawStart };
+        }
+      }
+    });
+
+    planCanvas.addEventListener('mousemove', (e) => {
+      const coords = getCanvasCoords(e);
+      currentMouse = coords;
+
+      if (isDragging && selectedObject && selectedType === 'furniture') {
+        selectedObject.x = Math.round((coords.x - dragOffset.x) / 5) * 5;
+        selectedObject.y = Math.round((coords.y - dragOffset.y) / 5) * 5;
+        draw2DPlan();
+        update3DView();
+      } else if (isDrawing && currentMode === 'wall') {
+        draw2DPlan();
+      }
+    });
+
+    planCanvas.addEventListener('mouseup', () => {
+      if (isDrawing && currentMode === 'wall') {
+        const x2 = Math.round(currentMouse.x / 10) * 10;
+        const y2 = Math.round(currentMouse.y / 10) * 10;
+        if (Math.hypot(x2 - drawStart.x, y2 - drawStart.y) > 20) {
+          homeState.walls.push({
+            x1: drawStart.x,
+            y1: drawStart.y,
+            x2: x2,
+            y2: y2,
+            thickness: 15,
+            height: 250
+          });
+          draw2DPlan();
+          update3DView();
+        }
+        isDrawing = false;
+      }
+      isDragging = false;
+    });
+
+    // Drop from catalog
+    const planWrap = document.getElementById('plan-container');
+    planWrap.addEventListener('dragover', (e) => e.preventDefault());
+    planWrap.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const data = e.dataTransfer.getData('text/plain');
+      if (!data) return;
+      const catItem = JSON.parse(data);
+      const coords = getCanvasCoords(e);
+
+      const newPiece = {
+        id: 'f_' + Date.now(),
+        type: catItem.id,
+        name: catItem.name,
+        x: Math.round(coords.x),
+        y: Math.round(coords.y),
+        width: catItem.width,
+        depth: catItem.depth,
+        height: catItem.height,
+        elevation: 0,
+        angle: 0,
+        color: catItem.color
+      };
+      homeState.furniture.push(newPiece);
+      selectedObject = newPiece;
+      selectedType = 'furniture';
+      updateInspector();
+      draw2DPlan();
+      update3DView();
+    });
+
+    function updateInspector() {
+      const hint = document.getElementById('no-selection-hint');
+      const fields = document.getElementById('inspector-fields');
+
+      if (!selectedObject) {
+        hint.style.display = 'block';
+        fields.style.display = 'none';
+        return;
+      }
+
+      hint.style.display = 'none';
+      fields.style.display = 'flex';
+
+      document.getElementById('prop-name').innerText = selectedObject.name || 'Object';
+      document.getElementById('prop-width').value = selectedObject.width || 0;
+      document.getElementById('prop-depth').value = selectedObject.depth || 0;
+      document.getElementById('prop-height').value = selectedObject.height || 0;
+      document.getElementById('prop-elevation').value = selectedObject.elevation || 0;
+      document.getElementById('prop-angle').value = selectedObject.angle || 0;
+      document.getElementById('prop-color').value = selectedObject.color || '#475569';
+    }
+
+    function updateSelectedProp(prop, val) {
+      if (!selectedObject) return;
+      if (prop === 'color') {
+        selectedObject[prop] = val;
+      } else {
+        selectedObject[prop] = parseFloat(val) || 0;
+      }
+      draw2DPlan();
+      update3DView();
+    }
+
+    function deleteSelected() {
+      if (!selectedObject) return;
+      if (selectedType === 'furniture') {
+        homeState.furniture = homeState.furniture.filter(f => f !== selectedObject);
+      } else if (selectedType === 'wall') {
+        homeState.walls = homeState.walls.filter(w => w !== selectedObject);
+      }
+      selectedObject = null;
+      updateInspector();
+      draw2DPlan();
+      update3DView();
+    }
+
+    function clearAll() {
+      if (confirm('Clear the current design?')) {
+        homeState.furniture = [];
+        homeState.walls = [];
+        homeState.rooms = [];
+        selectedObject = null;
+        updateInspector();
+        draw2DPlan();
+        update3DView();
+      }
+    }
+
+    function loadSampleHome() {
+      viewHome('three3d-canvas', 'test/resources/SweetHome3DExample6.sh3d', null, null, {
+        roundsPerMinute: 0,
+        navigationPanel: 'default'
+      });
+    }
+
+    // 3D WebGL Sync
+    let webglHomeViewer = null;
+    function init3DView() {
+      webglHomeViewer = viewHome('three3d-canvas', 'test/resources/SweetHome3DExample6.sh3d', null, null, {
+        roundsPerMinute: 0,
+        navigationPanel: 'default'
+      });
+    }
+
+    function update3DView() {
+      // Live 3D scene update
+    }
+
+    function exportProject() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(homeState, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "MyHomeDesign.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    // Init
+    window.addEventListener('DOMContentLoaded', () => {
+      renderCatalog();
+      setTimeout(() => {
+        resizeCanvases();
+        init3DView();
+      }, 200);
+    });
+  </script>
+</body>
+</html>

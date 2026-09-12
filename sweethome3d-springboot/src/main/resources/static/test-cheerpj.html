@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sweet Home 3D - CheerpJ 3.0 Java Runtime</title>
+  <script src="https://cjrtnc.leaningtech.com/3.0/cj3loader.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; background: #09090b; overflow: hidden; font-family: sans-serif; }
+    #cheerpj-display { width: 100vw; height: 100vh; }
+    #status-overlay {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(24, 24, 27, 0.9);
+      border: 1px solid #3f3f46;
+      border-radius: 8px;
+      padding: 10px 20px;
+      color: #f4f4f5;
+      font-size: 0.9rem;
+      z-index: 100;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+  </style>
+</head>
+<body>
+  <div id="status-overlay">Initializing Java 8 WebAssembly Runtime...</div>
+  <div id="cheerpj-display"></div>
+
+  <script>
+    async function main() {
+      const status = document.getElementById('status-overlay');
+      try {
+        status.innerText = "Downloading Java Runtime & WebAssembly Engine...";
+        await cheerpjInit({
+          version: 8
+        });
+
+        status.innerText = "Creating Java Swing Display Canvas...";
+        const displayDiv = document.getElementById('cheerpj-display');
+        cheerpjCreateDisplay(-1, -1, displayDiv);
+
+        status.innerText = "Loading SweetHome3D.jar and Classpath...";
+        const classpath = [
+          "/app/SweetHome3D.jar",
+          "/app/lib/j3dcore.jar",
+          "/app/lib/vecmath.jar",
+          "/app/lib/j3dutils.jar",
+          "/app/lib/iText-2.1.7.jar",
+          "/app/lib/sunflow-0.07.3i.jar",
+          "/app/lib/freehep-vectorgraphics-svg-2.1.1b.jar",
+          "/app/lib/batik-svgpathparser-1.7.jar"
+        ].join(":");
+
+        status.innerText = "Executing Sweet Home 3D Java Application...";
+        setTimeout(() => {
+          status.style.display = "none";
+        }, 4000);
+
+        await cheerpjRunMain("com.eteks.sweethome3d.SweetHome3D", classpath);
+      } catch (e) {
+        status.innerText = "Error: " + e.message;
+        status.style.borderColor = "#ef4444";
+        status.style.color = "#f87171";
+        console.error(e);
+      }
+    }
+    window.addEventListener("DOMContentLoaded", main);
+  </script>
+</body>
+</html>

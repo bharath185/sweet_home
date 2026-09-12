@@ -1,0 +1,380 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sweet Home 3D - Web Application</title>
+  
+  <!-- SweetHome3DJS Third Party Libraries -->
+  <script src="lib/big.min.js"></script>
+  <script src="lib/gl-matrix-min.js"></script>
+  <script src="lib/jszip.min.js"></script>
+  <script src="lib/jsXmlSaxParser.min.js"></script>
+
+  <!-- SweetHome3DJS Engine Sources -->
+  <script src="src/core.js"></script>
+  <script src="src/URLContent.js"></script>
+  <script src="src/scene3d.js"></script>
+  <script src="src/HTMLCanvas3D.js"></script>
+  <script src="src/ModelManager.js"></script>
+  <script src="src/ModelLoader.js"></script>
+  <script src="src/OBJLoader.js"></script>
+  <script src="src/Max3DSLoader.js"></script>
+  <script src="src/DAELoader.js"></script>
+  <script src="src/Triangulator.js"></script>
+
+  <!-- JSweet Transpiled SweetHome3D Core -->
+  <script src="lib/generated/geom.js"></script>
+  <script src="lib/generated/batik-svgpathparser.js"></script>
+  <script src="lib/generated/SweetHome3D.js"></script>
+  
+  <!-- SweetHome3DJS Components -->
+  <script src="src/HomeRecorder.js"></script>
+  <script src="src/HomeComponent3D.js"></script>
+  <script src="src/Object3DBranch.js"></script>
+  <script src="src/HomePieceOfFurniture3D.js"></script>
+  <script src="src/Room3D.js"></script>
+  <script src="src/Wall3D.js"></script>
+  <script src="src/Ground3D.js"></script>
+  <script src="src/Label3D.js"></script>
+  <script src="src/TextureManager.js"></script>
+  <script src="src/UserPreferences.js"></script>
+  <script src="src/LengthUnit.js"></script>
+  <script src="src/viewHome.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background: #121214;
+      color: #e4e4e7;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      background: #18181b;
+      border-bottom: 1px solid #27272a;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      z-index: 10;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      font-size: 1.15rem;
+      color: #fafafa;
+    }
+    .brand-badge {
+      background: #3b82f6;
+      color: white;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn {
+      background: #27272a;
+      color: #f4f4f5;
+      border: 1px solid #3f3f46;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn:hover {
+      background: #3f3f46;
+      border-color: #52525b;
+    }
+    .btn-primary {
+      background: #2563eb;
+      border-color: #3b82f6;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #1d4ed8;
+    }
+    .select {
+      background: #27272a;
+      color: #f4f4f5;
+      border: 1px solid #3f3f46;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 0.875rem;
+      cursor: pointer;
+      outline: none;
+    }
+    .view-toggle {
+      display: flex;
+      background: #27272a;
+      border: 1px solid #3f3f46;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .view-toggle label {
+      padding: 8px 14px;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      color: #a1a1aa;
+    }
+    .view-toggle input[type="radio"] {
+      display: none;
+    }
+    .view-toggle input[type="radio"]:checked + label {
+      background: #3b82f6;
+      color: #ffffff;
+      font-weight: 600;
+    }
+    #main-container {
+      flex: 1;
+      position: relative;
+      display: flex;
+      overflow: hidden;
+    }
+    #canvas-wrapper {
+      flex: 1;
+      position: relative;
+      background: #1e1e24;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #viewerCanvas {
+      width: 100%;
+      height: 100%;
+      outline: none;
+      display: block;
+    }
+    #loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(18, 18, 20, 0.88);
+      backdrop-filter: blur(4px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      gap: 16px;
+    }
+    .progress-bar-container {
+      width: 360px;
+      background: #27272a;
+      border-radius: 8px;
+      overflow: hidden;
+      height: 12px;
+      border: 1px solid #3f3f46;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #3b82f6, #60a5fa);
+      transition: width 0.2s ease;
+    }
+    .loading-status {
+      font-size: 0.9rem;
+      color: #a1a1aa;
+    }
+    #controls-hint {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      background: rgba(24, 24, 27, 0.85);
+      backdrop-filter: blur(6px);
+      border: 1px solid #3f3f46;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.8rem;
+      color: #d4d4d8;
+      pointer-events: none;
+      z-index: 5;
+      line-height: 1.5;
+    }
+    #controls-hint strong {
+      color: #60a5fa;
+    }
+    #file-input {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+      <span>Sweet Home 3D</span>
+      <span class="brand-badge">HTML5 / WebGL</span>
+    </div>
+
+    <div class="toolbar">
+      <div class="view-toggle">
+        <input type="radio" id="aerialView" name="cameraType" checked>
+        <label for="aerialView">Aerial View</label>
+        <input type="radio" id="virtualVisit" name="cameraType">
+        <label for="virtualVisit">Virtual Visit</label>
+      </div>
+
+      <select id="levelsAndCameras" class="select" title="Level / Viewpoint Selector"></select>
+
+      <button id="btn-spin" class="btn" onclick="toggleSpin()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        Auto Rotate
+      </button>
+
+      <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        Open .sh3d File
+      </button>
+      <input type="file" id="file-input" accept=".sh3d,.zip" onchange="handleFileSelected(event)">
+
+      <button class="btn" onclick="toggleFullScreen()" title="Full Screen">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="main-container">
+    <div id="canvas-wrapper">
+      <canvas id="viewerCanvas" tabIndex="1"></canvas>
+
+      <div id="loading-overlay">
+        <div style="font-weight: 600; font-size: 1.1rem;" id="loading-title">Loading 3D Home...</div>
+        <div class="progress-bar-container">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+        <div id="progress-label" class="loading-status">0% Initializing...</div>
+      </div>
+
+      <div id="controls-hint">
+        <strong>Mouse:</strong> Left-drag to rotate | Right-drag / Scroll to pan & zoom<br>
+        <strong>Keyboard:</strong> Arrow keys / WASD to move | Spacebar to toggle camera mode
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var currentHomeComponent = null;
+    var isSpinning = false;
+    var defaultHomeUrl = "test/resources/SweetHome3DExample6.sh3d";
+
+    function updateCanvasDimensions() {
+      var canvas = document.getElementById("viewerCanvas");
+      var wrapper = document.getElementById("canvas-wrapper");
+      canvas.width = wrapper.clientWidth;
+      canvas.height = wrapper.clientHeight;
+    }
+
+    window.addEventListener("resize", function() {
+      if (!currentHomeComponent) {
+        updateCanvasDimensions();
+      }
+    });
+
+    function loadHome(urlOrBlob) {
+      document.getElementById("loading-overlay").style.display = "flex";
+      document.getElementById("progress-bar").style.width = "0%";
+      document.getElementById("progress-label").innerText = "0% Loading home...";
+
+      updateCanvasDimensions();
+
+      var onerror = function(err) {
+        document.getElementById("loading-overlay").style.display = "none";
+        if (err === "No WebGL") {
+          alert("Your browser does not support WebGL.");
+        } else {
+          console.error("SweetHome3DJS Error:", err);
+          alert("Error loading 3D home: " + (err.message ? err.message : err));
+        }
+      };
+
+      var onprogression = function(part, info, percentage) {
+        var pct = Math.floor((percentage || 0) * 100);
+        var bar = document.getElementById("progress-bar");
+        var label = document.getElementById("progress-label");
+
+        if (part === HomeRecorder.READING_HOME) {
+          bar.style.width = (pct * 0.5) + "%";
+          label.innerText = pct + "% Reading home structure...";
+        } else if (part === Node3D.READING_MODEL) {
+          bar.style.width = (50 + pct * 0.5) + "%";
+          label.innerText = pct + "% Loading 3D models & textures...";
+          if (percentage >= 1) {
+            setTimeout(function() {
+              document.getElementById("loading-overlay").style.display = "none";
+            }, 300);
+          }
+        }
+      };
+
+      currentHomeComponent = viewHome("viewerCanvas", urlOrBlob, onerror, onprogression, {
+        roundsPerMinute: 0,
+        navigationPanel: "default",
+        aerialViewButtonId: "aerialView",
+        virtualVisitButtonId: "virtualVisit",
+        levelsAndCamerasListId: "levelsAndCameras"
+      });
+    }
+
+    function toggleSpin() {
+      if (!currentHomeComponent) return;
+      isSpinning = !isSpinning;
+      var btn = document.getElementById("btn-spin");
+      if (isSpinning) {
+        currentHomeComponent.startRotationAnimation(1.5);
+        btn.classList.add("btn-primary");
+      } else {
+        currentHomeComponent.stopRotationAnimation();
+        btn.classList.remove("btn-primary");
+      }
+    }
+
+    function handleFileSelected(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      var objectUrl = URL.createObjectURL(file);
+      loadHome(objectUrl);
+    }
+
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(function(err) {});
+      } else {
+        document.exitFullscreen().catch(function(err) {});
+      }
+    }
+
+    // Initialize with sample home
+    window.addEventListener("DOMContentLoaded", function() {
+      updateCanvasDimensions();
+      loadHome(defaultHomeUrl);
+    });
+  </script>
+</body>
+</html>

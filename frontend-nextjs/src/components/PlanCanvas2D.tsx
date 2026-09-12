@@ -1,0 +1,1415 @@
+'use client';
+
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import {
+  MousePointer,
+  Square,
+  Maximize2,
+  Trash2,
+  RotateCw,
+  RotateCcw,
+  ZoomIn,
+  ZoomOut,
+  Magnet,
+  Move,
+  AlertTriangle,
+  Building,
+  Ruler,
+  Type,
+  ImageIcon,
+  Palette,
+  Lock,
+  Unlock,
+  Copy,
+  Compass,
+  Sparkles,
+  Layers,
+  Sliders,
+  Check,
+  CornerDownRight,
+  Maximize,
+  Minimize,
+  Undo2,
+  Redo2
+} from 'lucide-react';
+import { HomePlan, Wall, FurnitureItem, Room, DimensionLine, TextNote } from '../types/plan';
+import { formatDistance, formatArea } from '../services/unitConverter';
+import { isTabletopItem, autoAttachToTabletop } from '../services/tabletopAttachment';
+
+interface PlanCanvas2DProps {
+  plan: HomePlan;
+  onUpdatePlan: (updated: HomePlan) => void;
+  selectedId: string | null;
+  onSelectId: (id: string | null) => void;
+  activeFloor?: number;
+  onFloorChange?: (floor: number) => void;
+  collidingItemIds?: Set<string>;
+  collisionReasons?: Map<string, string>;
+  onOpenBlueprintModal?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
+}
+
+type ToolMode = 'select' | 'drawWall' | 'dimension' | 'text' | 'pan';
+type FurnitureHandle = 'nw' | 'ne' | 'se' | 'sw' | 'n' | 's' | 'e' | 'w' | 'rotate' | 'body' | null;
+type WallHandle = 'start' | 'end' | 'body' | null;
+
+export const DESIGNER_PALETTES = [
+  { name: 'Scandinavian Oak', color: '#e0d8c3' },
+  { name: 'Warm Walnut', color: '#5c4033' },
+  { name: 'Japandi Charcoal', color: '#27272a' },
+  { name: 'Ivory Bouclé', color: '#f5f5f4' },
+  { name: 'Emerald Velvet', color: '#065f46' },
+  { name: 'French Navy', color: '#1e3a8a' },
+  { name: 'Terracotta Clay', color: '#c2410c' },
+  { name: 'Coastal Sage', color: '#84a98c' },
+  { name: 'Ochre Gold', color: '#d97706' },
+];
+
+export const WALL_FINISHES = [
+  { name: 'Crisp White', color: '#f8fafc' },
+  { name: 'Warm Greige', color: '#e7e5e4' },
+  { name: 'Modern Slate', color: '#334155' },
+  { name: 'Exposed Brick', color: '#991b1b' },
+  { name: 'Sage Accent', color: '#166534' },
+];
+
+export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
+  plan,
+  onUpdatePlan,
+  selectedId,
+  onSelectId,
+  activeFloor = 0,
+  onFloorChange,
+  collidingItemIds = new Set(),
+  collisionReasons = new Map(),
+  onOpenBlueprintModal,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo,
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const blueprintImgRef = useRef<HTMLImageElement | null>(null);
+
+  const [toolMode, setToolMode] = useState<ToolMode>('select');
+  const [scale, setScale] = useState<number>(0.8);
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Drawing state
+  const [wallStart, setWallStart] = useState<{ x: number; y: number } | null>(null);
+  const [dimStart, setDimStart] = useState<{ x: number; y: number } | null>(null);
+  const [mouseCanvasPos, setMouseCanvasPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Handle Dragging State
+  const [activeFurnitureHandle, setActiveFurnitureHandle] = useState<FurnitureHandle>(null);
+  const [activeWallHandle, setActiveWallHandle] = useState<WallHandle>(null);
+  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [initialFurnitureState, setInitialFurnitureState] = useState<FurnitureItem | null>(null);
+  const [initialWallState, setInitialWallState] = useState<Wall | null>(null);
+  const [magneticSnapPoint, setMagneticSnapPoint] = useState<{ x: number; y: number } | null>(null);
+
+  // Snapping
+  const [snapToGrid, setSnapToGrid] = useState<boolean>(plan.preferences?.magnetismEnabled ?? true);
+  const GRID_SIZE_CM = plan.preferences?.gridSize || 20;
+  const unit = plan.preferences?.unitSystem || 'cm';
+
+  // Load blueprint image if available
+  useEffect(() => {
+    if (plan.blueprint?.url && plan.blueprint?.isVisible) {
+      const img = new Image();
+      img.src = plan.blueprint.url;
+      img.onload = () => {
+        blueprintImgRef.current = img;
+      };
+    } else {
+      blueprintImgRef.current = null;
+    }
+  }, [plan.blueprint?.url, plan.blueprint?.isVisible]);
+
+  // Convert Screen pixel coordinates to Plan (cm) coordinates
+  const screenToPlan = useCallback(
+    (clientX: number, clientY: number, bypassSnap: boolean = false) => {
+      if (!canvasRef.current) return { x: 0, y: 0 };
+      const rect = canvasRef.current.getBoundingClientRect();
+      const centerX = rect.width / 2 + panOffset.x;
+      const centerY = rect.height / 2 + panOffset.y;
+
+      let x = (clientX - rect.left - centerX) / scale;
+      let y = (clientY - rect.top - centerY) / scale;
+
+      if (snapToGrid && !bypassSnap) {
+        x = Math.round(x / GRID_SIZE_CM) * GRID_SIZE_CM;
+        y = Math.round(y / GRID_SIZE_CM) * GRID_SIZE_CM;
+      }
+
+      return { x, y };
+    },
+    [scale, panOffset, snapToGrid, GRID_SIZE_CM]
+  );
+
+  // Convert Plan (cm) coordinates to Screen pixel coordinates
+  const planToScreen = useCallback(
+    (x: number, y: number) => {
+      if (!canvasRef.current) return { x: 0, y: 0 };
+      const rect = canvasRef.current.getBoundingClientRect();
+      const centerX = rect.width / 2 + panOffset.x;
+      const centerY = rect.height / 2 + panOffset.y;
+
+      return {
+        x: centerX + x * scale,
+        y: centerY + y * scale,
+      };
+    },
+    [scale, panOffset]
+  );
+
+  // Filter items for current floor
+  const floorWalls = plan.walls.filter((w) => (w.floorLevel ?? 0) === activeFloor);
+  const floorFurniture = plan.furniture.filter(
+    (f) => (f.floorLevel ?? 0) === activeFloor && f.isVisible !== false
+  );
+  const floorRooms = plan.rooms.filter((r) => (r.floorLevel ?? 0) === activeFloor);
+  const floorDimensionLines = (plan.dimensionLines || []).filter(
+    (d) => (d.floorLevel ?? 0) === activeFloor
+  );
+  const floorTextNotes = (plan.textNotes || []).filter(
+    (t) => (t.floorLevel ?? 0) === activeFloor
+  );
+
+  const selectedFurniture = floorFurniture.find((f) => f.id === selectedId);
+  const selectedWall = floorWalls.find((w) => w.id === selectedId);
+
+  // Helper to find magnetic snap vertex from other walls
+  const findSnapVertex = useCallback(
+    (targetX: number, targetY: number, excludeWallId?: string) => {
+      const SNAP_THRESHOLD_CM = 25;
+      let closestPt: { x: number; y: number } | null = null;
+      let minDistance = SNAP_THRESHOLD_CM;
+
+      floorWalls.forEach((w) => {
+        if (w.id === excludeWallId) return;
+        const d1 = Math.hypot(w.xStart - targetX, w.yStart - targetY);
+        if (d1 < minDistance) {
+          minDistance = d1;
+          closestPt = { x: w.xStart, y: w.yStart };
+        }
+        const d2 = Math.hypot(w.xEnd - targetX, w.yEnd - targetY);
+        if (d2 < minDistance) {
+          minDistance = d2;
+          closestPt = { x: w.xEnd, y: w.yEnd };
+        }
+      });
+
+      return closestPt;
+    },
+    [floorWalls]
+  );
+
+  // Keyboard Shortcuts (Scale, Rotate, Delete, Duplicate, Lock)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedId) {
+          handleDeleteSelected();
+        }
+      } else if (e.key === 'r' || e.key === 'R') {
+        if (selectedFurniture) {
+          const newAngle = ((selectedFurniture.angle || 0) + Math.PI / 4) % (Math.PI * 2);
+          updateFurniture({ angle: newAngle });
+        }
+      } else if (e.key === '+' || e.key === '=' || e.key === ']') {
+        if (selectedFurniture) handleScaleSelected(1.1);
+      } else if (e.key === '-' || e.key === '_' || e.key === '[') {
+        if (selectedFurniture) handleScaleSelected(0.9);
+      } else if (e.key === 'Escape') {
+        onSelectId(null);
+        setWallStart(null);
+        setDimStart(null);
+      } else if (e.key === 'l' || e.key === 'L') {
+        if (selectedFurniture) {
+          updateFurniture({ isLocked: !selectedFurniture.isLocked });
+        }
+      } else if (e.key === 'd' || e.key === 'D') {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          handleDuplicateSelected();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedId, selectedFurniture, selectedWall, plan]);
+
+  // Main 2D Drawing Render Loop
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+
+    const width = rect.width;
+    const height = rect.height;
+
+    // Background
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0, 0, width, height);
+
+    // 1. Draw Blueprint Background Image if loaded
+    if (blueprintImgRef.current && plan.blueprint?.isVisible) {
+      ctx.save();
+      ctx.globalAlpha = plan.blueprint.opacity || 0.4;
+      const bpWidth = plan.blueprint.width * scale;
+      const bpHeight = plan.blueprint.height * scale;
+      const bpPos = planToScreen(
+        plan.blueprint.x - plan.blueprint.width / 2,
+        plan.blueprint.y - plan.blueprint.height / 2
+      );
+      ctx.drawImage(blueprintImgRef.current, bpPos.x, bpPos.y, bpWidth, bpHeight);
+      ctx.restore();
+    }
+
+    // 2. Draw CAD Grid Lines
+    const gridPx = GRID_SIZE_CM * scale;
+    const centerX = width / 2 + panOffset.x;
+    const centerY = height / 2 + panOffset.y;
+
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+
+    const startX = centerX % gridPx;
+    const startY = centerY % gridPx;
+
+    ctx.beginPath();
+    for (let x = startX; x < width; x += gridPx) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+    }
+    for (let y = startY; y < height; y += gridPx) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+    }
+    ctx.stroke();
+
+    // 1-Meter Major Grid
+    const majorGridPx = 100 * scale;
+    const majorStartX = centerX % majorGridPx;
+    const majorStartY = centerY % majorGridPx;
+
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    for (let x = majorStartX; x < width; x += majorGridPx) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+    }
+    for (let y = majorStartY; y < height; y += majorGridPx) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+    }
+    ctx.stroke();
+
+    // Origin Axes
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.45;
+    ctx.beginPath();
+    ctx.moveTo(centerX, 0);
+    ctx.lineTo(centerX, height);
+    ctx.moveTo(0, centerY);
+    ctx.lineTo(width, centerY);
+    ctx.stroke();
+    ctx.globalAlpha = 1.0;
+
+    // 3. Draw Rooms
+    floorRooms.forEach((room) => {
+      if (room.points.length < 3) return;
+      ctx.fillStyle = 'rgba(14, 165, 233, 0.06)';
+      ctx.strokeStyle = 'rgba(14, 165, 233, 0.35)';
+      ctx.lineWidth = 1.2;
+
+      ctx.beginPath();
+      const p0 = planToScreen(room.points[0].x, room.points[0].y);
+      ctx.moveTo(p0.x, p0.y);
+      for (let i = 1; i < room.points.length; i++) {
+        const p = planToScreen(room.points[i].x, room.points[i].y);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      const avgX = room.points.reduce((acc, p) => acc + p.x, 0) / room.points.length;
+      const avgY = room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length;
+      const screenAvg = planToScreen(avgX, avgY);
+
+      ctx.font = '600 12px system-ui, sans-serif';
+      ctx.fillStyle = '#334155';
+      ctx.textAlign = 'center';
+      ctx.fillText(room.name, screenAvg.x, screenAvg.y - 8);
+      ctx.font = 'bold 10px monospace';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText(formatArea(room.areaSquareMeters || 12.5, unit), screenAvg.x, screenAvg.y + 8);
+    });
+
+    // 4. Draw Walls
+    floorWalls.forEach((wall) => {
+      const p1 = planToScreen(wall.xStart, wall.yStart);
+      const p2 = planToScreen(wall.xEnd, wall.yEnd);
+      const isSelected = selectedId === wall.id;
+
+      ctx.save();
+      // Outer wall rendering
+      ctx.strokeStyle = isSelected ? '#38bdf8' : wall.color || '#e2e8f0';
+      ctx.lineWidth = Math.max(3, wall.thickness * scale);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+
+      // Inner architectural core line
+      ctx.strokeStyle = isSelected ? '#0284c7' : '#94a3b8';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+      ctx.restore();
+
+      // Wall Length dimension label
+      const lengthCm = Math.round(
+        Math.hypot(wall.xEnd - wall.xStart, wall.yEnd - wall.yStart)
+      );
+      const midX = (p1.x + p2.x) / 2;
+      const midY = (p1.y + p2.y) / 2;
+
+      ctx.font = 'bold 10px monospace';
+      ctx.fillStyle = isSelected ? '#38bdf8' : '#cbd5e1';
+      ctx.textAlign = 'center';
+      ctx.fillText(formatDistance(lengthCm, unit), midX, midY - 8);
+
+      // If Wall is selected, draw vertex adjustment handles
+      if (isSelected) {
+        // Start Vertex Handle
+        ctx.save();
+        ctx.fillStyle = '#38bdf8';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p1.x, p1.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // End Vertex Handle
+        ctx.beginPath();
+        ctx.arc(p2.x, p2.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Glowing outer rings
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(p1.x, p1.y, 11, 0, Math.PI * 2);
+        ctx.arc(p2.x, p2.y, 11, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    });
+
+    // 5. Draw Active Wall Preview
+    if (toolMode === 'drawWall' && wallStart) {
+      const p1 = planToScreen(wallStart.x, wallStart.y);
+      const p2 = planToScreen(mouseCanvasPos.x, mouseCanvasPos.y);
+
+      ctx.save();
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = (plan.preferences?.defaultWallThickness || 15) * scale;
+      ctx.lineCap = 'round';
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+
+      const previewLen = Math.round(
+        Math.hypot(mouseCanvasPos.x - wallStart.x, mouseCanvasPos.y - wallStart.y)
+      );
+      ctx.font = 'bold 11px monospace';
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillText(formatDistance(previewLen, unit), (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 8);
+      ctx.restore();
+    }
+
+    // 6. Draw Dimension Lines
+    floorDimensionLines.forEach((dim) => {
+      const p1 = planToScreen(dim.xStart, dim.yStart);
+      const p2 = planToScreen(dim.xEnd, dim.yEnd);
+      const dist = Math.hypot(dim.xEnd - dim.xStart, dim.yEnd - dim.yStart);
+
+      ctx.save();
+      ctx.strokeStyle = '#38bdf8';
+      ctx.fillStyle = '#38bdf8';
+      ctx.lineWidth = 1.2;
+
+      // Line
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+
+      // Tick markers at ends
+      ctx.beginPath();
+      ctx.arc(p1.x, p1.y, 3, 0, Math.PI * 2);
+      ctx.arc(p2.x, p2.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Text label
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(dim.text || formatDistance(dist, unit), (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 6);
+      ctx.restore();
+    });
+
+    // 7. Draw Active Dimension Preview
+    if (toolMode === 'dimension' && dimStart) {
+      const p1 = planToScreen(dimStart.x, dimStart.y);
+      const p2 = planToScreen(mouseCanvasPos.x, mouseCanvasPos.y);
+      const dist = Math.hypot(mouseCanvasPos.x - dimStart.x, mouseCanvasPos.y - dimStart.y);
+
+      ctx.save();
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+
+      ctx.font = 'bold 11px monospace';
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillText(formatDistance(dist, unit), (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 8);
+      ctx.restore();
+    }
+
+    // 8. Draw Contractor Text Notes
+    floorTextNotes.forEach((note) => {
+      const p = planToScreen(note.x, note.y);
+      ctx.save();
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      ctx.fillStyle = note.color || '#fef08a';
+      ctx.textAlign = 'center';
+      ctx.fillText(`📌 ${note.text}`, p.x, p.y);
+      ctx.restore();
+    });
+
+    // 9. Draw Furniture Items with Architectural Details & Collision Red Glow
+    floorFurniture.forEach((item) => {
+      const pos = planToScreen(item.x, item.y);
+      const isSelected = selectedId === item.id;
+      const isColliding = collidingItemIds.has(item.id);
+      const isLocked = item.isLocked;
+      const w = item.width * scale;
+      const d = item.depth * scale;
+      const cat = (item.category || '').toLowerCase();
+      const itemName = (item.name || '').toLowerCase();
+
+      ctx.save();
+      ctx.translate(pos.x, pos.y);
+      ctx.rotate(item.angle || 0);
+
+      if (isColliding) {
+        ctx.shadowColor = '#ef4444';
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([4, 2]);
+      } else {
+        ctx.fillStyle = item.color
+          ? item.color + (isSelected ? 'dd' : 'ff')
+          : isSelected
+          ? 'rgba(14, 165, 233, 0.35)'
+          : cat.includes('door') || cat.includes('window')
+          ? 'rgba(234, 179, 8, 0.45)'
+          : '#e2e8f0';
+
+        ctx.strokeStyle = isSelected
+          ? '#0284c7'
+          : cat.includes('door') || cat.includes('window')
+          ? '#d97706'
+          : '#64748b';
+
+        ctx.lineWidth = isSelected ? 2.5 : 1.5;
+      }
+
+      // Base Body
+      ctx.fillRect(-w / 2, -d / 2, w, d);
+      ctx.strokeRect(-w / 2, -d / 2, w, d);
+
+      // Architectural Details for specific types
+      ctx.save();
+      ctx.strokeStyle = isColliding ? '#ef4444' : isSelected ? '#0284c7' : '#64748b';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+
+      if (cat.includes('sofa') || cat.includes('living') || itemName.includes('sofa') || itemName.includes('chair')) {
+        // Armrests & cushions
+        const armW = Math.min(w * 0.15, 12);
+        const backD = Math.min(d * 0.2, 14);
+        ctx.strokeRect(-w / 2, -d / 2, armW, d);
+        ctx.strokeRect(w / 2 - armW, -d / 2, armW, d);
+        ctx.strokeRect(-w / 2 + armW, -d / 2, w - 2 * armW, backD);
+      } else if (cat.includes('bed') || itemName.includes('bed')) {
+        // Pillows & fold line
+        const pillowW = Math.min(w * 0.35, 24);
+        const pillowD = Math.min(d * 0.2, 16);
+        ctx.strokeRect(-w / 2 + 4, -d / 2 + 4, pillowW, pillowD);
+        ctx.strokeRect(w / 2 - 4 - pillowW, -d / 2 + 4, pillowW, pillowD);
+        // Duvet line
+        ctx.beginPath();
+        ctx.moveTo(-w / 2, d * 0.1);
+        ctx.lineTo(w / 2, d * 0.1);
+        ctx.stroke();
+      } else if (cat.includes('door') || itemName.includes('door')) {
+        // Door swing arc
+        ctx.strokeStyle = '#d97706';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(-w / 2, d / 2, w, -Math.PI / 2, 0);
+        ctx.stroke();
+      } else if (cat.includes('light') || itemName.includes('light') || itemName.includes('lamp')) {
+        // Radial light glow
+        ctx.fillStyle = 'rgba(234, 179, 8, 0.2)';
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(w, d), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Orientation marker / arrow
+      ctx.strokeStyle = isColliding ? '#ef4444' : isSelected ? '#0284c7' : '#64748b';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -d / 2 + 4);
+      ctx.stroke();
+
+      // Label
+      if (scale > 0.4) {
+        ctx.font = isColliding ? 'bold 10px system-ui' : 'bold 10px system-ui, sans-serif';
+        ctx.fillStyle = isColliding ? '#991b1b' : isSelected ? '#0369a1' : '#1e293b';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(item.name, 0, 0);
+      }
+
+      // Collision Icon Badge
+      if (isColliding) {
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        ctx.arc(w / 2 - 4, -d / 2 + 4, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 9px monospace';
+        ctx.fillText('!', w / 2 - 4, -d / 2 + 4);
+      }
+
+      // Tabletop Attachment Badge
+      if (isTabletopItem(item)) {
+        ctx.save();
+        const isOnTable = (item.elevation || 0) > 0;
+        ctx.fillStyle = isOnTable ? 'rgba(2, 132, 199, 0.9)' : 'rgba(220, 38, 38, 0.9)';
+        ctx.font = 'bold 8px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(
+          isOnTable ? `▲ TABLETOP (+${Math.round(item.elevation || 0)}cm)` : '⚠️ RESTRICTED (NEEDS TABLE)',
+          0,
+          d / 2 + 12
+        );
+        ctx.restore();
+      }
+
+      // Lock Icon Badge
+      if (isLocked) {
+        ctx.fillStyle = '#d97706';
+        ctx.font = '10px system-ui';
+        ctx.fillText('🔒', -w / 2 + 10, -d / 2 + 10);
+      }
+
+      // 8 Bounding Box Resize Handles + Rotation Stem Handle
+      if (isSelected && !isLocked) {
+        const handleDist = d / 2 + 20;
+        ctx.strokeStyle = isColliding ? '#ef4444' : '#0284c7';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -d / 2);
+        ctx.lineTo(0, -handleDist);
+        ctx.stroke();
+
+        // Rotation Handle Knob
+        ctx.fillStyle = isColliding ? '#ef4444' : '#0284c7';
+        ctx.beginPath();
+        ctx.arc(0, -handleDist, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // 8 Resize Handles: [NW, N, NE, E, SE, S, SW, W]
+        const handles: [number, number][] = [
+          [-w / 2, -d / 2], // NW
+          [0, -d / 2],      // N
+          [w / 2, -d / 2],  // NE
+          [w / 2, 0],       // E
+          [w / 2, d / 2],   // SE
+          [0, d / 2],       // S
+          [-w / 2, d / 2],  // SW
+          [-w / 2, 0],      // W
+        ];
+
+        handles.forEach(([hx, hy]) => {
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = isColliding ? '#ef4444' : '#0284c7';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.rect(hx - 4, hy - 4, 8, 8);
+          ctx.fill();
+          ctx.stroke();
+        });
+      }
+
+      ctx.restore();
+    });
+
+    // 10. Magnetic Snap Beacon Indicator
+    if (magneticSnapPoint) {
+      const snapScreen = planToScreen(magneticSnapPoint.x, magneticSnapPoint.y);
+      ctx.save();
+      ctx.strokeStyle = '#10b981';
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.3)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(snapScreen.x, snapScreen.y, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#059669';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('SNAP ◎', snapScreen.x, snapScreen.y - 18);
+      ctx.restore();
+    }
+
+    // 11. North Compass Rose (Architectural CAD Style)
+    const compassX = width - 40;
+    const compassY = 40;
+    ctx.save();
+    ctx.translate(compassX, compassY);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(0, 0, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // North arrow
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.moveTo(0, -16);
+    ctx.lineTo(6, 0);
+    ctx.lineTo(0, -3);
+    ctx.closePath();
+    ctx.fill();
+
+    // South arrow
+    ctx.fillStyle = '#94a3b8';
+    ctx.beginPath();
+    ctx.moveTo(0, 16);
+    ctx.lineTo(-6, 0);
+    ctx.lineTo(0, 3);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.font = 'bold 9px system-ui, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText('N', 0, -6);
+    ctx.restore();
+
+    // 12. Graphic Scale Bar (Bottom Left)
+    const scaleBarX = 20;
+    const scaleBarY = height - 20;
+    const oneMeterPx = 100 * scale;
+    ctx.save();
+    ctx.strokeStyle = '#64748b';
+    ctx.fillStyle = '#64748b';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(scaleBarX, scaleBarY);
+    ctx.lineTo(scaleBarX + oneMeterPx, scaleBarY);
+    ctx.moveTo(scaleBarX, scaleBarY - 4);
+    ctx.lineTo(scaleBarX, scaleBarY + 4);
+    ctx.moveTo(scaleBarX + oneMeterPx, scaleBarY - 4);
+    ctx.lineTo(scaleBarX + oneMeterPx, scaleBarY + 4);
+    ctx.stroke();
+
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('0', scaleBarX, scaleBarY - 6);
+    ctx.fillText(formatDistance(100, unit), scaleBarX + oneMeterPx, scaleBarY - 6);
+    ctx.restore();
+  }, [
+    plan,
+    scale,
+    panOffset,
+    selectedId,
+    toolMode,
+    wallStart,
+    dimStart,
+    mouseCanvasPos,
+    planToScreen,
+    floorWalls,
+    floorFurniture,
+    floorRooms,
+    floorDimensionLines,
+    floorTextNotes,
+    collidingItemIds,
+    magneticSnapPoint,
+    unit,
+  ]);
+
+  // Handle Mouse Down
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (e.button === 1 || toolMode === 'pan' || e.altKey) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+      return;
+    }
+
+    const clickPlan = screenToPlan(e.clientX, e.clientY);
+
+    // Wall Tool
+    if (toolMode === 'drawWall') {
+      const snapPt = findSnapVertex(clickPlan.x, clickPlan.y);
+      const effectivePt = snapPt || clickPlan;
+
+      if (!wallStart) {
+        setWallStart(effectivePt);
+      } else {
+        const newWall: Wall = {
+          id: `wall_${Date.now()}`,
+          xStart: wallStart.x,
+          yStart: wallStart.y,
+          xEnd: effectivePt.x,
+          yEnd: effectivePt.y,
+          thickness: plan.preferences?.defaultWallThickness || 15,
+          height: plan.preferences?.defaultWallHeight || 250,
+          color: '#f8fafc',
+          floorLevel: activeFloor,
+        };
+        onUpdatePlan({
+          ...plan,
+          walls: [...plan.walls, newWall],
+          updatedAt: new Date().toISOString(),
+        });
+        setWallStart(effectivePt);
+      }
+      return;
+    }
+
+    // Dimension Tool
+    if (toolMode === 'dimension') {
+      if (!dimStart) {
+        setDimStart(clickPlan);
+      } else {
+        const newDim: DimensionLine = {
+          id: `dim_${Date.now()}`,
+          xStart: dimStart.x,
+          yStart: dimStart.y,
+          xEnd: clickPlan.x,
+          yEnd: clickPlan.y,
+          offset: 20,
+          floorLevel: activeFloor,
+        };
+        onUpdatePlan({
+          ...plan,
+          dimensionLines: [...(plan.dimensionLines || []), newDim],
+          updatedAt: new Date().toISOString(),
+        });
+        setDimStart(null);
+      }
+      return;
+    }
+
+    // Text Note Tool
+    if (toolMode === 'text') {
+      const text = prompt('Enter text note / contractor instruction:');
+      if (text && text.trim()) {
+        const newNote: TextNote = {
+          id: `note_${Date.now()}`,
+          x: clickPlan.x,
+          y: clickPlan.y,
+          text: text.trim(),
+          floorLevel: activeFloor,
+        };
+        onUpdatePlan({
+          ...plan,
+          textNotes: [...(plan.textNotes || []), newNote],
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      return;
+    }
+
+    // Select Tool Hit Testing
+    if (toolMode === 'select') {
+      // 1. Check if clicked on Selected Furniture Handles
+      if (selectedFurniture && !selectedFurniture.isLocked) {
+        const item = selectedFurniture;
+        const screenPos = planToScreen(item.x, item.y);
+        const rect = canvasRef.current!.getBoundingClientRect();
+        const clickScreenX = e.clientX - rect.left;
+        const clickScreenY = e.clientY - rect.top;
+
+        const w = item.width * scale;
+        const d = item.depth * scale;
+        const angle = item.angle || 0;
+
+        // Transform mouse point into furniture's local space
+        const dx = clickScreenX - screenPos.x;
+        const dy = clickScreenY - screenPos.y;
+        const cos = Math.cos(-angle);
+        const sin = Math.sin(-angle);
+        const localX = dx * cos - dy * sin;
+        const localY = dx * sin + dy * cos;
+
+        // Check Rotation Handle
+        const rotHandleDist = d / 2 + 20;
+        if (Math.hypot(localX - 0, localY - (-rotHandleDist)) <= 12) {
+          setActiveFurnitureHandle('rotate');
+          setDragStartPos(clickPlan);
+          setInitialFurnitureState({ ...item });
+          return;
+        }
+
+        // Check 8 Resize Handles
+        const handles: { handle: FurnitureHandle; x: number; y: number }[] = [
+          { handle: 'nw', x: -w / 2, y: -d / 2 },
+          { handle: 'n', x: 0, y: -d / 2 },
+          { handle: 'ne', x: w / 2, y: -d / 2 },
+          { handle: 'e', x: w / 2, y: 0 },
+          { handle: 'se', x: w / 2, y: d / 2 },
+          { handle: 's', x: 0, y: d / 2 },
+          { handle: 'sw', x: -w / 2, y: d / 2 },
+          { handle: 'w', x: -w / 2, y: 0 },
+        ];
+
+        for (const h of handles) {
+          if (Math.hypot(localX - h.x, localY - h.y) <= 10) {
+            setActiveFurnitureHandle(h.handle);
+            setDragStartPos(clickPlan);
+            setInitialFurnitureState({ ...item });
+            return;
+          }
+        }
+      }
+
+      // 2. Check if clicked on Selected Wall Handles
+      if (selectedWall) {
+        const p1 = planToScreen(selectedWall.xStart, selectedWall.yStart);
+        const p2 = planToScreen(selectedWall.xEnd, selectedWall.yEnd);
+        const rect = canvasRef.current!.getBoundingClientRect();
+        const clickScreenX = e.clientX - rect.left;
+        const clickScreenY = e.clientY - rect.top;
+
+        if (Math.hypot(clickScreenX - p1.x, clickScreenY - p1.y) <= 14) {
+          setActiveWallHandle('start');
+          setDragStartPos(clickPlan);
+          setInitialWallState({ ...selectedWall });
+          return;
+        }
+        if (Math.hypot(clickScreenX - p2.x, clickScreenY - p2.y) <= 14) {
+          setActiveWallHandle('end');
+          setDragStartPos(clickPlan);
+          setInitialWallState({ ...selectedWall });
+          return;
+        }
+      }
+
+      // 3. Hit Test Furniture Items
+      let foundFurniture: FurnitureItem | null = null;
+      for (let i = floorFurniture.length - 1; i >= 0; i--) {
+        const f = floorFurniture[i];
+        const halfW = f.width / 2;
+        const halfD = f.depth / 2;
+        const dx = clickPlan.x - f.x;
+        const dy = clickPlan.y - f.y;
+        const cos = Math.cos(-(f.angle || 0));
+        const sin = Math.sin(-(f.angle || 0));
+        const localX = dx * cos - dy * sin;
+        const localY = dx * sin + dy * cos;
+
+        if (Math.abs(localX) <= halfW && Math.abs(localY) <= halfD) {
+          foundFurniture = f;
+          break;
+        }
+      }
+
+      if (foundFurniture) {
+        onSelectId(foundFurniture.id);
+        if (!foundFurniture.isLocked) {
+          setActiveFurnitureHandle('body');
+          setDragStartPos(clickPlan);
+          setInitialFurnitureState({ ...foundFurniture });
+        }
+        return;
+      }
+
+      // 4. Hit Test Walls
+      let foundWall: Wall | null = null;
+      for (const w of floorWalls) {
+        const dist = pointToSegmentDistance(
+          clickPlan.x,
+          clickPlan.y,
+          w.xStart,
+          w.yStart,
+          w.xEnd,
+          w.yEnd
+        );
+        if (dist <= w.thickness / 2 + 10) {
+          foundWall = w;
+          break;
+        }
+      }
+
+      if (foundWall) {
+        onSelectId(foundWall.id);
+        setActiveWallHandle('body');
+        setDragStartPos(clickPlan);
+        setInitialWallState({ ...foundWall });
+        return;
+      }
+
+      // Clicked on empty space: deselect
+      onSelectId(null);
+    }
+  };
+
+  // Handle Mouse Move
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const currentPlan = screenToPlan(e.clientX, e.clientY);
+    setMouseCanvasPos(currentPlan);
+
+    // Dynamic magnetic snap preview during wall drawing or dragging
+    if (toolMode === 'drawWall' || (activeWallHandle && ['start', 'end'].includes(activeWallHandle))) {
+      const snapPt = findSnapVertex(currentPlan.x, currentPlan.y, selectedWall?.id);
+      setMagneticSnapPoint(snapPt);
+    } else {
+      if (magneticSnapPoint) setMagneticSnapPoint(null);
+    }
+
+    if (isPanning) {
+      setPanOffset({
+        x: e.clientX - panStart.x,
+        y: e.clientY - panStart.y,
+      });
+      return;
+    }
+
+    // Handle Dragging Furniture
+    if (activeFurnitureHandle && initialFurnitureState && selectedFurniture) {
+      if (activeFurnitureHandle === 'body') {
+        const dx = currentPlan.x - dragStartPos.x;
+        const dy = currentPlan.y - dragStartPos.y;
+        const newX = initialFurnitureState.x + dx;
+        const newY = initialFurnitureState.y + dy;
+
+        if (isTabletopItem(selectedFurniture)) {
+          const simulatedItem = {
+            ...selectedFurniture,
+            x: newX,
+            y: newY,
+            floorLevel: activeFloor,
+          };
+          const attach = autoAttachToTabletop(simulatedItem, plan.furniture);
+          updateFurniture({
+            x: newX,
+            y: newY,
+            elevation: attach.targetElevation,
+            hostFurnitureId: attach.host ? attach.host.id : undefined,
+          });
+        } else {
+          updateFurniture({
+            x: newX,
+            y: newY,
+          });
+        }
+        return;
+      }
+
+      if (activeFurnitureHandle === 'rotate') {
+        const angle = Math.atan2(
+          currentPlan.x - initialFurnitureState.x,
+          -(currentPlan.y - initialFurnitureState.y)
+        );
+        updateFurniture({ angle });
+        return;
+      }
+
+      // Handle Resize handles (NW, N, NE, E, SE, S, SW, W)
+      const angle = initialFurnitureState.angle || 0;
+      const dx = currentPlan.x - dragStartPos.x;
+      const dy = currentPlan.y - dragStartPos.y;
+      const cos = Math.cos(-angle);
+      const sin = Math.sin(-angle);
+      const localDx = dx * cos - dy * sin;
+      const localDy = dx * sin + dy * cos;
+
+      let newWidth = initialFurnitureState.width;
+      let newDepth = initialFurnitureState.depth;
+
+      if (['e', 'ne', 'se'].includes(activeFurnitureHandle)) {
+        newWidth = Math.max(15, Math.round(initialFurnitureState.width + localDx * 2));
+      } else if (['w', 'nw', 'sw'].includes(activeFurnitureHandle)) {
+        newWidth = Math.max(15, Math.round(initialFurnitureState.width - localDx * 2));
+      }
+
+      if (['s', 'se', 'sw'].includes(activeFurnitureHandle)) {
+        newDepth = Math.max(15, Math.round(initialFurnitureState.depth + localDy * 2));
+      } else if (['n', 'ne', 'nw'].includes(activeFurnitureHandle)) {
+        newDepth = Math.max(15, Math.round(initialFurnitureState.depth - localDy * 2));
+      }
+
+      updateFurniture({ width: newWidth, depth: newDepth });
+      return;
+    }
+
+    // Handle Dragging Wall Handles
+    if (activeWallHandle && initialWallState && selectedWall) {
+      const snapPt = findSnapVertex(currentPlan.x, currentPlan.y, selectedWall.id);
+      const targetPt = snapPt || currentPlan;
+
+      if (activeWallHandle === 'start') {
+        updateWall({ xStart: targetPt.x, yStart: targetPt.y });
+        return;
+      }
+
+      if (activeWallHandle === 'end') {
+        updateWall({ xEnd: targetPt.x, yEnd: targetPt.y });
+        return;
+      }
+
+      if (activeWallHandle === 'body') {
+        const dx = currentPlan.x - dragStartPos.x;
+        const dy = currentPlan.y - dragStartPos.y;
+        updateWall({
+          xStart: initialWallState.xStart + dx,
+          yStart: initialWallState.yStart + dy,
+          xEnd: initialWallState.xEnd + dx,
+          yEnd: initialWallState.yEnd + dy,
+        });
+        return;
+      }
+    }
+  };
+
+  const handleMouseUp = () => {
+    const hadDrag = activeFurnitureHandle !== null || activeWallHandle !== null;
+    setIsPanning(false);
+    setActiveFurnitureHandle(null);
+    setActiveWallHandle(null);
+    setInitialFurnitureState(null);
+    setInitialWallState(null);
+    setMagneticSnapPoint(null);
+    if (hadDrag) {
+      onUpdatePlan({ ...plan, updatedAt: new Date().toISOString() });
+    }
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+    setScale((prev) => Math.min(Math.max(prev * zoomFactor, 0.2), 3.0));
+  };
+
+  const updateFurniture = (patch: Partial<FurnitureItem>) => {
+    if (!selectedId) return;
+    const updated = plan.furniture.map((f) =>
+      f.id === selectedId ? { ...f, ...patch } : f
+    );
+    onUpdatePlan({ ...plan, furniture: updated, updatedAt: new Date().toISOString() });
+  };
+
+  const updateWall = (patch: Partial<Wall>) => {
+    if (!selectedId) return;
+    const updated = plan.walls.map((w) =>
+      w.id === selectedId ? { ...w, ...patch } : w
+    );
+    onUpdatePlan({ ...plan, walls: updated, updatedAt: new Date().toISOString() });
+  };
+
+  const handleDeleteSelected = () => {
+    if (!selectedId) return;
+    const item = plan.furniture.find((f) => f.id === selectedId);
+    if (item?.isLocked) {
+      alert(`⚠️ Cannot delete "${item.name}": This item is LOCKED.\nPlease unlock it first before deleting.`);
+      return;
+    }
+    onUpdatePlan({
+      ...plan,
+      walls: plan.walls.filter((w) => w.id !== selectedId),
+      furniture: plan.furniture.filter((f) => f.id !== selectedId),
+      dimensionLines: (plan.dimensionLines || []).filter((d) => d.id !== selectedId),
+      textNotes: (plan.textNotes || []).filter((t) => t.id !== selectedId),
+      updatedAt: new Date().toISOString(),
+    });
+    onSelectId(null);
+  };
+
+  const handleDuplicateSelected = () => {
+    if (!selectedFurniture) return;
+    const copy: FurnitureItem = {
+      ...selectedFurniture,
+      id: `f_${Date.now()}`,
+      name: `${selectedFurniture.name} (Copy)`,
+      x: selectedFurniture.x + 30,
+      y: selectedFurniture.y + 30,
+    };
+    onUpdatePlan({
+      ...plan,
+      furniture: [...plan.furniture, copy],
+      updatedAt: new Date().toISOString(),
+    });
+    onSelectId(copy.id);
+  };
+
+  const handleScaleSelected = (multiplier: number) => {
+    if (!selectedFurniture) return;
+    updateFurniture({
+      width: Math.max(10, Math.round(selectedFurniture.width * multiplier)),
+      depth: Math.max(10, Math.round(selectedFurniture.depth * multiplier)),
+      height: Math.max(10, Math.round(selectedFurniture.height * multiplier)),
+    });
+  };
+
+  return (
+    <div className="relative w-full h-full bg-slate-100 flex flex-col overflow-hidden select-none">
+      {/* Top 2D CAD Mode Bar */}
+      <div className="absolute top-3 left-3 z-10 flex items-center gap-1 bg-white/95 backdrop-blur-md p-1.5 rounded-xl border border-slate-200 shadow-md">
+        <button
+          onClick={() => {
+            setToolMode('select');
+            setWallStart(null);
+            setDimStart(null);
+          }}
+          className={`p-2 rounded-lg text-xs font-medium transition ${
+            toolMode === 'select'
+              ? 'bg-sky-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+          title="Select, Drag & Resize Tool (V)"
+        >
+          <MousePointer className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={() => {
+            setToolMode('drawWall');
+            setWallStart(null);
+            setDimStart(null);
+          }}
+          className={`p-2 rounded-lg text-xs font-medium transition ${
+            toolMode === 'drawWall'
+              ? 'bg-sky-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+          title="Draw Wall Tool (W)"
+        >
+          <Square className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={() => {
+            setToolMode('dimension');
+            setWallStart(null);
+            setDimStart(null);
+          }}
+          className={`p-2 rounded-lg text-xs font-medium transition ${
+            toolMode === 'dimension'
+              ? 'bg-sky-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+          title="Draw Dimension Line (D)"
+        >
+          <Ruler className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={() => {
+            setToolMode('text');
+            setWallStart(null);
+            setDimStart(null);
+          }}
+          className={`p-2 rounded-lg text-xs font-medium transition ${
+            toolMode === 'text'
+              ? 'bg-sky-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+          title="Add Text / Contractor Note (T)"
+        >
+          <Type className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={() => {
+            setToolMode('pan');
+            setWallStart(null);
+            setDimStart(null);
+          }}
+          className={`p-2 rounded-lg text-xs font-medium transition ${
+            toolMode === 'pan'
+              ? 'bg-sky-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+          title="Pan View Tool (H)"
+        >
+          <Move className="w-4 h-4" />
+        </button>
+
+        <div className="w-[1px] h-4 bg-slate-200 mx-1" />
+
+        <button
+          onClick={onOpenBlueprintModal}
+          className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition"
+          title="Import Blueprint Scan"
+        >
+          <ImageIcon className="w-4 h-4 text-sky-600" />
+        </button>
+
+        <button
+          onClick={() => setSnapToGrid(!snapToGrid)}
+          className={`p-2 rounded-lg text-xs font-medium transition ${
+            snapToGrid
+              ? 'text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold'
+              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+          }`}
+          title={`Magnetic Snapping: ${snapToGrid ? 'ON' : 'OFF'} (${GRID_SIZE_CM}cm)`}
+        >
+          <Magnet className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Floor Selector at Top Center */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-md">
+        {(plan.floors || [
+          { level: 0, name: 'Ground Floor' },
+          { level: 1, name: '1st Floor' },
+        ]).map((fl) => (
+          <button
+            key={fl.level}
+            onClick={() => onFloorChange && onFloorChange(fl.level)}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
+              activeFloor === fl.level
+                ? 'bg-sky-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Building className="w-3 h-3" />
+            <span>{fl.name}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Collision Alert Banner */}
+      {collidingItemIds.size > 0 && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-rose-600 text-white backdrop-blur-md px-3.5 py-1.5 rounded-full shadow-lg border border-rose-500 text-xs font-bold animate-pulse">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          <span>
+            {collidingItemIds.size} {collidingItemIds.size === 1 ? 'Item' : 'Items'} in Collision (Glowing Red)
+          </span>
+        </div>
+      )}
+
+
+
+      {/* Zoom Controls Overlay */}
+      <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1 bg-white/95 backdrop-blur-md p-1 rounded-lg border border-slate-200 shadow-md text-xs text-slate-700">
+        <button
+          onClick={() => setScale((s) => Math.max(s * 0.85, 0.2))}
+          className="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900"
+        >
+          <ZoomOut className="w-3.5 h-3.5" />
+        </button>
+        <span className="px-1.5 font-mono text-[11px] min-w-[45px] text-center font-bold text-slate-800">
+          {Math.round(scale * 100)}%
+        </span>
+        <button
+          onClick={() => setScale((s) => Math.min(s * 1.15, 3.0))}
+          className="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900"
+        >
+          <ZoomIn className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={() => {
+            setScale(0.8);
+            setPanOffset({ x: 0, y: 0 });
+          }}
+          className="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900 ml-1 border-l border-slate-200"
+          title="Reset View"
+        >
+          <Maximize2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* CAD Canvas */}
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full cursor-crosshair block"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onWheel={handleWheel}
+      />
+    </div>
+  );
+};
+
+function pointToSegmentDistance(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+): number {
+  const l2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
+  if (l2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  const projX = x1 + t * (x2 - x1);
+  const projY = y1 + t * (y2 - y1);
+  return Math.hypot(px - projX, py - projY);
+}
+
