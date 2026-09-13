@@ -1305,8 +1305,23 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-    setScale((prev) => Math.min(Math.max(prev * zoomFactor, 0.2), 3.0));
+    const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    setScale((prevScale) => {
+      // Allow deep CAD zoom: 5% (overview) to 1200% (max close-up detail)
+      const nextScale = Math.min(Math.max(prevScale * zoomFactor, 0.05), 12.0);
+      const ratio = nextScale / prevScale;
+      // Focus zoom towards current cursor position
+      setPanOffset((prevPan) => ({
+        x: mouseX - (mouseX - prevPan.x) * ratio,
+        y: mouseY - (mouseY - prevPan.y) * ratio,
+      }));
+      return nextScale;
+    });
   };
 
   const updateFurniture = (patch: Partial<FurnitureItem>) => {
@@ -1540,17 +1555,19 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       {/* Zoom Controls Overlay */}
       <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1 bg-white/95 backdrop-blur-md p-1 rounded-lg border border-slate-200 shadow-md text-xs text-slate-700">
         <button
-          onClick={() => setScale((s) => Math.max(s * 0.85, 0.2))}
+          onClick={() => setScale((s) => Math.max(s * 0.8, 0.05))}
           className="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900"
+          title="Zoom Out"
         >
           <ZoomOut className="w-3.5 h-3.5" />
         </button>
-        <span className="px-1.5 font-mono text-[11px] min-w-[45px] text-center font-bold text-slate-800">
+        <span className="px-1.5 font-mono text-[11px] min-w-[50px] text-center font-bold text-slate-800">
           {Math.round(scale * 100)}%
         </span>
         <button
-          onClick={() => setScale((s) => Math.min(s * 1.15, 3.0))}
+          onClick={() => setScale((s) => Math.min(s * 1.25, 12.0))}
           className="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900"
+          title="Max Zoom In (Up to 1200%)"
         >
           <ZoomIn className="w-3.5 h-3.5" />
         </button>

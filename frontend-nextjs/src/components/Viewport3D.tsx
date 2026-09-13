@@ -23,7 +23,9 @@ import {
   Copy,
   Move,
   Layers,
-  Palette
+  Palette,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import { HomePlan, FurnitureItem, Wall, Room, CatalogItem } from '../types/plan';
 import { isTabletopItem, autoAttachToTabletop } from '../services/tabletopAttachment';
@@ -151,7 +153,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     scene.fog = new THREE.FogExp2('#e2e8f0', 0.012);
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(55, width / height, 0.02, 1000);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({
@@ -1270,12 +1272,13 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         0,
         -Math.cos(visitorYawRef.current)
       );
-      visitorPosRef.current.addScaledVector(forward, e.deltaY < 0 ? 0.6 : -0.6);
+      visitorPosRef.current.addScaledVector(forward, e.deltaY < 0 ? 0.5 : -0.5);
     } else {
-      const zoomFactor = e.deltaY < 0 ? 0.9 : 1.1;
+      const zoomFactor = e.deltaY < 0 ? 0.88 : 1.14;
+      // Allow deep 3D close-up zoom: 0.3m (30cm macro detail) up to 120m (expansive landscape)
       sphericalRef.current.radius = Math.max(
-        3,
-        Math.min(45, sphericalRef.current.radius * zoomFactor)
+        0.3,
+        Math.min(120, sphericalRef.current.radius * zoomFactor)
       );
     }
   };
@@ -1601,6 +1604,46 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             <span>Walk (1.6m)</span>
           </button>
         </div>
+
+        <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
+
+        {/* Zoom In & Out */}
+        <button
+          onClick={() => {
+            if (cameraMode === 'visitor') {
+              const forward = new THREE.Vector3(
+                Math.sin(visitorYawRef.current),
+                0,
+                -Math.cos(visitorYawRef.current)
+              );
+              visitorPosRef.current.addScaledVector(forward, 0.8);
+            } else {
+              sphericalRef.current.radius = Math.max(0.3, sphericalRef.current.radius * 0.75);
+            }
+          }}
+          className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg transition"
+          title="Max Zoom In (30cm Close-Up)"
+        >
+          <ZoomIn className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={() => {
+            if (cameraMode === 'visitor') {
+              const forward = new THREE.Vector3(
+                Math.sin(visitorYawRef.current),
+                0,
+                -Math.cos(visitorYawRef.current)
+              );
+              visitorPosRef.current.addScaledVector(forward, -0.8);
+            } else {
+              sphericalRef.current.radius = Math.min(120, sphericalRef.current.radius * 1.25);
+            }
+          }}
+          className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg transition"
+          title="Zoom Out"
+        >
+          <ZoomOut className="w-3.5 h-3.5" />
+        </button>
 
         <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
 
