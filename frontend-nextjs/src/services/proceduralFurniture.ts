@@ -680,9 +680,12 @@ export function buildShelfMeshGroup(params: ShelfParams, mat: THREE.Material): T
 }
 
 // ----------------------------------------------------
-// DOOR MESH BUILDER
+// DOOR MESH BUILDER (With Proximity Swing & Slide Animation Pivots)
 export function buildDoorMeshGroup(params: DoorParams, mat: THREE.Material): THREE.Group {
   const group = new THREE.Group();
+  group.userData.isInteractive = true;
+  group.userData.interactiveType = 'door';
+
   const w = Math.max(50, params.width) * CM;
   const d = Math.max(4, params.depth) * CM;
   const h = Math.max(150, params.height) * CM;
@@ -690,17 +693,25 @@ export function buildDoorMeshGroup(params: DoorParams, mat: THREE.Material): THR
   const brassMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.85, roughness: 0.2 });
   const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, roughness: 0.05, transmission: 0.9 });
 
-  // Architectural Bottom Undercut Gap (1.2cm - 1.5cm clearance from floor for carpet/tiles)
-  const bottomGap = 0.015; // 1.5cm bottom gap
+  const bottomGap = 0.015; // 1.5cm bottom floor clearance
 
   if (params.type === 'barn_sliding') {
-    // Top Steel Track
+    // Top Steel Track (Stationary)
     const railGeom = new THREE.BoxGeometry(w * 1.8, 0.04, 0.02);
     const rail = new THREE.Mesh(railGeom, ironMat);
     rail.position.set(0, h + bottomGap + 0.08, d * 0.6);
     group.add(rail);
 
-    // Rollers & Hangers
+    // Sliding Door Assembly (Pivots/slides along X)
+    const sliderGroup = new THREE.Group();
+    sliderGroup.userData = {
+      animType: 'slide_x',
+      slideDist: w * 0.85,
+      currentProgress: 0,
+      targetProgress: 0,
+    };
+
+    // Rollers & Hangers attached to sliding door
     [-w * 0.35, w * 0.35].forEach((hx) => {
       const wheelGeom = new THREE.CylinderGeometry(0.03, 0.03, 0.015, 16);
       wheelGeom.rotateZ(Math.PI / 2);
@@ -709,16 +720,16 @@ export function buildDoorMeshGroup(params: DoorParams, mat: THREE.Material): THR
       const strapGeom = new THREE.BoxGeometry(0.03, 0.18, 0.01);
       const strap = new THREE.Mesh(strapGeom, ironMat);
       strap.position.set(hx, h + bottomGap + 0.01, d * 0.6 + 0.02);
-      group.add(wheel, strap);
+      sliderGroup.add(wheel, strap);
     });
 
-    // Main Barn Door Leaf with Realistic Bottom Gap
+    // Main Barn Door Leaf
     const leafH = h;
     const leafGeom = new THREE.BoxGeometry(w, leafH, 0.035);
     const leaf = new THREE.Mesh(leafGeom, mat);
     leaf.position.set(0, bottomGap + leafH / 2, 0);
     leaf.castShadow = true;
-    group.add(leaf);
+    sliderGroup.add(leaf);
 
     // Z-Brace Trim
     const braceThick = 0.008;
@@ -726,16 +737,18 @@ export function buildDoorMeshGroup(params: DoorParams, mat: THREE.Material): THR
     topBar.position.set(0, bottomGap + leafH * 0.85, 0.02);
     const botBar = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 0.08, braceThick), mat);
     botBar.position.set(0, bottomGap + leafH * 0.15, 0.02);
-    group.add(topBar, botBar);
+    sliderGroup.add(topBar, botBar);
 
     // Handle Bar
     const handleGeom = new THREE.BoxGeometry(0.03, 0.3, 0.025);
     const handle = new THREE.Mesh(handleGeom, ironMat);
     handle.position.set(w * 0.35, bottomGap + leafH * 0.5, 0.03);
-    group.add(handle);
+    sliderGroup.add(handle);
+
+    group.add(sliderGroup);
+    group.userData.animParts = [sliderGroup];
   } else if (params.type === 'glass_french') {
-    // 2-Leaf French Doors
-    // Outer Frame touches floor
+    // Outer Frame (Stationary)
     const frameThick = 0.04;
     const leftFrame = new THREE.Mesh(new THREE.BoxGeometry(frameThick, h, d), mat);
     leftFrame.position.set(-w / 2 + frameThick / 2, h / 2, 0);
@@ -746,60 +759,90 @@ export function buildDoorMeshGroup(params: DoorParams, mat: THREE.Material): THR
     group.add(leftFrame, rightFrame, topFrame);
 
     // Floor Threshold Strip
-    const thresholdGeom = new THREE.BoxGeometry(w, 0.006, d * 1.1);
-    const threshold = new THREE.Mesh(thresholdGeom, brassMat);
+    const threshold = new THREE.Mesh(new THREE.BoxGeometry(w, 0.006, d * 1.1), brassMat);
     threshold.position.set(0, 0.003, 0);
     group.add(threshold);
 
     const leafW = (w - frameThick * 2) / 2 - 0.005;
     const leafH = h - frameThick - bottomGap;
 
-    [-leafW / 2 - 0.002, leafW / 2 + 0.002].forEach((lx) => {
-      // Wood Frame Leaf
-      const frameLeaf = new THREE.Mesh(new THREE.BoxGeometry(leafW, leafH, 0.035), mat);
-      frameLeaf.position.set(lx, bottomGap + leafH / 2, 0);
-      group.add(frameLeaf);
+    // Left Leaf Hinge Pivot (Rotates Outwards -80 deg)
+    const leftPivot = new THREE.Group();
+    leftPivot.position.set(-w / 2 + frameThick, 0, 0);
+    leftPivot.userData = {
+      animType: 'hinge_left',
+      openRotation: -Math.PI * 0.45,
+      currentProgress: 0,
+      targetProgress: 0,
+    };
 
-      // Glass Inset
-      const glassGeom = new THREE.BoxGeometry(leafW * 0.75, leafH * 0.8, 0.01);
-      const glass = new THREE.Mesh(glassGeom, glassMat);
-      glass.position.set(lx, bottomGap + leafH / 2, 0);
-      group.add(glass);
+    const leftLeaf = new THREE.Mesh(new THREE.BoxGeometry(leafW, leafH, 0.035), mat);
+    leftLeaf.position.set(leafW / 2, bottomGap + leafH / 2, 0);
+    const leftGlass = new THREE.Mesh(new THREE.BoxGeometry(leafW * 0.75, leafH * 0.8, 0.01), glassMat);
+    leftGlass.position.set(leafW / 2, bottomGap + leafH / 2, 0);
+    const leftMullion = new THREE.Mesh(new THREE.BoxGeometry(leafW * 0.75, 0.02, 0.015), mat);
+    leftMullion.position.set(leafW / 2, bottomGap + leafH / 2, 0);
+    const leftHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.12, 12), brassMat);
+    leftHandle.position.set(leafW - 0.03, bottomGap + leafH * 0.5, 0.03);
+    leftPivot.add(leftLeaf, leftGlass, leftMullion, leftHandle);
+    group.add(leftPivot);
 
-      // Mullion Grids
-      const horizMullion = new THREE.Mesh(new THREE.BoxGeometry(leafW * 0.75, 0.02, 0.015), mat);
-      horizMullion.position.set(lx, bottomGap + leafH / 2, 0);
-      group.add(horizMullion);
-    });
+    // Right Leaf Hinge Pivot (Rotates Outwards +80 deg)
+    const rightPivot = new THREE.Group();
+    rightPivot.position.set(w / 2 - frameThick, 0, 0);
+    rightPivot.userData = {
+      animType: 'hinge_right',
+      openRotation: Math.PI * 0.45,
+      currentProgress: 0,
+      targetProgress: 0,
+    };
 
-    // Center Brass Handles
-    [-0.03, 0.03].forEach((hx) => {
-      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.12, 12), brassMat);
-      handle.position.set(hx, bottomGap + leafH * 0.5, 0.03);
-      group.add(handle);
-    });
+    const rightLeaf = new THREE.Mesh(new THREE.BoxGeometry(leafW, leafH, 0.035), mat);
+    rightLeaf.position.set(-leafW / 2, bottomGap + leafH / 2, 0);
+    const rightGlass = new THREE.Mesh(new THREE.BoxGeometry(leafW * 0.75, leafH * 0.8, 0.01), glassMat);
+    rightGlass.position.set(-leafW / 2, bottomGap + leafH / 2, 0);
+    const rightMullion = new THREE.Mesh(new THREE.BoxGeometry(leafW * 0.75, 0.02, 0.015), mat);
+    rightMullion.position.set(-leafW / 2, bottomGap + leafH / 2, 0);
+    const rightHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.12, 12), brassMat);
+    rightHandle.position.set(-leafW + 0.03, bottomGap + leafH * 0.5, 0.03);
+    rightPivot.add(rightLeaf, rightGlass, rightMullion, rightHandle);
+    group.add(rightPivot);
+
+    group.userData.animParts = [leftPivot, rightPivot];
   } else if (params.type === 'arched_wood') {
-    // Mediterranean Arched Door
+    // Mediterranean Arched Door (Frame stationary, slab hinges open)
     const archR = w / 2;
     const rectH = h * 0.75 - bottomGap;
+
+    const doorPivot = new THREE.Group();
+    doorPivot.position.set(-w / 2, 0, 0);
+    doorPivot.userData = {
+      animType: 'hinge_single',
+      openRotation: Math.PI * 0.48,
+      currentProgress: 0,
+      targetProgress: 0,
+    };
+
     const rectGeom = new THREE.BoxGeometry(w, rectH, 0.04);
     const rectMesh = new THREE.Mesh(rectGeom, mat);
-    rectMesh.position.set(0, bottomGap + rectH / 2, 0);
-    group.add(rectMesh);
+    rectMesh.position.set(w / 2, bottomGap + rectH / 2, 0);
+    doorPivot.add(rectMesh);
 
     const archGeom = new THREE.CylinderGeometry(archR, archR, 0.04, 32, 1, false, 0, Math.PI);
     archGeom.rotateX(Math.PI / 2);
     archGeom.rotateZ(Math.PI / 2);
     const archMesh = new THREE.Mesh(archGeom, mat);
-    archMesh.position.set(0, bottomGap + rectH, 0);
-    group.add(archMesh);
+    archMesh.position.set(w / 2, bottomGap + rectH, 0);
+    doorPivot.add(archMesh);
 
-    // Antique Brass Knob
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.025, 16, 16), brassMat);
-    knob.position.set(w * 0.35, bottomGap + rectH * 0.6, 0.03);
-    group.add(knob);
+    knob.position.set(w - 0.08, bottomGap + rectH * 0.6, 0.03);
+    doorPivot.add(knob);
+
+    group.add(doorPivot);
+    group.userData.animParts = [doorPivot];
   } else {
-    // Modern Flush Door with Frame, Threshold, Bottom Clearance Gap & Lever Handle
+    // Modern Flush Door with Hinge Pivot
     const frameThick = 0.04;
     const leftPost = new THREE.Mesh(new THREE.BoxGeometry(frameThick, h, d), mat);
     leftPost.position.set(-w / 2 + frameThick / 2, h / 2, 0);
@@ -809,36 +852,50 @@ export function buildDoorMeshGroup(params: DoorParams, mat: THREE.Material): THR
     topPost.position.set(0, h - frameThick / 2, 0);
     group.add(leftPost, rightPost, topPost);
 
-    // Bottom Threshold Transition Plate
-    const threshGeom = new THREE.BoxGeometry(w, 0.005, d * 1.05);
-    const thresh = new THREE.Mesh(threshGeom, ironMat);
+    // Floor Threshold Plate
+    const thresh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.005, d * 1.05), ironMat);
     thresh.position.set(0, 0.0025, 0);
     group.add(thresh);
 
-    // Door Slab with 1.2cm Undercut Gap above floor
     const slabW = w - frameThick * 2;
     const slabH = h - frameThick - bottomGap;
+
+    // Hinge Pivot at Left Post
+    const doorPivot = new THREE.Group();
+    doorPivot.position.set(-w / 2 + frameThick, 0, 0);
+    doorPivot.userData = {
+      animType: 'hinge_single',
+      openRotation: Math.PI * 0.48, // ~87 degrees swing open
+      currentProgress: 0,
+      targetProgress: 0,
+    };
+
     const slabGeom = new THREE.BoxGeometry(slabW, slabH, 0.038);
     const slab = new THREE.Mesh(slabGeom, mat);
-    slab.position.set(0, bottomGap + slabH / 2, 0);
+    slab.position.set(slabW / 2, bottomGap + slabH / 2, 0);
     slab.castShadow = true;
-    group.add(slab);
+    doorPivot.add(slab);
 
-    // Stainless Lever Handle
     const leverGeom = new THREE.BoxGeometry(0.12, 0.02, 0.04);
     const lever = new THREE.Mesh(leverGeom, ironMat);
-    lever.position.set(slabW * 0.35, bottomGap + slabH * 0.48, 0.03);
-    group.add(lever);
+    lever.position.set(slabW - 0.06, bottomGap + slabH * 0.48, 0.03);
+    doorPivot.add(lever);
+
+    group.add(doorPivot);
+    group.userData.animParts = [doorPivot];
   }
 
   return group;
 }
 
 // ----------------------------------------------------
-// WINDOW MESH BUILDER
+// WINDOW MESH BUILDER (With Proximity Sliding & Casement Pivots)
 // ----------------------------------------------------
 export function buildWindowMeshGroup(params: WindowParams, mat: THREE.Material): THREE.Group {
   const group = new THREE.Group();
+  group.userData.isInteractive = true;
+  group.userData.interactiveType = 'window';
+
   const w = Math.max(50, params.width) * CM;
   const d = Math.max(10, params.depth) * CM;
   const h = Math.max(60, params.height) * CM;
@@ -852,7 +909,7 @@ export function buildWindowMeshGroup(params: WindowParams, mat: THREE.Material):
     reflectivity: 0.6,
   });
 
-  // Sill at bottom
+  // Sill at bottom (Stationary)
   const sillGeom = new THREE.BoxGeometry(w * 1.08, 0.04, d * 1.3);
   const sill = new THREE.Mesh(sillGeom, mat);
   sill.position.set(0, 0.02, 0);
@@ -867,25 +924,34 @@ export function buildWindowMeshGroup(params: WindowParams, mat: THREE.Material):
   rightFrame.position.set(w / 2 - frameThick / 2, h / 2, 0);
   group.add(topFrame, leftFrame, rightFrame);
 
-  // Center Glass Pane
   const glassW = w - frameThick * 2;
   const glassH = h - frameThick - 0.04;
-  const glassGeom = new THREE.BoxGeometry(glassW, glassH, 0.015);
-  const glass = new THREE.Mesh(glassGeom, glassMat);
-  glass.position.set(0, h / 2, 0);
-  group.add(glass);
 
-  if (params.type === 'grid_double_hung') {
-    // 6-pane / 4-pane Grids
-    const vertMullion = new THREE.Mesh(new THREE.BoxGeometry(0.02, glassH, 0.02), mat);
-    vertMullion.position.set(0, h / 2, 0);
-    const horizMullion1 = new THREE.Mesh(new THREE.BoxGeometry(glassW, 0.02, 0.02), mat);
-    horizMullion1.position.set(0, h * 0.35, 0);
-    const horizMullion2 = new THREE.Mesh(new THREE.BoxGeometry(glassW, 0.02, 0.02), mat);
-    horizMullion2.position.set(0, h * 0.65, 0);
-    group.add(vertMullion, horizMullion1, horizMullion2);
+  if (params.type === 'modern_sliding') {
+    // Fixed Left Pane
+    const fixedGlass = new THREE.Mesh(new THREE.BoxGeometry(glassW / 2, glassH, 0.012), glassMat);
+    fixedGlass.position.set(-glassW / 4, h / 2, -0.01);
+    group.add(fixedGlass);
+
+    // Sliding Right Sash Pane (Slides Open to the Left on Proximity)
+    const slidingSash = new THREE.Group();
+    slidingSash.userData = {
+      animType: 'slide_x',
+      slideDist: -glassW * 0.42,
+      currentProgress: 0,
+      targetProgress: 0,
+    };
+
+    const movingGlass = new THREE.Mesh(new THREE.BoxGeometry(glassW / 2, glassH, 0.012), glassMat);
+    movingGlass.position.set(glassW / 4, h / 2, 0.01);
+    const sashDivider = new THREE.Mesh(new THREE.BoxGeometry(0.035, glassH, 0.025), mat);
+    sashDivider.position.set(0, h / 2, 0.01);
+    slidingSash.add(movingGlass, sashDivider);
+
+    group.add(slidingSash);
+    group.userData.animParts = [slidingSash];
   } else if (params.type === 'french_arch') {
-    // Arched Top with Sunburst
+    // Arched Top
     const archR = w / 2;
     const archGeom = new THREE.CylinderGeometry(archR, archR, d, 32, 1, false, 0, Math.PI);
     archGeom.rotateX(Math.PI / 2);
@@ -893,11 +959,50 @@ export function buildWindowMeshGroup(params: WindowParams, mat: THREE.Material):
     const archMesh = new THREE.Mesh(archGeom, mat);
     archMesh.position.set(0, h, 0);
     group.add(archMesh);
-  } else if (params.type === 'modern_sliding') {
-    // Center divider sash
-    const sash = new THREE.Mesh(new THREE.BoxGeometry(0.035, glassH, d * 0.8), mat);
-    sash.position.set(0, h / 2, 0);
-    group.add(sash);
+
+    // Casement Pane that swings open
+    const windowPivot = new THREE.Group();
+    windowPivot.position.set(-glassW / 2, 0, 0);
+    windowPivot.userData = {
+      animType: 'hinge_single',
+      openRotation: Math.PI * 0.35, // ~60 degrees casement opening
+      currentProgress: 0,
+      targetProgress: 0,
+    };
+
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(glassW, glassH, 0.015), glassMat);
+    glass.position.set(glassW / 2, h / 2, 0);
+    windowPivot.add(glass);
+
+    group.add(windowPivot);
+    group.userData.animParts = [windowPivot];
+  } else {
+    // Standard / Panoramic / Grid window with casement swing
+    const windowPivot = new THREE.Group();
+    windowPivot.position.set(-glassW / 2, 0, 0);
+    windowPivot.userData = {
+      animType: 'hinge_single',
+      openRotation: Math.PI * 0.35,
+      currentProgress: 0,
+      targetProgress: 0,
+    };
+
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(glassW, glassH, 0.015), glassMat);
+    glass.position.set(glassW / 2, h / 2, 0);
+    windowPivot.add(glass);
+
+    if (params.type === 'grid_double_hung') {
+      const vertMullion = new THREE.Mesh(new THREE.BoxGeometry(0.02, glassH, 0.02), mat);
+      vertMullion.position.set(glassW / 2, h / 2, 0);
+      const horizMullion1 = new THREE.Mesh(new THREE.BoxGeometry(glassW, 0.02, 0.02), mat);
+      horizMullion1.position.set(glassW / 2, h * 0.35, 0);
+      const horizMullion2 = new THREE.Mesh(new THREE.BoxGeometry(glassW, 0.02, 0.02), mat);
+      horizMullion2.position.set(glassW / 2, h * 0.65, 0);
+      windowPivot.add(vertMullion, horizMullion1, horizMullion2);
+    }
+
+    group.add(windowPivot);
+    group.userData.animParts = [windowPivot];
   }
 
   return group;

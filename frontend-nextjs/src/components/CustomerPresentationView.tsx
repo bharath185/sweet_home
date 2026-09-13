@@ -1033,7 +1033,7 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
       {/* Floating Tour Guidance at Bottom */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-1.5 bg-white/95 rounded-full border border-slate-200 text-xs text-slate-700 shadow-md backdrop-blur-xl">
         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-        <span>Click 3D pieces to customize • Use "+ Add 3D Items" to furnish room</span>
+        <span>Walk near Doors & Windows to auto-open • Click 3D pieces to customize</span>
       </div>
     </div>
   );

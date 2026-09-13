@@ -392,6 +392,44 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         camera.lookAt(targetRef.current);
       }
 
+      // ----------------------------------------------------
+      // PROXIMITY DOOR & WINDOW ANIMATION ENGINE
+      // ----------------------------------------------------
+      const isVisitorMode = mode === 'visitor';
+      const camPos = camera.position;
+      const worldPosVec = new THREE.Vector3();
+
+      meshesGroup.traverse((obj) => {
+        if (obj.userData && obj.userData.isInteractive && Array.isArray(obj.userData.animParts)) {
+          obj.getWorldPosition(worldPosVec);
+          const dist = Math.hypot(camPos.x - worldPosVec.x, camPos.z - worldPosVec.z);
+          // Trigger when camera is within 2.3 meters in Virtual Tour mode
+          const shouldBeOpen = isVisitorMode && dist < 2.3;
+
+          obj.userData.animParts.forEach((part: THREE.Object3D) => {
+            if (part && part.userData) {
+              part.userData.targetProgress = shouldBeOpen ? 1.0 : 0.0;
+
+              const cur = part.userData.currentProgress || 0;
+              const tgt = part.userData.targetProgress;
+              const step = Math.min(1.0, delta * 5.0); // Smooth 60fps spring interpolation
+              const next = cur + (tgt - cur) * step;
+              part.userData.currentProgress = next;
+
+              if (
+                part.userData.animType === 'hinge_single' ||
+                part.userData.animType === 'hinge_left' ||
+                part.userData.animType === 'hinge_right'
+              ) {
+                part.rotation.y = part.userData.openRotation * next;
+              } else if (part.userData.animType === 'slide_x') {
+                part.position.x = part.userData.slideDist * next;
+              }
+            }
+          });
+        }
+      });
+
       // Pulse animation for colliding items
       const elapsedTime = clock.getElapsedTime();
       meshesGroup.traverse((child) => {
