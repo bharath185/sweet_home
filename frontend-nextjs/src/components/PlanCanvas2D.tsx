@@ -264,7 +264,57 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   const selectedWall = plan.walls.find((w) => w.id === selectedId);
   const selectedRoom = plan.rooms.find((r) => r.id === selectedId);
 
-  // Keyboard Shortcuts (Space for Pan, Shift for Ortho, V/W/R/D/T/O/N/C/S)
+  // Delete selected entity (Room, Wall, Furniture, Dimension, Note)
+  const handleDeleteSelected = useCallback(() => {
+    if (!selectedId) return;
+
+    if (selectedRoom) {
+      onUpdatePlan({
+        ...plan,
+        rooms: plan.rooms.filter((r) => r.id !== selectedId),
+        updatedAt: new Date().toISOString(),
+      });
+      onSelectId(null);
+    } else if (selectedWall) {
+      onUpdatePlan({
+        ...plan,
+        walls: plan.walls.filter((w) => w.id !== selectedId),
+        updatedAt: new Date().toISOString(),
+      });
+      onSelectId(null);
+    } else if (selectedFurniture) {
+      if (selectedFurniture.isLocked) {
+        triggerWalkWarning(`⚠️ Cannot delete "${selectedFurniture.name}": Locked item.`);
+        return;
+      }
+      onUpdatePlan({
+        ...plan,
+        furniture: plan.furniture.filter((f) => f.id !== selectedId),
+        updatedAt: new Date().toISOString(),
+      });
+      onSelectId(null);
+    } else {
+      const isDim = (plan.dimensionLines || []).some((d) => d.id === selectedId);
+      const isNote = (plan.textNotes || []).some((n) => n.id === selectedId);
+      if (isDim) {
+        onUpdatePlan({
+          ...plan,
+          dimensionLines: (plan.dimensionLines || []).filter((d) => d.id !== selectedId),
+          updatedAt: new Date().toISOString(),
+        });
+        onSelectId(null);
+      } else if (isNote) {
+        onUpdatePlan({
+          ...plan,
+          textNotes: (plan.textNotes || []).filter((n) => n.id !== selectedId),
+          updatedAt: new Date().toISOString(),
+        });
+        onSelectId(null);
+      }
+    }
+  }, [selectedId, selectedRoom, selectedWall, selectedFurniture, plan, onUpdatePlan, onSelectId]);
+
+  // Keyboard Shortcuts (Space for Pan, Shift for Ortho, Delete/Backspace for Delete, V/W/R/D/T/H)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
@@ -274,6 +324,11 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         setOrthoLock(true);
       } else if (e.code === 'KeyF') {
         setDoorSwingFlipped((prev) => !prev);
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedId) {
+          e.preventDefault();
+          handleDeleteSelected();
+        }
       } else if (e.code === 'Escape') {
         setToolMode('select');
         setWallStart(null);
@@ -313,7 +368,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [toolMode, roomVertices]);
+  }, [toolMode, roomVertices, selectedId, handleDeleteSelected]);
 
   // Object Snap (OSnap) Calculation Engine
   const findSnapVertex = useCallback(
@@ -1765,6 +1820,26 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             <Hand className="w-3.5 h-3.5" />
           </button>
         </div>
+
+        {/* Center/Context: Selected Item Actions (Delete / Backspace) */}
+        {selectedId && (
+          <div className="flex items-center gap-2 bg-slate-900/95 backdrop-blur-md text-white px-3 py-1 rounded-xl shadow-md border border-slate-700/80 pointer-events-auto text-xs animate-in fade-in zoom-in duration-150">
+            <span className="font-medium text-slate-300 text-[11px] truncate max-w-[140px]">
+              {selectedRoom ? `Room: ${selectedRoom.name || 'Room'}` :
+               selectedWall ? `Wall (${Math.round(Math.hypot(selectedWall.xEnd - selectedWall.xStart, selectedWall.yEnd - selectedWall.yStart))}cm)` :
+               selectedFurniture ? selectedFurniture.name :
+               'Selected Item'}
+            </span>
+            <button
+              onClick={handleDeleteSelected}
+              className="flex items-center gap-1 px-2 py-0.5 bg-rose-600 hover:bg-rose-500 text-white rounded-md text-[11px] font-bold transition shadow-xs cursor-pointer"
+              title="Delete Selected Item (Delete or Backspace key)"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Delete</span>
+            </button>
+          </div>
+        )}
 
         {/* Right: Layers & Professional Export Actions */}
         <div className="flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-xl border border-slate-200/90 shadow-md pointer-events-auto">

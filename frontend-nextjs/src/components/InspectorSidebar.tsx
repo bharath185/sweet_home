@@ -179,6 +179,9 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
 }) => {
   const selectedFurniture = plan.furniture.find((f) => f.id === selectedId);
   const selectedWall = plan.walls.find((w) => w.id === selectedId);
+  const selectedRoom = plan.rooms.find((r) => r.id === selectedId);
+  const selectedDimension = (plan.dimensionLines || []).find((d) => d.id === selectedId);
+  const selectedNote = (plan.textNotes || []).find((n) => n.id === selectedId);
   const isColliding = selectedFurniture ? collidingItemIds.has(selectedFurniture.id) : false;
   const collisionReason = selectedFurniture ? collisionReasons.get(selectedFurniture.id) : undefined;
 
@@ -195,19 +198,19 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
     }
   }, [isWalkMode]);
 
-  // Automatically open Properties panel when any item or wall is selected (in Orbit / 2D mode),
+  // Automatically open Properties panel when any item, wall, or room is selected (in Orbit / 2D mode),
   // and collapse the properties/finish panel when deselected (e.g. in Walk mode or clicking background)
   useEffect(() => {
     if (isWalkMode) {
       setActiveTab(null);
       return;
     }
-    if (selectedFurniture || selectedWall) {
+    if (selectedFurniture || selectedWall || selectedRoom) {
       setActiveTab('transform');
     } else if (!selectedId) {
       setActiveTab((prev) => (prev === 'transform' || prev === 'design' ? null : prev));
     }
-  }, [selectedId, selectedFurniture, selectedWall, isWalkMode]);
+  }, [selectedId, selectedFurniture, selectedWall, selectedRoom, isWalkMode]);
 
   const isDark = theme === 'dark';
 
@@ -270,6 +273,27 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
       onUpdatePlan({
         ...plan,
         walls: plan.walls.filter((w) => w.id !== selectedWall.id),
+        updatedAt: new Date().toISOString(),
+      });
+      onSelectId(null);
+    } else if (selectedRoom) {
+      onUpdatePlan({
+        ...plan,
+        rooms: plan.rooms.filter((r) => r.id !== selectedRoom.id),
+        updatedAt: new Date().toISOString(),
+      });
+      onSelectId(null);
+    } else if (selectedDimension) {
+      onUpdatePlan({
+        ...plan,
+        dimensionLines: (plan.dimensionLines || []).filter((d) => d.id !== selectedDimension.id),
+        updatedAt: new Date().toISOString(),
+      });
+      onSelectId(null);
+    } else if (selectedNote) {
+      onUpdatePlan({
+        ...plan,
+        textNotes: plan.textNotes?.filter((n) => n.id !== selectedNote.id),
         updatedAt: new Date().toISOString(),
       });
       onSelectId(null);

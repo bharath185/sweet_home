@@ -372,7 +372,11 @@ export default function HomeStudioPage() {
   const handleDeleteItem = (id: string) => {
     const updated = {
       ...plan,
-      furniture: plan.furniture.filter((f) => f.id !== id)
+      furniture: plan.furniture.filter((f) => f.id !== id),
+      walls: plan.walls.filter((w) => w.id !== id),
+      rooms: plan.rooms.filter((r) => r.id !== id),
+      dimensionLines: (plan.dimensionLines || []).filter((d) => d.id !== id),
+      textNotes: (plan.textNotes || []).filter((n) => n.id !== id),
     };
     handleUpdatePlan(updated);
     if (selectedId === id) setSelectedId(null);
