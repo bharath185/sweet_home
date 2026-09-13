@@ -30,6 +30,7 @@ import {
   CornerDownRight,
   Maximize,
   Minimize,
+  Download,
   Undo2,
   Redo2
 } from 'lucide-react';
@@ -444,23 +445,24 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         ctx.setLineDash(isCurActive ? [] : [6, 4]);
         ctx.strokeRect(centerScreen.x - boxW / 2, centerScreen.y - boxH / 2, boxW, boxH);
 
-        // Floor Header Tag
+        // Floor Header Tag (Clean compact pill badge with zero overlap)
         ctx.setLineDash([]);
-        ctx.fillStyle = isCurActive ? '#0284c7' : '#475569';
-        ctx.font = 'bold 12px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(
-          `LEVEL ${fl.level}: ${fl.name.toUpperCase()} (Height: ${fl.height || 250}cm)`,
-          centerScreen.x,
-          centerScreen.y - boxH / 2 - 12
-        );
+        const tagTitle = fl.level === 0 ? 'LEVEL 0 • GROUND' : fl.level === 1 ? 'LEVEL 1 • 1ST FLOOR' : `LEVEL ${fl.level}`;
+        const pillW = 150;
+        const pillH = 24;
+        ctx.fillStyle = isCurActive ? '#0284c7' : 'rgba(241, 245, 249, 0.95)';
+        ctx.beginPath();
+        ctx.roundRect(centerScreen.x - pillW / 2, centerScreen.y - boxH / 2 - pillH / 2, pillW, pillH, 6);
+        ctx.fill();
+        ctx.strokeStyle = isCurActive ? '#0284c7' : '#cbd5e1';
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
-        // Active Floor Indicator
-        if (isCurActive) {
-          ctx.fillStyle = '#0284c7';
-          ctx.font = 'bold 9px system-ui, sans-serif';
-          ctx.fillText('● ACTIVE SELECTED FLOOR', centerScreen.x, centerScreen.y - boxH / 2 + 16);
-        }
+        ctx.fillStyle = isCurActive ? '#ffffff' : '#64748b';
+        ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(isCurActive ? `● ${tagTitle}` : tagTitle, centerScreen.x, centerScreen.y - boxH / 2);
         ctx.restore();
       });
     }
@@ -495,24 +497,55 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         const avgY = room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length;
         const screenAvg = planToScreen(avgX, avgY, flLevel);
 
-        ctx.font = '600 12px system-ui, sans-serif';
-        ctx.fillStyle = '#334155';
-        ctx.textAlign = 'center';
-        ctx.fillText(room.name, screenAvg.x, screenAvg.y - 8);
+        const roomTitle = room.name.toUpperCase();
+        const areaStr = formatArea(room.areaSquareMeters || 12.5, unit);
+
+        ctx.save();
+        ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+        const titleW = ctx.measureText(roomTitle).width;
         ctx.font = 'bold 10px monospace';
-        ctx.fillStyle = '#64748b';
-        ctx.fillText(formatArea(room.areaSquareMeters || 12.5, unit), screenAvg.x, screenAvg.y + 8);
+        const areaW = ctx.measureText(areaStr).width;
+        const cardW = Math.max(titleW, areaW) + 24;
+        const cardH = 34;
+
+        // Clean white architectural badge with border so text is NEVER obscured by furniture
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
+        ctx.shadowColor = 'rgba(15, 23, 42, 0.12)';
+        ctx.shadowBlur = 6;
+        ctx.shadowOffsetY = 2;
+        ctx.beginPath();
+        ctx.roundRect(screenAvg.x - cardW / 2, screenAvg.y - cardH / 2, cardW, cardH, 6);
+        ctx.fill();
+
+        ctx.shadowColor = 'transparent';
+        ctx.strokeStyle = 'rgba(203, 213, 225, 0.95)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        // Room Title
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 10.5px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(roomTitle, screenAvg.x, screenAvg.y - 6);
+
+        // Room Area
+        ctx.fillStyle = '#0284c7';
+        ctx.font = 'bold 9.5px monospace';
+        ctx.fillText(areaStr, screenAvg.x, screenAvg.y + 7);
+        ctx.restore();
       });
 
-      // 4. Draw Walls
+      // 4. Draw Walls (Solid Architectural CAD Double Line & Fill)
       curWalls.forEach((wall) => {
         const p1 = planToScreen(wall.xStart, wall.yStart, flLevel);
         const p2 = planToScreen(wall.xEnd, wall.yEnd, flLevel);
         const isSelected = selectedId === wall.id;
 
         ctx.save();
-        ctx.strokeStyle = isSelected ? '#38bdf8' : wall.color || '#e2e8f0';
-        ctx.lineWidth = Math.max(3, wall.thickness * scale);
+        const wallThicknessPx = Math.max(4, (wall.thickness || 15) * scale);
+        ctx.strokeStyle = isSelected ? '#38bdf8' : '#334155';
+        ctx.lineWidth = wallThicknessPx;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
@@ -521,25 +554,37 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         ctx.lineTo(p2.x, p2.y);
         ctx.stroke();
 
-        ctx.strokeStyle = isSelected ? '#0284c7' : '#94a3b8';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
+        // Inner core line
+        ctx.strokeStyle = isSelected ? '#0284c7' : '#64748b';
+        ctx.lineWidth = Math.max(1, wallThicknessPx * 0.25);
         ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
         ctx.lineTo(p2.x, p2.y);
         ctx.stroke();
         ctx.restore();
 
+        // Wall length label with high-contrast badge
         const lengthCm = Math.round(
           Math.hypot(wall.xEnd - wall.xStart, wall.yEnd - wall.yStart)
         );
         const midX = (p1.x + p2.x) / 2;
         const midY = (p1.y + p2.y) / 2;
+        const dimStr = formatDistance(lengthCm, unit);
 
-        ctx.font = 'bold 10px monospace';
-        ctx.fillStyle = isSelected ? '#38bdf8' : '#cbd5e1';
+        ctx.save();
+        ctx.font = 'bold 9.5px monospace';
+        const txtW = ctx.measureText(dimStr).width + 8;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+        ctx.fillRect(midX - txtW / 2, midY - 14, txtW, 12);
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(midX - txtW / 2, midY - 14, txtW, 12);
+
+        ctx.fillStyle = isSelected ? '#0284c7' : '#1e293b';
         ctx.textAlign = 'center';
-        ctx.fillText(formatDistance(lengthCm, unit), midX, midY - 8);
+        ctx.textBaseline = 'middle';
+        ctx.fillText(dimStr, midX, midY - 8);
+        ctx.restore();
 
         if (isSelected) {
           ctx.save();
@@ -1589,6 +1634,103 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     });
   };
 
+  // Export Ultra High-Definition (4K 300 DPI) Engineering Blueprint Drawing
+  const handleExportHDImage = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Create 4K Ultra-HD Export Canvas
+    const exportCanvas = document.createElement('canvas');
+    const width = 3840;
+    const height = 2160;
+    exportCanvas.width = width;
+    exportCanvas.height = height;
+    const ectx = exportCanvas.getContext('2d');
+    if (!ectx) return;
+
+    // White Blueprint Background
+    ectx.fillStyle = '#ffffff';
+    ectx.fillRect(0, 0, width, height);
+
+    // Architectural Grid Lines
+    ectx.strokeStyle = '#f1f5f9';
+    ectx.lineWidth = 1;
+    const gridPx = 40;
+    for (let x = 0; x < width; x += gridPx) {
+      ectx.beginPath();
+      ectx.moveTo(x, 0);
+      ectx.lineTo(x, height);
+      ectx.stroke();
+    }
+    for (let y = 0; y < height; y += gridPx) {
+      ectx.beginPath();
+      ectx.moveTo(0, y);
+      ectx.lineTo(width, y);
+      ectx.stroke();
+    }
+
+    // Draw active high-res canvas content centered onto 4K sheet
+    const srcAspect = canvas.width / canvas.height;
+    const dstAspect = width / height;
+    let drawW = width;
+    let drawH = height;
+    let drawX = 0;
+    let drawY = 0;
+
+    if (srcAspect > dstAspect) {
+      drawH = width / srcAspect;
+      drawY = (height - drawH) / 2;
+    } else {
+      drawW = height * srcAspect;
+      drawX = (width - drawW) / 2;
+    }
+    ectx.drawImage(canvas, drawX, drawY, drawW, drawH);
+
+    // Engineering Drawing Title Block & Official Architectural Seal
+    const stampW = 620;
+    const stampH = 170;
+    const stampX = width - stampW - 50;
+    const stampY = height - stampH - 50;
+
+    ectx.fillStyle = 'rgba(255, 255, 255, 0.98)';
+    ectx.shadowColor = 'rgba(15, 23, 42, 0.25)';
+    ectx.shadowBlur = 24;
+    ectx.shadowOffsetY = 8;
+    ectx.beginPath();
+    ectx.roundRect(stampX, stampY, stampW, stampH, 12);
+    ectx.fill();
+    ectx.shadowColor = 'transparent';
+    ectx.strokeStyle = '#0284c7';
+    ectx.lineWidth = 3;
+    ectx.stroke();
+
+    // Title Block Header
+    ectx.fillStyle = '#0284c7';
+    ectx.fillRect(stampX, stampY, stampW, 40);
+    ectx.fillStyle = '#ffffff';
+    ectx.font = 'bold 17px system-ui, -apple-system, sans-serif';
+    ectx.textAlign = 'left';
+    ectx.textBaseline = 'middle';
+    ectx.fillText('📐 ARCHITECTURAL ENGINEERING BLUEPRINT', stampX + 20, stampY + 20);
+
+    // Title Block Info
+    ectx.fillStyle = '#0f172a';
+    ectx.font = 'bold 16px system-ui, -apple-system, sans-serif';
+    ectx.fillText(`Project: ${plan.name || 'Custom Architectural Project'}`, stampX + 20, stampY + 70);
+    
+    ectx.font = '500 13.5px system-ui, -apple-system, sans-serif';
+    ectx.fillStyle = '#475569';
+    ectx.fillText(`Floor: ${activeFloor === 0 ? 'Ground Floor' : '1st Floor'}   •   Scale: 1:50 HD Vector`, stampX + 20, stampY + 102);
+    ectx.fillText(`Total Plan Items: ${plan.furniture.length}   •   Export Date: ${new Date().toLocaleDateString()}`, stampX + 20, stampY + 132);
+
+    // Trigger crisp PNG file download
+    const dataUrl = exportCanvas.toDataURL('image/png', 1.0);
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = `${(plan.name || 'Floorplan').replace(/\s+/g, '_')}_Floor_${activeFloor}_HD_Blueprint.png`;
+    link.click();
+  };
+
   return (
     <div className="relative w-full h-full bg-slate-100 flex flex-col overflow-hidden select-none">
       {/* Unified Top 2D CAD Header Bar (Zero Overlap Guaranteed) */}
@@ -1696,6 +1838,18 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             title={`Snap: ${snapToGrid ? 'ON' : 'OFF'} (${GRID_SIZE_CM}cm)`}
           >
             <Magnet className="w-3.5 h-3.5" />
+          </button>
+
+          <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
+
+          {/* Export HD Blueprint Button */}
+          <button
+            onClick={handleExportHDImage}
+            className="px-2 py-1 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 hover:bg-sky-600 hover:text-white border border-sky-200 transition flex items-center gap-1 shadow-2xs cursor-pointer"
+            title="Export Ultra HD 4K Architectural Blueprint (PNG)"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Export HD</span>
           </button>
         </div>
       </div>
