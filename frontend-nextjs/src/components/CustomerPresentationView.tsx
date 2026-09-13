@@ -32,7 +32,8 @@ import {
   Maximize2,
   Pin,
   Box,
-  Search
+  Search,
+  Hand
 } from 'lucide-react';
 import { HomePlan, Room, CatalogItem, FurnitureItem, UserRole } from '../types/plan';
 import { isTabletopItem, findNearestSupportingSurface } from '../services/tabletopAttachment';
@@ -75,6 +76,7 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
 }) => {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(plan.rooms[0] || null);
   const [tourCameraMode, setTourCameraMode] = useState<'visitor' | 'aerial'>('visitor');
+  const [tourToolMode, setTourToolMode] = useState<'select' | 'pan'>('select');
   const [showSpecDrawer, setShowSpecDrawer] = useState<boolean>(false);
   const [showAddCatalogDrawer, setShowAddCatalogDrawer] = useState<boolean>(false);
   const [consultationBooked, setConsultationBooked] = useState<boolean>(false);
@@ -343,6 +345,8 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
           cameraModeProp={tourCameraMode}
           onCameraModeChangeProp={setTourCameraMode}
           targetRoomToFocus={selectedRoom}
+          toolModeProp={tourToolMode}
+          onToolModeChangeProp={setTourToolMode}
         />
       </div>
 
@@ -386,12 +390,27 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
                   <Eye className="w-3 h-3" />
                   <span>🌐 Aerial View</span>
                 </button>
+                <div className="w-[1px] h-3 bg-slate-300 mx-0.5" />
+                <button
+                  onClick={() => setTourToolMode(tourToolMode === 'pan' ? 'select' : 'pan')}
+                  className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold transition ${
+                    tourToolMode === 'pan'
+                      ? 'bg-amber-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Free Hand / Pan View Tool (H or Hold Space) - Move 3D scene without selecting items"
+                >
+                  <Hand className="w-3 h-3" />
+                  <span>🖐️ Free Hand</span>
+                </button>
               </div>
             </div>
             <p className="text-[10px] text-slate-500">
-              {tourCameraMode === 'visitor'
+              {tourToolMode === 'pan'
+                ? '🖐️ Free Hand Tool: Click & drag anywhere to pan view without touching furniture • Press H or click Free Hand to exit'
+                : tourCameraMode === 'visitor'
                 ? '🚶 Use WASD, Arrow Keys, or on-screen D-Pad to walk • Doors auto-open when approaching!'
-                : '🌐 Left-click + drag to orbit • Scroll to zoom'}
+                : '🌐 Left-click + drag to orbit • Scroll to zoom • Press H for Free Hand'}
             </p>
           </div>
         </div>

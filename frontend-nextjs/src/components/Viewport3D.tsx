@@ -25,7 +25,9 @@ import {
   Layers,
   Palette,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  Hand,
+  MousePointer
 } from 'lucide-react';
 import { HomePlan, FurnitureItem, Wall, Room, CatalogItem } from '../types/plan';
 import { isTabletopItem, autoAttachToTabletop } from '../services/tabletopAttachment';
@@ -60,6 +62,8 @@ interface Viewport3DProps {
   cameraModeProp?: 'aerial' | 'visitor';
   onCameraModeChangeProp?: (mode: 'aerial' | 'visitor') => void;
   targetRoomToFocus?: Room | null;
+  toolModeProp?: 'select' | 'pan';
+  onToolModeChangeProp?: (mode: 'select' | 'pan') => void;
 }
 
 export const Viewport3D: React.FC<Viewport3DProps> = ({
@@ -77,6 +81,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   cameraModeProp,
   onCameraModeChangeProp,
   targetRoomToFocus,
+  toolModeProp,
+  onToolModeChangeProp,
 }) => {
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -100,6 +106,21 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const [isHoveringObject, setIsHoveringObject] = useState(false);
   const [isDraggingObjectState, setIsDraggingObjectState] = useState(false);
   const [isDragOverCatalog, setIsDragOverCatalog] = useState(false);
+
+  // 3D Tool Mode: 'select' (Select & Drag Furniture) | 'pan' (Free Hand Pan View without moving items)
+  const [localToolMode, setLocalToolMode] = useState<'select' | 'pan'>('select');
+  const toolMode = toolModeProp !== undefined ? toolModeProp : localToolMode;
+  const setToolMode = (mode: 'select' | 'pan') => {
+    setLocalToolMode(mode);
+    if (onToolModeChangeProp) onToolModeChangeProp(mode);
+  };
+  const toolModeRef = useRef<'select' | 'pan'>('select');
+  toolModeRef.current = toolMode;
+
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const isSpacePressedRef = useRef(false);
+  const [isPanningState, setIsPanningState] = useState(false);
+
 
   // 3D Floor Isolation & Multi-Floor Mode: 'isolated' (Focus Active Floor) | 'stacked' (All Floors) | 'sideBySide' (All Floors Side-by-Side)
   const [localFloor3DMode, setLocalFloor3DMode] = useState<'isolated' | 'stacked' | 'sideBySide'>('isolated');
@@ -224,6 +245,23 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         return;
       }
 
+      // Spacebar for Free Hand Pan Mode
+      if (e.code === 'Space' && !e.repeat) {
+        isSpacePressedRef.current = true;
+        setIsSpacePressed(true);
+      }
+      // 'H' key toggles Free Hand tool
+      if (e.code === 'KeyH') {
+        const next = toolModeRef.current === 'pan' ? 'select' : 'pan';
+        toolModeRef.current = next;
+        setToolMode(next);
+      }
+      // 'V' key or Escape returns to Select tool
+      if (e.code === 'KeyV' || e.code === 'Escape') {
+        toolModeRef.current = 'select';
+        setToolMode('select');
+      }
+
       keysPressedRef.current[e.code] = true;
 
       const selId = selectedIdRef.current;
@@ -326,6 +364,10 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       keysPressedRef.current[e.code] = false;
+      if (e.code === 'Space') {
+        isSpacePressedRef.current = false;
+        setIsSpacePressed(false);
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
@@ -883,6 +925,15 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
     prevMouseRef.current = { x: e.clientX, y: e.clientY };
 
+    const isFreeHand = toolModeRef.current === 'pan' || isSpacePressedRef.current;
+
+    // Free Hand / Pan Tool or Middle/Right click: Strictly Pan camera view, NEVER select or drag furniture
+    if (isFreeHand || e.button === 1 || e.button === 2) {
+      isPanningRef.current = true;
+      setIsPanningState(true);
+      return;
+    }
+
     // Check if user clicked a 3D furniture item in Aerial or Visitor mode with Left Mouse Button (0)
     if (e.button === 0 && cameraRef.current && meshesGroupRef.current && canvasMountRef.current) {
       const rect = canvasMountRef.current.getBoundingClientRect();
@@ -966,8 +1017,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const dy = e.clientY - prevMouseRef.current.y;
     prevMouseRef.current = { x: e.clientX, y: e.clientY };
 
+    const isFreeHand = toolModeRef.current === 'pan' || isSpacePressedRef.current;
+
     // 1. ACTIVE 3D FURNITURE DRAGGING & PLACEMENT
     if (
+      !isFreeHand &&
       isDraggingObjectRef.current &&
       draggedItemIdRef.current &&
       cameraRef.current &&
@@ -1077,6 +1131,21 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           -Math.PI / 2.5,
           Math.min(Math.PI / 2.5, visitorPitchRef.current - dy * 0.005)
         );
+      } else if (isPanningRef.current) {
+        // Free Hand Strafe/Pan in Visitor Walk Mode
+        const panSpeed = 0.008;
+        const forward = new THREE.Vector3(
+          Math.sin(visitorYawRef.current),
+          0,
+          -Math.cos(visitorYawRef.current)
+        );
+        const right = new THREE.Vector3(
+          Math.cos(visitorYawRef.current),
+          0,
+          Math.sin(visitorYawRef.current)
+        );
+        visitorPosRef.current.addScaledVector(right, -dx * panSpeed);
+        visitorPosRef.current.addScaledVector(forward, dy * panSpeed);
       }
     } else {
       if (isDraggingRef.current) {
@@ -1102,6 +1171,9 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   };
 
   const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    const wasPanning = isPanningRef.current;
+    const isFreeHand = toolModeRef.current === 'pan' || isSpacePressedRef.current;
+
     // Finish 3D Dragging
     if (isDraggingObjectRef.current) {
       isDraggingObjectRef.current = false;
@@ -1112,6 +1184,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
     isDraggingRef.current = false;
     isPanningRef.current = false;
+    setIsPanningState(false);
+
+    // If we were using the Free Hand tool or panning, do not trigger selection
+    if (isFreeHand || wasPanning) {
+      return;
+    }
 
     // Click to select/deselect
     const dragDist = Math.hypot(
@@ -1488,10 +1566,16 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     onSelectId(copy.id);
   };
 
+  const isFreeHandActive = toolMode === 'pan' || isSpacePressed;
+
   return (
     <div
       className={`relative w-full h-full bg-slate-100 overflow-hidden select-none ${
-        isDraggingObjectState
+        isFreeHandActive
+          ? isPanningState
+            ? 'cursor-grabbing'
+            : 'cursor-grab'
+          : isDraggingObjectState
           ? 'cursor-grabbing'
           : isHoveringObject
           ? 'cursor-grab'
@@ -1576,6 +1660,36 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
           </>
         )}
+
+                {/* 3D Tool Mode: Select vs Free Hand Pan */}
+        <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+          <button
+            onClick={() => setToolMode('select')}
+            className={`px-2 py-1 rounded-md text-[11px] transition flex items-center gap-1 ${
+              toolMode === 'select'
+                ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+            title="Select & Move 3D Items (V)"
+          >
+            <MousePointer className="w-3 h-3" />
+            <span>Select</span>
+          </button>
+          <button
+            onClick={() => setToolMode('pan')}
+            className={`px-2 py-1 rounded-md text-[11px] transition flex items-center gap-1 ${
+              toolMode === 'pan'
+                ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+            title="Free Hand / Pan View Tool (H or Hold Space) - Move 3D scene without selecting items"
+          >
+            <Hand className="w-3 h-3" />
+            <span>Hand</span>
+          </button>
+        </div>
+
+        <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
 
         {/* Camera Mode */}
         <div className="flex items-center gap-0.5">
@@ -1767,9 +1881,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         <div className="absolute bottom-4 left-4 z-10 flex items-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 text-[11px] text-slate-600 pointer-events-none shadow-md">
           <Sparkles className="w-3.5 h-3.5 text-sky-600" />
           <span>
-            {cameraMode === 'visitor'
-              ? 'Virtual Visitor: Use W/A/S/D or D-Pad to walk • Drag to look 360° • Click & drag furniture to reposition'
-              : '3D Drag & Drop: Click and drag any furniture piece on the floor • Press R to rotate • Drag empty space to orbit'}
+            {toolMode === 'pan' || isSpacePressed
+              ? '🖐️ Free Hand Tool Active: Click and drag anywhere to pan the 3D scene smoothly (Press V or Click Select to exit)'
+              : cameraMode === 'visitor'
+              ? 'Virtual Visitor: Use W/A/S/D or D-Pad to walk • Drag to look 360° • Click & drag furniture to reposition • Press H for Free Hand'
+              : '3D Drag & Drop: Click and drag any furniture piece on the floor • Press R to rotate • Press H or Hold Space for Free Hand Pan'}
           </span>
         </div>
       )}
