@@ -11,7 +11,7 @@ export const LoginSimulator3D: React.FC = () => {
   const isDraggingRef = useRef(false);
   const dragModeRef = useRef<'rotate' | 'pan' | 'move_item'>('rotate');
   const prevMouseRef = useRef({ x: 0, y: 0 });
-  const cameraAngleRef = useRef({ theta: Math.PI / 4.2, phi: Math.PI / 3.0, radius: 12.0 });
+  const cameraAngleRef = useRef({ theta: Math.PI / 4.2, phi: Math.PI / 3.0, radius: 12.5 });
   const cameraTargetRef = useRef(new THREE.Vector3(0, 0.45, 0));
 
   // Selected item manipulation state
@@ -44,37 +44,37 @@ export const LoginSimulator3D: React.FC = () => {
     mount.innerHTML = '';
     mount.appendChild(renderer.domElement);
 
-    // 2. High-End Studio Lighting Setup
+    // 2. Studio Lighting Setup
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.15);
     scene.add(ambientLight);
 
     // Warm Sun Key Light
     const sunLight = new THREE.DirectionalLight(0xfff7ed, 2.3);
-    sunLight.position.set(9, 18, 10);
+    sunLight.position.set(10, 18, 11);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 2048;
     sunLight.shadow.mapSize.height = 2048;
     sunLight.shadow.camera.near = 0.5;
     sunLight.shadow.camera.far = 40;
-    sunLight.shadow.camera.left = -7;
-    sunLight.shadow.camera.right = 7;
-    sunLight.shadow.camera.top = 7;
-    sunLight.shadow.camera.bottom = -7;
+    sunLight.shadow.camera.left = -8;
+    sunLight.shadow.camera.right = 8;
+    sunLight.shadow.camera.top = 8;
+    sunLight.shadow.camera.bottom = -8;
     sunLight.shadow.bias = -0.0002;
     scene.add(sunLight);
 
     // Soft Blue Fill Light
     const fillLight = new THREE.DirectionalLight(0xbae6fd, 0.9);
-    fillLight.position.set(-10, 12, -9);
+    fillLight.position.set(-11, 12, -10);
     scene.add(fillLight);
 
-    // 3. Scaled Root Room Group (Scale 0.58 guarantees zero edge cropping)
+    // 3. Scaled Root Room Group (Scale 0.54 guarantees full visibility of the wide 5.6m room)
     const roomRoot = new THREE.Group();
-    roomRoot.scale.set(0.58, 0.58, 0.58);
+    roomRoot.scale.set(0.54, 0.54, 0.54);
     scene.add(roomRoot);
 
     // Chandelier Warm Point Light
-    const chandelierPoint = new THREE.PointLight(0xfef08a, 0, 10, 1.4);
+    const chandelierPoint = new THREE.PointLight(0xfef08a, 0, 11, 1.4);
     chandelierPoint.position.set(0, 2.0, 0);
     chandelierPoint.castShadow = true;
     roomRoot.add(chandelierPoint);
@@ -106,7 +106,7 @@ export const LoginSimulator3D: React.FC = () => {
       const tex = new THREE.CanvasTexture(canvas);
       tex.wrapS = THREE.RepeatWrapping;
       tex.wrapT = THREE.RepeatWrapping;
-      tex.repeat.set(4, 4);
+      tex.repeat.set(5, 3.5);
       return tex;
     };
 
@@ -123,49 +123,49 @@ export const LoginSimulator3D: React.FC = () => {
     });
 
     const sofaMat = new THREE.MeshStandardMaterial({
-      color: 0x1e3a8a,
+      color: 0x1e3a8a, // Royal Navy
       roughness: 0.55,
       metalness: 0.1,
     });
 
     const armchairMat = new THREE.MeshStandardMaterial({
-      color: 0xc2410c,
+      color: 0xc2410c, // Terracotta Cognac
       roughness: 0.5,
       metalness: 0.12,
     });
 
     const tableMat = new THREE.MeshStandardMaterial({
-      color: 0x78350f,
+      color: 0x78350f, // Walnut Wood
       roughness: 0.4,
       metalness: 0.08,
     });
 
     const tvUnitMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
+      color: 0x1e293b, // Dark Slate
       roughness: 0.45,
       metalness: 0.15,
     });
 
     const plantMat = new THREE.MeshStandardMaterial({
-      color: 0x15803d,
+      color: 0x15803d, // Lush Botanical Green
       roughness: 0.35,
       metalness: 0.05,
     });
 
     const lampMat = new THREE.MeshStandardMaterial({
-      color: 0xd97706,
+      color: 0xd97706, // Brushed Brass / Gold
       roughness: 0.25,
       metalness: 0.85,
     });
 
     const doorMat = new THREE.MeshStandardMaterial({
-      color: 0x5c4033,
+      color: 0x5c4033, // Warm Wood
       roughness: 0.5,
       metalness: 0.05,
     });
 
     const windowMat = new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
+      color: 0x38bdf8, // Glass Blue Tint
       roughness: 0.08,
       metalness: 0.85,
       transparent: true,
@@ -178,7 +178,7 @@ export const LoginSimulator3D: React.FC = () => {
       metalness: 0.1,
     });
 
-    // Selection ring / highlight helper
+    // Selection ring helper
     const selectionRingGeom = new THREE.RingGeometry(0.5, 0.56, 32);
     const selectionRingMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0 });
     const selectionRing = new THREE.Mesh(selectionRingGeom, selectionRingMat);
@@ -219,7 +219,7 @@ export const LoginSimulator3D: React.FC = () => {
     };
 
     // =========================================================================
-    // 5. STAGE 0: DETAILED ARCHITECTURAL 2D BLUEPRINT DRAFTING PLAN
+    // 5. STAGE 0: WIDE ARCHITECTURAL 2D BLUEPRINT DRAFTING PLAN (5.60m x 3.50m)
     // =========================================================================
     const blueprintGroup = new THREE.Group();
     roomRoot.add(blueprintGroup);
@@ -239,38 +239,35 @@ export const LoginSimulator3D: React.FC = () => {
       return new THREE.Line(geom, mat);
     };
 
-    // A. Double-Line Structural Exterior & Interior Walls
-    // Outer perimeter
+    // A. Wide Double-Line Structural Exterior & Interior Walls (5.6m x 3.5m)
+    // Outer perimeter: X from -2.8 to +2.8, Z from -1.75 to +1.75
     const outerWallPts = [
-      new THREE.Vector3(-2.2, 0.015, -1.9),
-      new THREE.Vector3(2.2, 0.015, -1.9),
-      new THREE.Vector3(2.2, 0.015, 1.9),
-      new THREE.Vector3(-2.2, 0.015, 1.9),
-      new THREE.Vector3(-2.2, 0.015, -1.9),
+      new THREE.Vector3(-2.8, 0.015, -1.75),
+      new THREE.Vector3(2.8, 0.015, -1.75),
+      new THREE.Vector3(2.8, 0.015, 1.75),
+      new THREE.Vector3(-2.8, 0.015, 1.75),
+      new THREE.Vector3(-2.8, 0.015, -1.75),
     ];
     blueprintGroup.add(createLine(outerWallPts, bpCyanBold));
 
     // Inner perimeter (Wall thickness: 0.16m)
     const innerWallPts = [
-      new THREE.Vector3(-2.04, 0.015, -1.74),
-      new THREE.Vector3(2.04, 0.015, -1.74),
-      new THREE.Vector3(2.04, 0.015, 1.74),
-      new THREE.Vector3(-2.04, 0.015, 1.74),
-      new THREE.Vector3(-2.04, 0.015, -1.74),
+      new THREE.Vector3(-2.64, 0.015, -1.59),
+      new THREE.Vector3(2.64, 0.015, -1.59),
+      new THREE.Vector3(2.64, 0.015, 1.59),
+      new THREE.Vector3(-2.64, 0.015, 1.59),
+      new THREE.Vector3(-2.64, 0.015, -1.59),
     ];
     blueprintGroup.add(createLine(innerWallPts, bpCyanBold));
 
-    // B. Architectural Door Swing Arc (Left Wall at Z = 0.6)
-    // Door jamb opening lines
-    blueprintGroup.add(createLine([new THREE.Vector3(-2.2, 0.016, 0.15), new THREE.Vector3(-2.04, 0.016, 0.15)], bpCyanBold));
-    blueprintGroup.add(createLine([new THREE.Vector3(-2.2, 0.016, 1.05), new THREE.Vector3(-2.04, 0.016, 1.05)], bpCyanBold));
-    // Door leaf line (open into room)
-    blueprintGroup.add(createLine([new THREE.Vector3(-2.04, 0.016, 0.15), new THREE.Vector3(-1.14, 0.016, 0.15)], bpCyanBold));
+    // B. Architectural Door Swing Arc (Left Wall at Z = 0.5)
+    blueprintGroup.add(createLine([new THREE.Vector3(-2.8, 0.016, 0.05), new THREE.Vector3(-2.64, 0.016, 0.05)], bpCyanBold));
+    blueprintGroup.add(createLine([new THREE.Vector3(-2.8, 0.016, 0.95), new THREE.Vector3(-2.64, 0.016, 0.95)], bpCyanBold));
+    blueprintGroup.add(createLine([new THREE.Vector3(-2.64, 0.016, 0.05), new THREE.Vector3(-1.74, 0.016, 0.05)], bpCyanBold));
 
-    // 90-degree circular door swing arc
     const doorArcPts: THREE.Vector3[] = [];
     const doorRadius = 0.9;
-    const doorHinge = new THREE.Vector3(-2.04, 0.016, 0.15);
+    const doorHinge = new THREE.Vector3(-2.64, 0.016, 0.05);
     for (let a = 0; a <= Math.PI / 2; a += Math.PI / 24) {
       doorArcPts.push(new THREE.Vector3(
         doorHinge.x + doorRadius * Math.cos(a),
@@ -280,90 +277,68 @@ export const LoginSimulator3D: React.FC = () => {
     }
     blueprintGroup.add(createLine(doorArcPts, bpDashedMat));
 
-    // C. Architectural Window Opening & Glazing Lines (Back Wall at X = 0.95)
-    // Window jambs
-    blueprintGroup.add(createLine([new THREE.Vector3(0.25, 0.016, -1.9), new THREE.Vector3(0.25, 0.016, -1.74)], bpCyanBold));
-    blueprintGroup.add(createLine([new THREE.Vector3(1.65, 0.016, -1.9), new THREE.Vector3(1.65, 0.016, -1.74)], bpCyanBold));
-    // Triple glazing lines
-    blueprintGroup.add(createLine([new THREE.Vector3(0.25, 0.016, -1.82), new THREE.Vector3(1.65, 0.016, -1.82)], bpCyanBold));
-    blueprintGroup.add(createLine([new THREE.Vector3(0.25, 0.016, -1.78), new THREE.Vector3(1.65, 0.016, -1.78)], bpCyanFine));
-    blueprintGroup.add(createLine([new THREE.Vector3(0.25, 0.016, -1.86), new THREE.Vector3(1.65, 0.016, -1.86)], bpCyanFine));
+    // C. Architectural Window Opening on Back Wall (X = 1.4)
+    blueprintGroup.add(createLine([new THREE.Vector3(0.7, 0.016, -1.75), new THREE.Vector3(0.7, 0.016, -1.59)], bpCyanBold));
+    blueprintGroup.add(createLine([new THREE.Vector3(2.1, 0.016, -1.75), new THREE.Vector3(2.1, 0.016, -1.59)], bpCyanBold));
+    blueprintGroup.add(createLine([new THREE.Vector3(0.7, 0.016, -1.67), new THREE.Vector3(2.1, 0.016, -1.67)], bpCyanBold));
+    blueprintGroup.add(createLine([new THREE.Vector3(0.7, 0.016, -1.63), new THREE.Vector3(2.1, 0.016, -1.63)], bpCyanFine));
+    blueprintGroup.add(createLine([new THREE.Vector3(0.7, 0.016, -1.71), new THREE.Vector3(2.1, 0.016, -1.71)], bpCyanFine));
 
-    // D. Architectural Dimension Lines & Ticks (Exterior Top & Left)
-    // Top Dimension line (4.40m)
+    // D. Wide Dimension Lines (5.60m x 3.50m)
     const dimTopY = 0.016;
-    const dimTopZ = -2.25;
-    blueprintGroup.add(createLine([new THREE.Vector3(-2.2, dimTopY, -1.9), new THREE.Vector3(-2.2, dimTopY, dimTopZ - 0.15)], bpDimMat));
-    blueprintGroup.add(createLine([new THREE.Vector3(2.2, dimTopY, -1.9), new THREE.Vector3(2.2, dimTopY, dimTopZ - 0.15)], bpDimMat));
-    blueprintGroup.add(createLine([new THREE.Vector3(-2.2, dimTopY, dimTopZ), new THREE.Vector3(2.2, dimTopY, dimTopZ)], bpDimMat));
-    // 45-deg slash ticks
-    blueprintGroup.add(createLine([new THREE.Vector3(-2.28, dimTopY, dimTopZ + 0.08), new THREE.Vector3(-2.12, dimTopY, dimTopZ - 0.08)], bpCyanBold));
-    blueprintGroup.add(createLine([new THREE.Vector3(2.12, dimTopY, dimTopZ + 0.08), new THREE.Vector3(2.28, dimTopY, dimTopZ - 0.08)], bpCyanBold));
+    const dimTopZ = -2.1;
+    blueprintGroup.add(createLine([new THREE.Vector3(-2.8, dimTopY, -1.75), new THREE.Vector3(-2.8, dimTopY, dimTopZ - 0.15)], bpDimMat));
+    blueprintGroup.add(createLine([new THREE.Vector3(2.8, dimTopY, -1.75), new THREE.Vector3(2.8, dimTopY, dimTopZ - 0.15)], bpDimMat));
+    blueprintGroup.add(createLine([new THREE.Vector3(-2.8, dimTopY, dimTopZ), new THREE.Vector3(2.8, dimTopY, dimTopZ)], bpDimMat));
+    blueprintGroup.add(createLine([new THREE.Vector3(-2.88, dimTopY, dimTopZ + 0.08), new THREE.Vector3(-2.72, dimTopY, dimTopZ - 0.08)], bpCyanBold));
+    blueprintGroup.add(createLine([new THREE.Vector3(2.72, dimTopY, dimTopZ + 0.08), new THREE.Vector3(2.88, dimTopY, dimTopZ - 0.08)], bpCyanBold));
 
-    // Left Dimension line (3.80m)
-    const dimLeftX = -2.55;
-    blueprintGroup.add(createLine([new THREE.Vector3(-2.2, dimTopY, -1.9), new THREE.Vector3(dimLeftX - 0.15, dimTopY, -1.9)], bpDimMat));
-    blueprintGroup.add(createLine([new THREE.Vector3(-2.2, dimTopY, 1.9), new THREE.Vector3(dimLeftX - 0.15, dimTopY, 1.9)], bpDimMat));
-    blueprintGroup.add(createLine([new THREE.Vector3(dimLeftX, dimTopY, -1.9), new THREE.Vector3(dimLeftX, dimTopY, 1.9)], bpDimMat));
-    // Slash ticks
-    blueprintGroup.add(createLine([new THREE.Vector3(dimLeftX - 0.08, dimTopY, -1.98), new THREE.Vector3(dimLeftX + 0.08, dimTopY, -1.82)], bpCyanBold));
-    blueprintGroup.add(createLine([new THREE.Vector3(dimLeftX - 0.08, dimTopY, 1.82), new THREE.Vector3(dimLeftX + 0.08, dimTopY, 1.98)], bpCyanBold));
+    const dimLeftX = -3.15;
+    blueprintGroup.add(createLine([new THREE.Vector3(-2.8, dimTopY, -1.75), new THREE.Vector3(dimLeftX - 0.15, dimTopY, -1.75)], bpDimMat));
+    blueprintGroup.add(createLine([new THREE.Vector3(-2.8, dimTopY, 1.75), new THREE.Vector3(dimLeftX - 0.15, dimTopY, 1.75)], bpDimMat));
+    blueprintGroup.add(createLine([new THREE.Vector3(dimLeftX, dimTopY, -1.75), new THREE.Vector3(dimLeftX, dimTopY, 1.75)], bpDimMat));
+    blueprintGroup.add(createLine([new THREE.Vector3(dimLeftX - 0.08, dimTopY, -1.83), new THREE.Vector3(dimLeftX + 0.08, dimTopY, -1.67)], bpCyanBold));
+    blueprintGroup.add(createLine([new THREE.Vector3(dimLeftX - 0.08, dimTopY, 1.67), new THREE.Vector3(dimLeftX + 0.08, dimTopY, 1.83)], bpCyanBold));
 
-    // E. 2D Blueprint Furniture Symbols
+    // E. 2D Furniture Blueprint Symbols
     // 1. Sofa 2D Symbol
     const sofa2D = [
-      new THREE.Vector3(-1.15, 0.015, 0.4),
-      new THREE.Vector3(0.95, 0.015, 0.4),
-      new THREE.Vector3(0.95, 0.015, 1.25),
-      new THREE.Vector3(-1.15, 0.015, 1.25),
-      new THREE.Vector3(-1.15, 0.015, 0.4),
+      new THREE.Vector3(-1.35, 0.015, 0.35),
+      new THREE.Vector3(0.75, 0.015, 0.35),
+      new THREE.Vector3(0.75, 0.015, 1.2),
+      new THREE.Vector3(-1.35, 0.015, 1.2),
+      new THREE.Vector3(-1.35, 0.015, 0.35),
     ];
     blueprintGroup.add(createLine(sofa2D, bpCyanFine));
-    // Sofa cushions line
-    blueprintGroup.add(createLine([new THREE.Vector3(-1.15, 0.015, 1.05), new THREE.Vector3(0.95, 0.015, 1.05)], bpCyanFine));
-    blueprintGroup.add(createLine([new THREE.Vector3(-0.45, 0.015, 0.4), new THREE.Vector3(-0.45, 0.015, 1.05)], bpCyanFine));
-    blueprintGroup.add(createLine([new THREE.Vector3(0.25, 0.015, 0.4), new THREE.Vector3(0.25, 0.015, 1.05)], bpCyanFine));
 
     // 2. Coffee Table 2D Circle
     const tableCirclePts: THREE.Vector3[] = [];
     for (let t = 0; t <= Math.PI * 2; t += Math.PI / 16) {
-      tableCirclePts.push(new THREE.Vector3(-0.1 + 0.38 * Math.cos(t), 0.015, 0.02 + 0.38 * Math.sin(t)));
+      tableCirclePts.push(new THREE.Vector3(-0.3 + 0.38 * Math.cos(t), 0.015, -0.05 + 0.38 * Math.sin(t)));
     }
     blueprintGroup.add(createLine(tableCirclePts, bpCyanFine));
 
     // 3. Armchair 2D Symbol
     const arm2DPts = [
-      new THREE.Vector3(0.85, 0.015, -0.3),
-      new THREE.Vector3(1.45, 0.015, 0.3),
-      new THREE.Vector3(1.15, 0.015, 0.6),
-      new THREE.Vector3(0.55, 0.015, 0.0),
-      new THREE.Vector3(0.85, 0.015, -0.3),
+      new THREE.Vector3(0.8, 0.015, -0.35),
+      new THREE.Vector3(1.4, 0.015, 0.25),
+      new THREE.Vector3(1.1, 0.015, 0.55),
+      new THREE.Vector3(0.5, 0.015, -0.05),
+      new THREE.Vector3(0.8, 0.015, -0.35),
     ];
     blueprintGroup.add(createLine(arm2DPts, bpCyanFine));
 
-    // 4. TV Media Console 2D Symbol (with X-cross hatch)
+    // 4. TV Media Console 2D Symbol
     const tv2DPts = [
-      new THREE.Vector3(-0.9, 0.015, -1.84),
-      new THREE.Vector3(0.7, 0.015, -1.84),
-      new THREE.Vector3(0.7, 0.015, -1.4),
-      new THREE.Vector3(-0.9, 0.015, -1.4),
-      new THREE.Vector3(-0.9, 0.015, -1.84),
+      new THREE.Vector3(-1.1, 0.015, -1.69),
+      new THREE.Vector3(0.5, 0.015, -1.69),
+      new THREE.Vector3(0.5, 0.015, -1.25),
+      new THREE.Vector3(-1.1, 0.015, -1.25),
+      new THREE.Vector3(-1.1, 0.015, -1.69),
     ];
     blueprintGroup.add(createLine(tv2DPts, bpCyanFine));
-    blueprintGroup.add(createLine([new THREE.Vector3(-0.9, 0.015, -1.84), new THREE.Vector3(0.7, 0.015, -1.4)], bpCyanFine));
-    blueprintGroup.add(createLine([new THREE.Vector3(-0.9, 0.015, -1.4), new THREE.Vector3(0.7, 0.015, -1.84)], bpCyanFine));
 
-    // 5. Rug 2D Dashed Outline
-    const rug2DPts = [
-      new THREE.Vector3(-1.45, 0.015, -1.0),
-      new THREE.Vector3(1.45, 0.015, -1.0),
-      new THREE.Vector3(1.45, 0.015, 1.3),
-      new THREE.Vector3(-1.45, 0.015, 1.3),
-      new THREE.Vector3(-1.45, 0.015, -1.0),
-    ];
-    blueprintGroup.add(createLine(rug2DPts, bpDashedMat));
-
-    // F. Architectural Plan Stamp & Labels (Canvas Texture on Plane)
+    // F. Architectural Plan Stamp (5.60m x 3.50m)
     const createBlueprintStampTexture = () => {
       const canvas = document.createElement('canvas');
       canvas.width = 1024;
@@ -372,39 +347,37 @@ export const LoginSimulator3D: React.FC = () => {
       if (ctx) {
         ctx.clearRect(0, 0, 1024, 1024);
 
-        // Room Name Title
         ctx.fillStyle = '#38bdf8';
         ctx.font = 'bold 36px "Courier New", monospace';
         ctx.textAlign = 'center';
         ctx.fillText('LIVING ROOM SUITE', 512, 420);
 
-        // Room Specs
         ctx.fillStyle = '#94a3b8';
         ctx.font = '24px "Courier New", monospace';
-        ctx.fillText('AREA: 16.72 m²  |  CEILING HT: 2.40 m', 512, 465);
+        ctx.fillText('AREA: 19.60 m²  |  DIMENSIONS: 5.60m × 3.50m', 512, 465);
         ctx.fillText('SCALE: 1:50  |  VISUAL RENDERED CAD', 512, 505);
 
         // Top dimension text
         ctx.fillStyle = '#38bdf8';
         ctx.font = 'bold 28px "Courier New", monospace';
-        ctx.fillText('4.40 m', 512, 90);
+        ctx.fillText('5.60 m', 512, 105);
 
-        // North Arrow Icon
+        // North Arrow
         ctx.strokeStyle = '#38bdf8';
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.arc(880, 200, 36, 0, Math.PI * 2);
+        ctx.arc(900, 200, 36, 0, Math.PI * 2);
         ctx.stroke();
         ctx.fillStyle = '#38bdf8';
         ctx.beginPath();
-        ctx.moveTo(880, 170);
-        ctx.lineTo(892, 210);
-        ctx.lineTo(880, 202);
-        ctx.lineTo(868, 210);
+        ctx.moveTo(900, 170);
+        ctx.lineTo(912, 210);
+        ctx.lineTo(900, 202);
+        ctx.lineTo(888, 210);
         ctx.closePath();
         ctx.fill();
         ctx.font = 'bold 22px sans-serif';
-        ctx.fillText('N', 880, 160);
+        ctx.fillText('N', 900, 160);
       }
       const tex = new THREE.CanvasTexture(canvas);
       return tex;
@@ -415,43 +388,44 @@ export const LoginSimulator3D: React.FC = () => {
       transparent: true,
       opacity: 0.9,
     });
-    const bpStampPlane = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 4.8), bpStampMat);
+    const bpStampPlane = new THREE.Mesh(new THREE.PlaneGeometry(5.8, 4.2), bpStampMat);
     bpStampPlane.rotation.x = -Math.PI / 2;
     bpStampPlane.position.set(0, 0.014, 0);
     blueprintGroup.add(bpStampPlane);
 
-    // ==========================================
-    // 6. STAGE 1: 3D WALLS & FLOOR
-    // ==========================================
+    // =========================================================================
+    // 6. STAGE 1: WIDE 3D WALLS & FLOOR (5.60m x 3.50m)
+    // =========================================================================
     const wallsGroup = new THREE.Group();
     roomRoot.add(wallsGroup);
 
-    const floorGeom = new THREE.BoxGeometry(4.4, 0.06, 3.8);
+    // Floor: 5.6m width x 3.5m depth
+    const floorGeom = new THREE.BoxGeometry(5.6, 0.06, 3.5);
     const roomFloor = new THREE.Mesh(floorGeom, woodFloorMat);
     roomFloor.position.set(0, -0.03, 0);
     roomFloor.receiveShadow = true;
     wallsGroup.add(roomFloor);
 
-    // Back Wall
-    const backWallGeom = new THREE.BoxGeometry(4.4, 2.4, 0.16);
+    // Back Wall: width 5.6m, depth 0.16m at Z = -1.75
+    const backWallGeom = new THREE.BoxGeometry(5.6, 2.4, 0.16);
     const backWall = new THREE.Mesh(backWallGeom, wallMat);
-    backWall.position.set(0, 1.2, -1.9);
+    backWall.position.set(0, 1.2, -1.75);
     backWall.castShadow = true;
     backWall.receiveShadow = true;
     wallsGroup.add(backWall);
 
-    // Left Wall
-    const leftWallGeom = new THREE.BoxGeometry(0.16, 2.4, 3.8);
+    // Left Wall: depth 3.5m, width 0.16m at X = -2.8
+    const leftWallGeom = new THREE.BoxGeometry(0.16, 2.4, 3.5);
     const leftWall = new THREE.Mesh(leftWallGeom, wallMat);
-    leftWall.position.set(-2.2, 1.2, 0);
+    leftWall.position.set(-2.8, 1.2, 0);
     leftWall.castShadow = true;
     leftWall.receiveShadow = true;
     wallsGroup.add(leftWall);
 
-    // Right Low Cutaway Wall
-    const rightWallGeom = new THREE.BoxGeometry(0.16, 0.65, 3.8);
+    // Right Low Cutaway Wall: depth 3.5m at X = 2.8
+    const rightWallGeom = new THREE.BoxGeometry(0.16, 0.65, 3.5);
     const rightWall = new THREE.Mesh(rightWallGeom, wallMat);
-    rightWall.position.set(2.2, 0.325, 0);
+    rightWall.position.set(2.8, 0.325, 0);
     rightWall.receiveShadow = true;
     wallsGroup.add(rightWall);
 
@@ -461,16 +435,16 @@ export const LoginSimulator3D: React.FC = () => {
     const architecturalFittingsGroup = new THREE.Group();
     roomRoot.add(architecturalFittingsGroup);
 
-    // Window from inventory (/models/doubleWindow126x123.obj)
+    // Window on Back Wall (X = 1.4, Z = -1.68)
     loadInventoryItem('/models/doubleWindow126x123.obj', 1.4, 0.16, 1.25, windowMat, 'window').then((winMesh) => {
-      winMesh.position.set(0.95, 0.7, -1.82);
+      winMesh.position.set(1.4, 0.7, -1.68);
       architecturalFittingsGroup.add(winMesh);
     });
 
-    // Door from inventory (/models/door.obj)
+    // Door on Left Wall (X = -2.72, Z = 0.5)
     loadInventoryItem('/models/door.obj', 0.9, 0.12, 2.1, doorMat, 'door').then((doorMesh) => {
       doorMesh.rotation.y = Math.PI / 2;
-      doorMesh.position.set(-2.12, 0, 0.6);
+      doorMesh.position.set(-2.72, 0, 0.5);
       architecturalFittingsGroup.add(doorMesh);
     });
 
@@ -480,70 +454,70 @@ export const LoginSimulator3D: React.FC = () => {
     const lightingGroup = new THREE.Group();
     roomRoot.add(lightingGroup);
 
-    // Pendant Lamp from inventory (/models/pendantLamp.obj)
+    // Pendant Lamp
     loadInventoryItem('/models/pendantLamp.obj', 0.55, 0.55, 0.65, lampMat, 'lamp').then((lampMesh) => {
       lampMesh.position.set(0, 1.75, 0);
       lightingGroup.add(lampMesh);
     });
 
     // ==========================================
-    // 9. STAGE 4 & 5: INVENTORY FURNITURE SUITE
+    // 9. STAGE 4 & 5: INVENTORY FURNITURE SUITE (SPACIOUS WIDE ROOM)
     // ==========================================
     const furnitureGroup = new THREE.Group();
     roomRoot.add(furnitureGroup);
 
     const interactiveItems: THREE.Object3D[] = [];
 
-    // A. Luxury Sofa from inventory (/models/sofa.obj)
+    // A. Luxury Sofa (/models/sofa.obj)
     loadInventoryItem('/models/sofa.obj', 2.1, 0.85, 0.82, sofaMat, 'sofa').then((sofaMesh) => {
       sofaMesh.rotation.y = Math.PI;
-      sofaMesh.position.set(-0.1, 0, 0.82);
+      sofaMesh.position.set(-0.3, 0, 0.75);
       furnitureGroup.add(sofaMesh);
       interactiveItems.push(sofaMesh);
     });
 
-    // B. Coffee Table from inventory (/models/roundTable.obj)
+    // B. Coffee Table (/models/roundTable.obj)
     loadInventoryItem('/models/roundTable.obj', 0.75, 0.75, 0.42, tableMat, 'coffeeTable').then((tableMesh) => {
-      tableMesh.position.set(-0.1, 0, 0.02);
+      tableMesh.position.set(-0.3, 0, -0.05);
       furnitureGroup.add(tableMesh);
       interactiveItems.push(tableMesh);
     });
 
-    // C. Single Seater Armchair from inventory (/models/armchair.obj)
+    // C. Single Seater Armchair (/models/armchair.obj)
     loadInventoryItem('/models/armchair.obj', 0.8, 0.8, 0.8, armchairMat, 'armchair').then((chairMesh) => {
       chairMesh.rotation.y = -Math.PI * 0.70;
-      chairMesh.position.set(1.15, 0, 0.1);
+      chairMesh.position.set(1.15, 0, 0.05);
       furnitureGroup.add(chairMesh);
       interactiveItems.push(chairMesh);
     });
 
-    // D. TV Media Console from inventory (/models/tvUnit.obj)
+    // D. TV Media Console (/models/tvUnit.obj)
     loadInventoryItem('/models/tvUnit.obj', 1.6, 0.45, 0.5, tvUnitMat, 'tvUnit').then((tvMesh) => {
       tvMesh.rotation.y = Math.PI;
-      tvMesh.position.set(-0.1, 0, -1.62);
+      tvMesh.position.set(-0.3, 0, -1.48);
       furnitureGroup.add(tvMesh);
       interactiveItems.push(tvMesh);
     });
 
-    // E. Bookcase Shelf from inventory (/models/bookcase.obj)
+    // E. Bookcase Shelf (/models/bookcase.obj)
     loadInventoryItem('/models/bookcase.obj', 0.8, 0.35, 1.75, bookcaseMat, 'bookcase').then((shelfMesh) => {
       shelfMesh.rotation.y = Math.PI / 2;
-      shelfMesh.position.set(-2.0, 0, -0.6);
+      shelfMesh.position.set(-2.62, 0, -0.6);
       furnitureGroup.add(shelfMesh);
       interactiveItems.push(shelfMesh);
     });
 
-    // F. Botanical Plant from inventory (/models/plant.obj)
+    // F. Botanical Plant (/models/plant.obj)
     loadInventoryItem('/models/plant.obj', 0.55, 0.55, 1.35, plantMat, 'plant').then((plantMesh) => {
-      plantMesh.position.set(-1.65, 0, -1.45);
+      plantMesh.position.set(-2.2, 0, -1.3);
       furnitureGroup.add(plantMesh);
       interactiveItems.push(plantMesh);
     });
 
     // G. Plush Woven Floor Rug
     const rugMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.98 });
-    const rugMesh = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.015, 2.3), rugMat);
-    rugMesh.position.set(0.0, 0.008, 0.15);
+    const rugMesh = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.015, 2.3), rugMat);
+    rugMesh.position.set(-0.2, 0.008, 0.1);
     rugMesh.receiveShadow = true;
     furnitureGroup.add(rugMesh);
 
@@ -571,7 +545,7 @@ export const LoginSimulator3D: React.FC = () => {
         bpCyanBold.opacity = pulse;
         bpStampMat.opacity = pulse * 0.95;
       } else {
-        // Completely hide 2D blueprint lines when 3D construction starts
+        // Hide 2D blueprint lines completely in 3D mode
         blueprintGroup.visible = false;
       }
 
@@ -614,7 +588,7 @@ export const LoginSimulator3D: React.FC = () => {
         furnitureGroup.visible = false;
       }
 
-      // Update selection indicator ring position
+      // Selection indicator ring
       if (selectedItemRef.current) {
         selectionRing.position.x = selectedItemRef.current.position.x;
         selectionRing.position.z = selectedItemRef.current.position.z;
@@ -625,7 +599,7 @@ export const LoginSimulator3D: React.FC = () => {
         selectionRingMat.opacity = 0;
       }
 
-      // Camera position based on user's manual adjustments
+      // Camera view from user's manual adjustments
       const target = cameraTargetRef.current;
       const s = cameraAngleRef.current;
 
@@ -641,7 +615,7 @@ export const LoginSimulator3D: React.FC = () => {
     animate();
 
     // ==========================================
-    // 11. INTERACTIVE ITEM POSITION DRAG & ROTATION
+    // 11. USER INTERACTION: ITEM DRAG + PAN + ORBIT
     // ==========================================
     const raycaster = new THREE.Raycaster();
     const mouseNorm = new THREE.Vector2();
@@ -659,7 +633,6 @@ export const LoginSimulator3D: React.FC = () => {
       prevMouseRef.current = { x: e.clientX, y: e.clientY };
 
       raycaster.setFromCamera(mouseNorm, camera);
-
       const intersects = raycaster.intersectObjects(interactiveItems, true);
 
       if (e.button === 0 && intersects.length > 0 && !e.shiftKey) {
@@ -719,8 +692,8 @@ export const LoginSimulator3D: React.FC = () => {
             const newPos = intersectPt.sub(dragOffsetRef.current);
             const halfW = (selectedItemRef.current.userData.targetW || 0.8) / 2;
             const halfD = (selectedItemRef.current.userData.targetD || 0.8) / 2;
-            selectedItemRef.current.position.x = Math.max(-2.0 + halfW, Math.min(2.0 - halfW, newPos.x));
-            selectedItemRef.current.position.z = Math.max(-1.7 + halfD, Math.min(1.7 - halfD, newPos.z));
+            selectedItemRef.current.position.x = Math.max(-2.6 + halfW, Math.min(2.6 - halfW, newPos.x));
+            selectedItemRef.current.position.z = Math.max(-1.55 + halfD, Math.min(1.55 - halfD, newPos.z));
           }
         } else if (dragModeRef.current === 'pan') {
           const target = cameraTargetRef.current;
