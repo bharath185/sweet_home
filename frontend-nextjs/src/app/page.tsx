@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Navbar } from '../components/Navbar';
 import { AdminSidebar } from '../components/AdminSidebar';
 import { AdminDashboard } from '../components/AdminDashboard';
-import { CatalogSidebar } from '../components/CatalogSidebar';
 import { FurnitureListPane } from '../components/FurnitureListPane';
 import { PlanCanvas2D } from '../components/PlanCanvas2D';
 import { Viewport3D } from '../components/Viewport3D';
@@ -103,7 +102,7 @@ export default function HomeStudioPage() {
   const [activeFloor, setActiveFloor] = useState<number>(0);
   const [floorMode, setFloorMode] = useState<'single' | 'sideBySide' | 'stacked'>('single');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [isCatalogOpen, setIsCatalogOpen] = useState<boolean>(false);
+  const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(true);
 
   const [isFurnitureListOpen, setIsFurnitureListOpen] = useState<boolean>(true);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
@@ -658,20 +657,20 @@ export default function HomeStudioPage() {
                   </button>
                 </div>
 
-                {/* 3D Catalog Toggle Button */}
+                {/* 3D Catalog & Inspector Toggle Button */}
                 <button
-                  onClick={() => setIsCatalogOpen(!isCatalogOpen)}
-                  className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
-                    isCatalogOpen
+                  onClick={() => setIsInspectorOpen(!isInspectorOpen)}
+                  className={`px-2.5 py-1.5 rounded-md border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
+                    isInspectorOpen
                       ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
                       : isDark
                       ? 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-800'
                       : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
                   }`}
-                  title="Toggle 3D Furniture Catalog Drawer"
+                  title="Toggle 3D Catalog & Inspector Panel"
                 >
                   <Box className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Catalog</span>
+                  <span>Catalog / Inspector</span>
                 </button>
 
                 {/* Blueprint Scan Importer */}
@@ -854,16 +853,7 @@ export default function HomeStudioPage() {
                 )}
               </div>
 
-              {/* Left Floating Drawer: 3D Element & Furniture Catalog */}
-              <CatalogSidebar
-                catalog={catalog}
-                onAddItem={handleAddItem}
-                isOpen={isCatalogOpen}
-                onToggleOpen={() => setIsCatalogOpen(!isCatalogOpen)}
-                theme={theme}
-              />
-
-              {/* Right Floating Drawer: Properties & Material Inspector */}
+              {/* Right Unified 3D Catalog, Finish & Transform Inspector */}
               <InspectorSidebar
                 plan={plan}
                 selectedId={selectedId}
@@ -872,7 +862,10 @@ export default function HomeStudioPage() {
                 collidingItemIds={collisionReport.collidingItemIds}
                 collisionReasons={collisionReport.reasons}
                 catalog={catalog}
+                onAddItem={handleAddItem}
                 theme={theme}
+                isOpen={isInspectorOpen}
+                onToggleOpen={() => setIsInspectorOpen(!isInspectorOpen)}
               />
             </div>
 
