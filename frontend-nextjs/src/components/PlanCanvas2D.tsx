@@ -1698,12 +1698,58 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     });
   };
 
-  // Export Ultra High-Definition (4K 300 DPI) Engineering Blueprint Drawing
+  // Export Ultra High-Definition (4K 300 DPI) Engineering Blueprint Drawing for Selected Floor
   const handleExportHDImage = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    // 1. Identify Target Floor
+    const flObj = allFloors.find((f) => f.level === activeFloor) || {
+      level: activeFloor,
+      name: activeFloor === 0 ? 'Ground Floor' : '1st Floor',
+    };
+    const floorDisplayName = flObj.level === 0 ? 'Ground Floor' : flObj.level === 1 ? '1st Floor' : (flObj.name || `Floor ${flObj.level}`);
 
-    // Create 4K Ultra-HD Export Canvas
+    // 2. Filter geometry specifically for the selected floor
+    const expWalls = plan.walls.filter((w) => (w.floorLevel ?? 0) === activeFloor);
+    const expRooms = plan.rooms.filter((r) => (r.floorLevel ?? 0) === activeFloor);
+    const expFurniture = plan.furniture.filter((f) => (f.floorLevel ?? 0) === activeFloor && f.isVisible !== false);
+    const expDimensions = (plan.dimensionLines || []).filter((d) => (d.floorLevel ?? 0) === activeFloor);
+    const expNotes = (plan.textNotes || []).filter((t) => (t.floorLevel ?? 0) === activeFloor);
+
+    // 3. Compute Bounding Box of Selected Floor
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    expRooms.forEach((r) => {
+      r.points.forEach((p) => {
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y);
+        maxY = Math.max(maxY, p.y);
+      });
+    });
+    expWalls.forEach((w) => {
+      minX = Math.min(minX, w.xStart, w.xEnd);
+      maxX = Math.max(maxX, w.xStart, w.xEnd);
+      minY = Math.min(minY, w.yStart, w.yEnd);
+      maxY = Math.max(maxY, w.yStart, w.yEnd);
+    });
+    expFurniture.forEach((f) => {
+      const hw = (f.width || 100) / 2;
+      const hd = (f.depth || 100) / 2;
+      minX = Math.min(minX, f.x - hw);
+      maxX = Math.max(maxX, f.x + hw);
+      minY = Math.min(minY, f.y - hd);
+      maxY = Math.max(maxY, f.y + hd);
+    });
+
+    if (minX === Infinity) {
+      minX = -350; maxX = 350; minY = -250; maxY = 250;
+    }
+
+    const marginCm = 120;
+    const planW = (maxX - minX) + marginCm * 2;
+    const planH = (maxY - minY) + marginCm * 2;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    // 4. Initialize 4K Canvas Sheet (3840 x 2160)
     const exportCanvas = document.createElement('canvas');
     const width = 3840;
     const height = 2160;
@@ -1712,50 +1758,267 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     const ectx = exportCanvas.getContext('2d');
     if (!ectx) return;
 
-    // White Blueprint Background
+    ectx.imageSmoothingEnabled = true;
+    ectx.imageSmoothingQuality = 'high';
+
+    // Pure White Sheet Background
     ectx.fillStyle = '#ffffff';
     ectx.fillRect(0, 0, width, height);
 
-    // Architectural Grid Lines
+    // Architectural Fine Millimeter Grid
     ectx.strokeStyle = '#f1f5f9';
-    ectx.lineWidth = 1;
-    const gridPx = 40;
-    for (let x = 0; x < width; x += gridPx) {
+    ectx.lineWidth = 1.5;
+    const gridSpacing = 40;
+    for (let gx = 0; gx < width; gx += gridSpacing) {
       ectx.beginPath();
-      ectx.moveTo(x, 0);
-      ectx.lineTo(x, height);
+      ectx.moveTo(gx, 0);
+      ectx.lineTo(gx, height);
       ectx.stroke();
     }
-    for (let y = 0; y < height; y += gridPx) {
+    for (let gy = 0; gy < height; gy += gridSpacing) {
       ectx.beginPath();
-      ectx.moveTo(0, y);
-      ectx.lineTo(width, y);
+      ectx.moveTo(0, gy);
+      ectx.lineTo(width, gy);
       ectx.stroke();
     }
 
-    // Draw active high-res canvas content centered onto 4K sheet
-    const srcAspect = canvas.width / canvas.height;
-    const dstAspect = width / height;
-    let drawW = width;
-    let drawH = height;
-    let drawX = 0;
-    let drawY = 0;
+    // Outer Architectural Double Sheet Border
+    ectx.strokeStyle = '#0f172a';
+    ectx.lineWidth = 4;
+    ectx.strokeRect(60, 60, width - 120, height - 120);
+    ectx.lineWidth = 1.5;
+    ectx.strokeRect(72, 72, width - 144, height - 144);
 
-    if (srcAspect > dstAspect) {
-      drawH = width / srcAspect;
-      drawY = (height - drawH) / 2;
-    } else {
-      drawW = height * srcAspect;
-      drawX = (width - drawW) / 2;
-    }
-    ectx.drawImage(canvas, drawX, drawY, drawW, drawH);
+    // 5. Fit & Center Floor Geometry
+    const printableW = width - 360;
+    const printableH = height - 360;
+    const hdScale = Math.min(printableW / planW, printableH / planH);
+    const sheetCenterX = width / 2;
+    const sheetCenterY = height / 2 - 30;
 
-    // Engineering Drawing Title Block & Official Architectural Seal
-    const stampW = 620;
-    const stampH = 170;
-    const stampX = width - stampW - 50;
-    const stampY = height - stampH - 50;
+    const toHDScreen = (x: number, y: number) => ({
+      x: sheetCenterX + (x - centerX) * hdScale,
+      y: sheetCenterY + (y - centerY) * hdScale,
+    });
 
+    // 6. Draw Rooms
+    expRooms.forEach((room) => {
+      if (room.points.length < 3) return;
+      ectx.fillStyle = room.floorColor ? room.floorColor : 'rgba(240, 249, 255, 0.7)';
+      ectx.strokeStyle = 'rgba(14, 165, 233, 0.5)';
+      ectx.lineWidth = 3;
+
+      ectx.beginPath();
+      const p0 = toHDScreen(room.points[0].x, room.points[0].y);
+      ectx.moveTo(p0.x, p0.y);
+      for (let i = 1; i < room.points.length; i++) {
+        const p = toHDScreen(room.points[i].x, room.points[i].y);
+        ectx.lineTo(p.x, p.y);
+      }
+      ectx.closePath();
+      ectx.fill();
+      ectx.stroke();
+
+      // Centered Room Architectural Badge
+      const avgX = room.points.reduce((acc, p) => acc + p.x, 0) / room.points.length;
+      const avgY = room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length;
+      const roomCenter = toHDScreen(avgX, avgY);
+
+      const roomTitle = room.name.toUpperCase();
+      const areaStr = formatArea(room.areaSquareMeters || 12.5, unit);
+
+      ectx.save();
+      ectx.font = 'bold 22px system-ui, -apple-system, sans-serif';
+      const titleW = ectx.measureText(roomTitle).width;
+      ectx.font = 'bold 19px monospace';
+      const areaW = ectx.measureText(areaStr).width;
+      const cardW = Math.max(titleW, areaW) + 40;
+      const cardH = 56;
+
+      ectx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+      ectx.shadowColor = 'rgba(15, 23, 42, 0.15)';
+      ectx.shadowBlur = 12;
+      ectx.shadowOffsetY = 4;
+      ectx.beginPath();
+      ectx.roundRect(roomCenter.x - cardW / 2, roomCenter.y - cardH / 2, cardW, cardH, 10);
+      ectx.fill();
+
+      ectx.shadowColor = 'transparent';
+      ectx.shadowBlur = 0;
+      ectx.strokeStyle = '#cbd5e1';
+      ectx.lineWidth = 2;
+      ectx.stroke();
+
+      ectx.fillStyle = '#0f172a';
+      ectx.font = 'bold 20px system-ui, -apple-system, sans-serif';
+      ectx.textAlign = 'center';
+      ectx.textBaseline = 'middle';
+      ectx.fillText(roomTitle, roomCenter.x, roomCenter.y - 12);
+
+      ectx.fillStyle = '#0284c7';
+      ectx.font = 'bold 17px monospace';
+      ectx.fillText(areaStr, roomCenter.x, roomCenter.y + 14);
+      ectx.restore();
+    });
+
+    // 7. Draw Architectural Double-Line Core Walls
+    expWalls.forEach((wall) => {
+      const p1 = toHDScreen(wall.xStart, wall.yStart);
+      const p2 = toHDScreen(wall.xEnd, wall.yEnd);
+
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const length = Math.hypot(dx, dy);
+      if (length === 0) return;
+
+      const angle = Math.atan2(dy, dx);
+      const thicknessPx = Math.max(8, (wall.thickness || 15) * hdScale);
+
+      ectx.save();
+      ectx.translate(p1.x, p1.y);
+      ectx.rotate(angle);
+
+      // Solid dark core
+      ectx.fillStyle = '#334155';
+      ectx.fillRect(0, -thicknessPx / 2, length, thicknessPx);
+
+      // Boundary line strokes
+      ectx.strokeStyle = '#0f172a';
+      ectx.lineWidth = 2.5;
+      ectx.strokeRect(0, -thicknessPx / 2, length, thicknessPx);
+
+      // Wall Length Callout Badge
+      const lengthCm = Math.round(Math.hypot(wall.xEnd - wall.xStart, wall.yEnd - wall.yStart));
+      const dimLabel = formatDistance(lengthCm, unit);
+
+      if (length > 100) {
+        ectx.save();
+        ectx.translate(length / 2, 0);
+        if (Math.abs(angle) > Math.PI / 2) {
+          ectx.rotate(Math.PI);
+        }
+
+        ectx.font = 'bold 16px monospace';
+        const labelW = ectx.measureText(dimLabel).width + 16;
+        const labelH = 26;
+
+        ectx.fillStyle = '#ffffff';
+        ectx.strokeStyle = '#94a3b8';
+        ectx.lineWidth = 1.5;
+        ectx.beginPath();
+        ectx.roundRect(-labelW / 2, -labelH / 2, labelW, labelH, 5);
+        ectx.fill();
+        ectx.stroke();
+
+        ectx.fillStyle = '#0f172a';
+        ectx.textAlign = 'center';
+        ectx.textBaseline = 'middle';
+        ectx.fillText(dimLabel, 0, 0);
+        ectx.restore();
+      }
+
+      ectx.restore();
+    });
+
+    // 8. Draw Furniture & CAD Architectural Symbols
+    expFurniture.forEach((item) => {
+      const screenPos = toHDScreen(item.x, item.y);
+      const w = item.width * hdScale;
+      const d = item.depth * hdScale;
+      const angle = item.angle || 0;
+
+      ectx.save();
+      ectx.translate(screenPos.x, screenPos.y);
+      ectx.rotate(angle);
+
+      const isDoor = item.catalogId === 'door' || item.category === 'Doors & Windows';
+
+      if (isDoor) {
+        // Door Jamb & Swing Arc
+        ectx.strokeStyle = '#0f172a';
+        ectx.lineWidth = 3;
+        ectx.strokeRect(-w / 2, -d / 2, w, d);
+
+        ectx.strokeStyle = '#0284c7';
+        ectx.lineWidth = 2;
+        ectx.setLineDash([6, 4]);
+        ectx.beginPath();
+        ectx.arc(-w / 2, d / 2, w, 0, -Math.PI / 2, true);
+        ectx.stroke();
+        ectx.setLineDash([]);
+
+        ectx.strokeStyle = '#0284c7';
+        ectx.lineWidth = 3.5;
+        ectx.beginPath();
+        ectx.moveTo(-w / 2, d / 2);
+        ectx.lineTo(-w / 2, d / 2 - w);
+        ectx.stroke();
+      } else {
+        // Standard Furniture Body
+        ectx.fillStyle = item.color ? item.color : '#f8fafc';
+        ectx.strokeStyle = '#1e293b';
+        ectx.lineWidth = 2.5;
+        ectx.beginPath();
+        ectx.roundRect(-w / 2, -d / 2, w, d, 6);
+        ectx.fill();
+        ectx.stroke();
+
+        // Architectural Details
+        if (item.category === 'Living') {
+          // Sofa backrest & cushion lines
+          ectx.strokeStyle = 'rgba(0,0,0,0.2)';
+          ectx.lineWidth = 2;
+          ectx.strokeRect(-w / 2 + 4, -d / 2 + 4, w - 8, Math.max(6, d * 0.28));
+        } else if (item.category === 'Bedroom') {
+          // Pillows & blanket fold
+          ectx.fillStyle = 'rgba(255,255,255,0.85)';
+          ectx.strokeStyle = '#94a3b8';
+          ectx.lineWidth = 1.5;
+          const pillowW = (w - 16) / 2;
+          ectx.fillRect(-w / 2 + 6, -d / 2 + 6, pillowW, d * 0.28);
+          ectx.strokeRect(-w / 2 + 6, -d / 2 + 6, pillowW, d * 0.28);
+          ectx.fillRect(2, -d / 2 + 6, pillowW, d * 0.28);
+          ectx.strokeRect(2, -d / 2 + 6, pillowW, d * 0.28);
+        }
+
+        // Furniture Label
+        ectx.fillStyle = '#0f172a';
+        ectx.font = 'bold 15px system-ui, -apple-system, sans-serif';
+        ectx.textAlign = 'center';
+        ectx.textBaseline = 'middle';
+        ectx.fillText(item.name, 0, 0);
+      }
+
+      ectx.restore();
+    });
+
+    // 9. Dimension Lines
+    expDimensions.forEach((dim) => {
+      const p1 = toHDScreen(dim.xStart, dim.yStart);
+      const p2 = toHDScreen(dim.xEnd, dim.yEnd);
+      ectx.strokeStyle = '#0284c7';
+      ectx.lineWidth = 2.5;
+      ectx.beginPath();
+      ectx.moveTo(p1.x, p1.y);
+      ectx.lineTo(p2.x, p2.y);
+      ectx.stroke();
+
+      const distCm = Math.round(Math.hypot(dim.xEnd - dim.xStart, dim.yEnd - dim.yStart));
+      const mid = toHDScreen((dim.xStart + dim.xEnd) / 2, (dim.yStart + dim.yEnd) / 2);
+      ectx.fillStyle = '#0284c7';
+      ectx.font = 'bold 16px monospace';
+      ectx.textAlign = 'center';
+      ectx.textBaseline = 'middle';
+      ectx.fillText(formatDistance(distCm, unit), mid.x, mid.y - 12);
+    });
+
+    // 10. Official Architectural Title Block & Engineering Seal
+    const stampW = 760;
+    const stampH = 210;
+    const stampX = width - stampW - 75;
+    const stampY = height - stampH - 75;
+
+    ectx.save();
     ectx.fillStyle = 'rgba(255, 255, 255, 0.98)';
     ectx.shadowColor = 'rgba(15, 23, 42, 0.25)';
     ectx.shadowBlur = 24;
@@ -1763,35 +2026,81 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     ectx.beginPath();
     ectx.roundRect(stampX, stampY, stampW, stampH, 12);
     ectx.fill();
+
     ectx.shadowColor = 'transparent';
     ectx.strokeStyle = '#0284c7';
+    ectx.lineWidth = 3.5;
+    ectx.stroke();
+
+    // Title Block Header Bar
+    ectx.fillStyle = '#0284c7';
+    ectx.fillRect(stampX, stampY, stampW, 46);
+    ectx.fillStyle = '#ffffff';
+    ectx.font = 'bold 20px system-ui, -apple-system, sans-serif';
+    ectx.textAlign = 'left';
+    ectx.textBaseline = 'middle';
+    ectx.fillText('📐 ARCHITECTURAL ENGINEERING BLUEPRINT', stampX + 24, stampY + 23);
+
+    // Title Block Content Rows
+    ectx.fillStyle = '#0f172a';
+    ectx.font = 'bold 19px system-ui, -apple-system, sans-serif';
+    ectx.fillText(`Project: ${plan.name || 'Architectural Floor Plan'}`, stampX + 24, stampY + 80);
+
+    ectx.font = 'bold 17px system-ui, -apple-system, sans-serif';
+    ectx.fillStyle = '#0284c7';
+    ectx.fillText(`Drawing: FLOOR PLAN • ${floorDisplayName.toUpperCase()} (LEVEL ${activeFloor})`, stampX + 24, stampY + 118);
+
+    ectx.font = '500 15px system-ui, -apple-system, sans-serif';
+    ectx.fillStyle = '#475569';
+    ectx.fillText(`Scale: 1:50 Ultra-HD 4K (3840 × 2160 @ 300 DPI)   •   Units: ${unit.toUpperCase()}`, stampX + 24, stampY + 152);
+    ectx.fillText(`Rooms: ${expRooms.length}   •   Walls: ${expWalls.length}   •   Date: ${new Date().toLocaleDateString()}`, stampX + 24, stampY + 182);
+    ectx.restore();
+
+    // 11. North Compass Rose
+    const compassX = 140;
+    const compassY = height - 150;
+    ectx.save();
+    ectx.translate(compassX, compassY);
+    ectx.fillStyle = '#ffffff';
+    ectx.beginPath();
+    ectx.arc(0, 0, 42, 0, Math.PI * 2);
+    ectx.fill();
+    ectx.strokeStyle = '#0f172a';
     ectx.lineWidth = 3;
     ectx.stroke();
 
-    // Title Block Header
-    ectx.fillStyle = '#0284c7';
-    ectx.fillRect(stampX, stampY, stampW, 40);
+    // North arrow
+    ectx.fillStyle = '#ef4444';
+    ectx.beginPath();
+    ectx.moveTo(0, -32);
+    ectx.lineTo(12, 0);
+    ectx.lineTo(0, -6);
+    ectx.closePath();
+    ectx.fill();
+
+    // South arrow
+    ectx.fillStyle = '#94a3b8';
+    ectx.beginPath();
+    ectx.moveTo(0, 32);
+    ectx.lineTo(-12, 0);
+    ectx.lineTo(0, 6);
+    ectx.closePath();
+    ectx.fill();
+
+    ectx.font = 'bold 18px system-ui, sans-serif';
     ectx.fillStyle = '#ffffff';
-    ectx.font = 'bold 17px system-ui, -apple-system, sans-serif';
-    ectx.textAlign = 'left';
+    ectx.textAlign = 'center';
     ectx.textBaseline = 'middle';
-    ectx.fillText('📐 ARCHITECTURAL ENGINEERING BLUEPRINT', stampX + 20, stampY + 20);
+    ectx.fillText('N', 0, -12);
+    ectx.restore();
 
-    // Title Block Info
-    ectx.fillStyle = '#0f172a';
-    ectx.font = 'bold 16px system-ui, -apple-system, sans-serif';
-    ectx.fillText(`Project: ${plan.name || 'Custom Architectural Project'}`, stampX + 20, stampY + 70);
-    
-    ectx.font = '500 13.5px system-ui, -apple-system, sans-serif';
-    ectx.fillStyle = '#475569';
-    ectx.fillText(`Floor: ${activeFloor === 0 ? 'Ground Floor' : '1st Floor'}   •   Scale: 1:50 HD Vector`, stampX + 20, stampY + 102);
-    ectx.fillText(`Total Plan Items: ${plan.furniture.length}   •   Export Date: ${new Date().toLocaleDateString()}`, stampX + 20, stampY + 132);
-
-    // Trigger crisp PNG file download
+    // 12. Trigger Instant Download of Selected Floor 4K Blueprint
     const dataUrl = exportCanvas.toDataURL('image/png', 1.0);
     const link = document.createElement('a');
     link.href = dataUrl;
-    link.download = `${(plan.name || 'Floorplan').replace(/\s+/g, '_')}_Floor_${activeFloor}_HD_Blueprint.png`;
+    const safeProjectName = (plan.name || 'Floorplan').replace(/\s+/g, '_');
+    const safeFloorName = floorDisplayName.replace(/\s+/g, '_');
+    link.download = `${safeProjectName}_${safeFloorName}_4K_HD_Blueprint.png`;
     link.click();
   };
 

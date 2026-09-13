@@ -1138,7 +1138,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   }, [selectedId, hoveredId]);
 
 
-  // Capture Photo Snapshot (from Section 10 & 12 of guide)
+  // Capture Photo Snapshot (from Section 10 & 12 of guide) based on selected floor
   const handleTakePhotoSnapshot = () => {
     const renderer = rendererRef.current;
     if (!renderer) return;
@@ -1148,7 +1148,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const dataUrl = renderer.domElement.toDataURL('image/png');
       const a = document.createElement('a');
       a.href = dataUrl;
-      a.download = `${plan.name.replace(/\s+/g, '_')}_Photo_Render_3D.png`;
+      const floorName = activeFloor === 0 ? 'Ground_Floor' : activeFloor === 1 ? '1st_Floor' : `Floor_${activeFloor}`;
+      a.download = `${(plan.name || 'Project').replace(/\s+/g, '_')}_${floorName}_3D_Render.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
