@@ -103,6 +103,7 @@ export default function HomeStudioPage() {
   const [activeFloor, setActiveFloor] = useState<number>(0);
   const [floorMode, setFloorMode] = useState<'single' | 'sideBySide' | 'stacked'>('single');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [isCatalogOpen, setIsCatalogOpen] = useState<boolean>(false);
 
   const [isFurnitureListOpen, setIsFurnitureListOpen] = useState<boolean>(true);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
@@ -657,6 +658,22 @@ export default function HomeStudioPage() {
                   </button>
                 </div>
 
+                {/* 3D Catalog Toggle Button */}
+                <button
+                  onClick={() => setIsCatalogOpen(!isCatalogOpen)}
+                  className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
+                    isCatalogOpen
+                      ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
+                      : isDark
+                      ? 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-800'
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+                  }`}
+                  title="Toggle 3D Furniture Catalog Drawer"
+                >
+                  <Box className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Catalog</span>
+                </button>
+
                 {/* Blueprint Scan Importer */}
                 <button
                   onClick={() => setIsBlueprintModalOpen(true)}
@@ -752,18 +769,10 @@ export default function HomeStudioPage() {
               </div>
             </div>
 
-            {/* Design Studio Viewport & Sidebars Area */}
-            <div className="flex-1 flex overflow-hidden">
-              {/* Left Pane: 3D Element & Furniture Catalog */}
-              <CatalogSidebar
-                catalog={catalog}
-                onAddItem={handleAddItem}
-                onOpenCreateItemModal={() => setIsAddItemModalOpen(true)}
-                theme={theme}
-              />
-
-              {/* Center Viewports */}
-              <div className="flex-1 flex relative overflow-hidden">
+            {/* Design Studio Viewport & Floating Sidebars Area */}
+            <div className="flex-1 flex relative overflow-hidden w-full h-full">
+              {/* Full Width Center Viewports */}
+              <div className="flex-1 flex relative overflow-hidden w-full h-full">
                 {/* Split Mode: 2D Blueprint on Left, 3D Orbit on Right */}
                 {activeView === 'split' && (
                   <>
@@ -845,7 +854,16 @@ export default function HomeStudioPage() {
                 )}
               </div>
 
-              {/* Right Pane: Properties & Material Inspector */}
+              {/* Left Floating Drawer: 3D Element & Furniture Catalog */}
+              <CatalogSidebar
+                catalog={catalog}
+                onAddItem={handleAddItem}
+                isOpen={isCatalogOpen}
+                onToggleOpen={() => setIsCatalogOpen(!isCatalogOpen)}
+                theme={theme}
+              />
+
+              {/* Right Floating Drawer: Properties & Material Inspector */}
               <InspectorSidebar
                 plan={plan}
                 selectedId={selectedId}
@@ -854,6 +872,7 @@ export default function HomeStudioPage() {
                 collidingItemIds={collisionReport.collidingItemIds}
                 collisionReasons={collisionReport.reasons}
                 catalog={catalog}
+                theme={theme}
               />
             </div>
 

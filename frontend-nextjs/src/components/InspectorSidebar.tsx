@@ -27,7 +27,8 @@ import {
   Sliders,
   Flame,
   Droplets,
-  Box
+  Box,
+  X
 } from 'lucide-react';
 import { HomePlan, FurnitureItem, Wall, CatalogItem } from '../types/plan';
 import { isTabletopItem, findSupportingHost, findNearestSupportingSurface } from '../services/tabletopAttachment';
@@ -41,6 +42,7 @@ interface InspectorSidebarProps {
   collidingItemIds?: Set<string>;
   collisionReasons?: Map<string, string>;
   catalog?: CatalogItem[];
+  theme?: 'dark' | 'light';
 }
 
 // 1. Curated 1-Click Aesthetic Style Presets
@@ -164,6 +166,7 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
   collidingItemIds = new Set(),
   collisionReasons = new Map(),
   catalog = fallbackCatalog,
+  theme = 'dark',
 }) => {
   const [activeTab, setActiveTab] = useState<'design' | 'transform'>('design');
   const [activeMatCategory, setActiveMatCategory] = useState<string>('wood');
@@ -173,41 +176,10 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
   const isColliding = selectedFurniture ? collidingItemIds.has(selectedFurniture.id) : false;
   const collisionReason = selectedFurniture ? collisionReasons.get(selectedFurniture.id) : undefined;
 
-  if (!selectedFurniture && !selectedWall) {
-    return (
-      <aside className="w-84 bg-white border-l border-slate-200 p-5 flex flex-col items-center justify-center text-center select-none text-slate-400 shadow-sm relative z-10">
-        <div className="w-14 h-14 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center mb-3 shadow-sm">
-          <SlidersHorizontal className="w-6 h-6 text-sky-600" />
-        </div>
-        <p className="text-sm font-bold text-slate-800">Properties Inspector</p>
-        <p className="text-xs text-slate-500 mt-1 max-w-[210px] leading-relaxed">
-          Select any 3D furniture item or wall in the 2D CAD or 3D view to inspect design styles, materials, and dimensions.
-        </p>
+  const isDark = theme === 'dark';
 
-        <div className="w-full mt-6 pt-5 border-t border-slate-200 text-left bg-slate-50 border border-slate-200/80 p-3.5 rounded-xl shadow-xs">
-          <div className="text-[10px] uppercase font-bold tracking-wider text-sky-600 mb-2.5 flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5" />
-            <span>Active Level Overview</span>
-          </div>
-          <div className="space-y-2 text-xs">
-            <div className="flex justify-between text-slate-600">
-              <span>Walls:</span>
-              <span className="font-mono text-slate-900 font-bold">{plan.walls.length}</span>
-            </div>
-            <div className="flex justify-between text-slate-600">
-              <span>Furniture Pieces:</span>
-              <span className="font-mono text-slate-900 font-bold">{plan.furniture.length}</span>
-            </div>
-            <div className="flex justify-between text-slate-600">
-              <span>Collisions:</span>
-              <span className={`font-mono font-bold ${collidingItemIds.size > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                {collidingItemIds.size > 0 ? `${collidingItemIds.size} Overlapping` : '0 (Clear)'}
-              </span>
-            </div>
-          </div>
-        </div>
-      </aside>
-    );
+  if (!selectedFurniture && !selectedWall) {
+    return null;
   }
 
   const updateFurniture = (patch: Partial<FurnitureItem>) => {
@@ -291,26 +263,35 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
     : 0;
 
   return (
-    <aside className="w-84 bg-white border-l border-slate-200 flex flex-col h-full select-none shadow-sm relative z-10 overflow-hidden">
-      {/* Header */}
-      <div className="p-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50/80 backdrop-blur-md shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-lg bg-sky-100/70 border border-sky-200 flex items-center justify-center shrink-0">
-            {selectedFurniture ? (
-              <Palette className="w-4 h-4 text-sky-700" />
-            ) : (
-              <Square className="w-4 h-4 text-sky-700" />
-            )}
+    <div className="absolute top-3 right-3 bottom-3 z-30 flex">
+      <aside className={`w-80 rounded-2xl border shadow-2xl backdrop-blur-xl flex flex-col h-full select-none overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-right-4 ${
+        isDark
+          ? 'bg-[#0b1222]/95 border-slate-800 text-slate-100 shadow-black/60'
+          : 'bg-white/95 border-slate-200 text-slate-800 shadow-slate-900/15'
+      }`}>
+        {/* Header */}
+        <div className={`p-3.5 border-b flex items-center justify-between shrink-0 ${
+          isDark ? 'border-slate-800/90 bg-[#0e172a]/80' : 'border-slate-200 bg-slate-50/90'
+        }`}>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 ${
+              isDark ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+            }`}>
+              {selectedFurniture ? (
+                <Palette className="w-4 h-4" />
+              ) : (
+                <Square className="w-4 h-4" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <h3 className={`text-xs font-bold truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                {selectedFurniture ? selectedFurniture.name : 'Wall Structure'}
+              </h3>
+              <span className="text-[10px] text-slate-400 block truncate">
+                {selectedFurniture ? selectedFurniture.category : `Length: ${wallLength} cm`}
+              </span>
+            </div>
           </div>
-          <div className="min-w-0">
-            <h3 className="text-xs font-bold text-slate-900 truncate">
-              {selectedFurniture ? selectedFurniture.name : 'Wall Structure'}
-            </h3>
-            <span className="text-[10px] text-slate-500 block truncate">
-              {selectedFurniture ? selectedFurniture.category : `Length: ${wallLength} cm`}
-            </span>
-          </div>
-        </div>
 
         <div className="flex items-center gap-1 shrink-0">
           {selectedFurniture && (
@@ -337,10 +318,20 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
           )}
           <button
             onClick={handleDelete}
-            className="p-1.5 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-50 transition"
+            className="p-1.5 rounded-lg text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
             title="Delete (Del)"
           >
             <Trash2 className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => onSelectId(null)}
+            className={`p-1.5 rounded-lg transition cursor-pointer ${
+              isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+            title="Close Inspector (Full Canvas View)"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -1174,6 +1165,7 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
         )}
       </div>
     </aside>
+  </div>
   );
 };
 export default InspectorSidebar;
