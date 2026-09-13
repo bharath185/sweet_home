@@ -16,6 +16,7 @@ import { AddUserModal } from '../components/AddUserModal';
 import { AddItemModal } from '../components/AddItemModal';
 import { BlueprintImportModal } from '../components/BlueprintImportModal';
 import { PreferencesModal } from '../components/PreferencesModal';
+import { ClientProjectSelectModal } from '../components/ClientProjectSelectModal';
 import { HomePlan, CatalogItem, FurnitureItem, User, UserRole, FloorTemplate, BlueprintImage, ProjectPreferences } from '../types/plan';
 import { detectCollisions } from '../services/collisionDetector';
 import { isTabletopItem, findNearestSupportingSurface, autoAttachToTabletop } from '../services/tabletopAttachment';
@@ -62,6 +63,7 @@ export default function HomeStudioPage() {
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState<boolean>(false);
   const [isBlueprintModalOpen, setIsBlueprintModalOpen] = useState<boolean>(false);
   const [isPreferencesModalOpen, setIsPreferencesModalOpen] = useState<boolean>(false);
+  const [isClientSelectModalOpen, setIsClientSelectModalOpen] = useState<boolean>(false);
 
   // Ref-Backed Undo / Redo History Stack
   const historyRef = useRef<HomePlan[]>([JSON.parse(JSON.stringify(sampleDefaultPlan))]);
@@ -631,6 +633,92 @@ export default function HomeStudioPage() {
   };
 
   // Load Template in Studio
+  
+  // Start New Design for a specific Client
+  const handleStartNewDesignForClient = (client: User, templateId?: string) => {
+    let basePlan: HomePlan;
+
+    if (templateId === 'duplex_2floor' && ALL_CLIENT_PLANS['plan-sarah-suite']) {
+      basePlan = JSON.parse(JSON.stringify(ALL_CLIENT_PLANS['plan-sarah-suite']));
+      basePlan.name = `${client.name}'s Luxury Duplex`;
+    } else if (templateId === 'studio_apt' && ALL_CLIENT_PLANS['plan-david-villa']) {
+      basePlan = JSON.parse(JSON.stringify(ALL_CLIENT_PLANS['plan-david-villa']));
+      basePlan.name = `${client.name}'s Modern Studio`;
+    } else {
+      // Blank / Custom Template
+      basePlan = {
+        id: `plan-${client.id || Date.now()}`,
+        name: `${client.name}'s Custom Suite`,
+        version: '1.0',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        currentFloor: 0,
+        floors: [
+          { level: 0, name: 'Ground Floor', elevation: 0, height: 250 },
+          { level: 1, name: '1st Floor', elevation: 250, height: 250 },
+        ],
+        walls: [
+          { id: 'w1', xStart: -300, yStart: -200, xEnd: 300, yEnd: -200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
+          { id: 'w2', xStart: 300, yStart: -200, xEnd: 300, yEnd: 200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
+          { id: 'w3', xStart: 300, yStart: 200, xEnd: -300, yEnd: 200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
+          { id: 'w4', xStart: -300, yStart: 200, xEnd: -300, yEnd: -200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
+        ],
+        furniture: [],
+        rooms: [
+          {
+            id: 'r1',
+            name: 'Main Living Room',
+            floorLevel: 0,
+            points: [
+              { x: -300, y: -200 },
+              { x: 300, y: -200 },
+              { x: 300, y: 200 },
+              { x: -300, y: 200 },
+            ],
+            floorColor: '#e2e8f0',
+            areaSquareMeters: 24.0,
+          },
+        ],
+        dimensionLines: [],
+        textNotes: [],
+        preferences: {
+          unitSystem: 'cm',
+          defaultWallThickness: 15,
+          defaultWallHeight: 250,
+          gridSize: 20,
+          magnetismEnabled: true,
+          showRulers: true,
+        },
+      };
+    }
+
+    const newPlanId = `plan-${client.id || Date.now()}`;
+    basePlan.id = newPlanId;
+    basePlan.updatedAt = new Date().toISOString();
+
+    // Cache in global memory & localStorage
+    ALL_CLIENT_PLANS[newPlanId] = basePlan;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`sweethome_plan_${newPlanId}`, JSON.stringify(basePlan));
+    }
+
+    // Link plan to client
+    setUsers((prev) =>
+      prev.map((u) => (u.id === client.id ? { ...u, assignedPlan: newPlanId } : u))
+    );
+
+    setPlan(basePlan);
+    historyRef.current = [JSON.parse(JSON.stringify(basePlan))];
+    historyIndexRef.current = 0;
+    setCanUndo(false);
+    setCanRedo(false);
+    setSelectedId(null);
+    setActiveFloor(0);
+
+    setIsClientSelectModalOpen(false);
+    setActiveView(userRole === 'CLIENT' ? 'customer' : 'split');
+  };
+
   const handleOpenStudioWithTemplate = (templateId: string) => {
     const tpl = templates.find((t) => t.id === templateId);
     if (tpl) {
@@ -709,6 +797,7 @@ export default function HomeStudioPage() {
         onRedo={handleRedo}
         currentUser={currentUser}
         onLogout={handleLogout}
+        onOpenClientSelectModal={() => setIsClientSelectModalOpen(true)}
       />
 
       {/* Main Workspace Body */}
@@ -732,6 +821,7 @@ export default function HomeStudioPage() {
             onDeleteCatalogItem={handleDeleteCatalogItem}
             onOpenAddItemModal={() => setIsAddItemModalOpen(true)}
             onOpenAddUserModal={() => setIsAddUserModalOpen(true)}
+            onOpenClientSelectModal={() => setIsClientSelectModalOpen(true)}
             plan={plan}
           />
         )}
@@ -889,6 +979,23 @@ export default function HomeStudioPage() {
         onClose={() => setIsBlueprintModalOpen(false)}
         currentBlueprint={plan.blueprint}
         onSaveBlueprint={handleSaveBlueprint}
+      />
+
+      
+      {/* Client Project Selector Modal */}
+      <ClientProjectSelectModal
+        isOpen={isClientSelectModalOpen}
+        onClose={() => setIsClientSelectModalOpen(false)}
+        users={users}
+        templates={templates}
+        currentPlanId={plan.id}
+        onSelectExistingPlan={(planId) => {
+          handleSelectClientProject(planId);
+          setIsClientSelectModalOpen(false);
+          setActiveView(userRole === 'CLIENT' ? 'customer' : 'split');
+        }}
+        onStartNewDesignForClient={handleStartNewDesignForClient}
+        onOpenAddClientModal={() => setIsAddUserModalOpen(true)}
       />
 
       {/* Project Preferences Modal */}

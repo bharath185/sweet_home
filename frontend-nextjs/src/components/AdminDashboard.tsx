@@ -38,6 +38,7 @@ interface AdminDashboardProps {
   onDeleteCatalogItem: (itemId: string) => void;
   onOpenAddItemModal: () => void;
   onOpenAddUserModal: () => void;
+  onOpenClientSelectModal?: () => void;
   plan: HomePlan;
 }
 
@@ -54,6 +55,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDeleteCatalogItem,
   onOpenAddItemModal,
   onOpenAddUserModal,
+  onOpenClientSelectModal,
   plan,
 }) => {
   const [userSearch, setUserSearch] = useState('');
@@ -138,7 +140,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
 
             <button
-              onClick={() => onOpenStudioWithTemplate('duplex_2floor')}
+              onClick={() => {
+                if (onOpenClientSelectModal) {
+                  onOpenClientSelectModal();
+                } else {
+                  onOpenStudioWithTemplate('duplex_2floor');
+                }
+              }}
               className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-[11px] font-bold shadow-sm shadow-sky-500/20 border border-sky-400/30 transition flex items-center gap-1.5 active:scale-95"
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -228,7 +236,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* 3. COMPACT EASY-ACCESS LAUNCHPAD */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         <button
-          onClick={() => onOpenStudioWithTemplate('duplex_2floor')}
+          onClick={() => {
+            if (onOpenClientSelectModal) {
+              onOpenClientSelectModal();
+            } else {
+              onOpenStudioWithTemplate('duplex_2floor');
+            }
+          }}
           className="p-3 bg-white hover:bg-sky-50 border border-slate-200 hover:border-sky-300 rounded-2xl transition flex flex-col items-start gap-1 text-left shadow-2xs group"
         >
           <div className="w-7 h-7 rounded-lg bg-sky-50 group-hover:bg-sky-600 text-sky-600 group-hover:text-white flex items-center justify-center transition">

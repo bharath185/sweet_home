@@ -59,6 +59,7 @@ interface NavbarProps {
   onRedo?: () => void;
   currentUser?: import('../types/plan').User | null;
   onLogout?: () => void;
+  onOpenClientSelectModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -89,8 +90,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   onRedo,
   currentUser,
   onLogout,
+  onOpenClientSelectModal,
 }) => {
   const unit = plan.preferences?.unitSystem?.toUpperCase() || 'CM';
+
+  // Find the current client name if matched
+  const currentClient = clientProjects.find((cp) => cp.id === plan.id);
+  const clientDisplayName = currentClient ? currentClient.clientName : 'Custom Client';
 
   return (
     <header className="h-14 bg-white/95 backdrop-blur-xl border-b border-slate-200/90 px-4 flex items-center justify-between select-none z-30 shadow-sm shadow-slate-900/5 relative">
@@ -125,37 +131,39 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
           </div>
 
-          {/* Client Project Switcher Dropdown */}
+          {/* Visual Client Project Switcher Pill */}
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[10px] text-slate-400 uppercase font-semibold">
-              {userRole === 'CLIENT' ? 'Your Suite:' : 'Client:'}
+            <span className="text-[10px] text-slate-400 uppercase font-bold">
+              {userRole === 'CLIENT' ? 'Suite:' : 'Working on:'}
             </span>
-            {userRole !== 'CLIENT' && clientProjects.length > 0 && onSelectClientProject ? (
+            {userRole !== 'CLIENT' ? (
               <div className="flex items-center gap-1">
-                <select
-                  value={plan.id}
-                  onChange={(e) => onSelectClientProject(e.target.value)}
-                  className="bg-slate-50 text-slate-800 font-semibold text-xs rounded-lg px-2.5 py-0.5 border border-slate-200 hover:border-sky-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 cursor-pointer max-w-[210px] truncate shadow-sm transition"
-                  title="Switch Client Design Project"
+                <button
+                  onClick={onOpenClientSelectModal}
+                  className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs rounded-lg px-2.5 py-0.5 border border-slate-200/90 hover:border-sky-400 shadow-2xs transition group"
+                  title="Click to Switch Client Design or Start New"
                 >
-                  {clientProjects.map((cp) => (
-                    <option key={cp.id} value={cp.id} className="bg-white text-slate-800">
-                      {cp.clientName} — {cp.name}
-                    </option>
-                  ))}
-                </select>
+                  <span className="text-sky-600 font-bold">🏡</span>
+                  <span className="text-slate-900 font-bold truncate max-w-[150px]">
+                    {plan.name || 'Untitled Plan'}
+                  </span>
+                  <span className="text-slate-400 text-[11px] font-normal">
+                    • {clientDisplayName}
+                  </span>
+                  <span className="text-[9px] text-slate-400 group-hover:text-slate-700 transition ml-0.5">▼</span>
+                </button>
                 {userRole === 'ADMIN' && onOpenAddUserModal && (
                   <button
                     onClick={onOpenAddUserModal}
                     className="px-2 py-0.5 rounded-md bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 text-[10px] font-bold transition flex items-center gap-1"
-                    title="Onboard New Client with Fresh Design"
+                    title="Onboard New Client"
                   >
                     <span>+ Client</span>
                   </button>
                 )}
               </div>
             ) : (
-              <span className="text-xs text-sky-700 font-semibold truncate max-w-[180px]">
+              <span className="text-xs text-sky-700 font-bold truncate max-w-[200px]">
                 {plan.name || 'Untitled Home'}
               </span>
             )}
