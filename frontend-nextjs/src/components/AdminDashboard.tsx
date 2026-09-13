@@ -141,51 +141,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#080d19] text-slate-100 overflow-hidden select-none font-sans">
-      {/* Top Clean Header Bar */}
-      <div className="flex-shrink-0 px-8 py-4 border-b border-slate-800/80 bg-[#0c1424] flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white font-bold shadow-sm">
-            <LayoutDashboard className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-              SweetHome 3D Overview
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 font-medium">
-                Active Studio
-              </span>
-            </h1>
-            <p className="text-xs text-slate-400">
-              Welcome, <span className="text-slate-200 font-semibold">{currentUser?.name || 'Architect'}</span> • Multi-floor CAD & 3D WebGL Planning
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          {onNewPlan && (
-            <button
-              onClick={onNewPlan}
-              className="px-3.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5 text-indigo-400" />
-              New Floor Plan
-            </button>
-          )}
-
-          {onSwitchToStudio && (
-            <button
-              onClick={onSwitchToStudio}
-              className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/25 cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              Open 3D Studio
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto px-8 py-5 space-y-5 custom-scrollbar">
+      {/* Main Content Area directly below navbar */}
+      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-5 custom-scrollbar">
         {currentTab === 'dashboard' && (
           <>
             {/* 4 Clean Metric Cards */}
