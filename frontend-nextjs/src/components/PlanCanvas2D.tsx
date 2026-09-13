@@ -474,24 +474,34 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     setToolMode('select');
   };
 
-  // One-Click Auto-Dimension All Exterior Walls
+  // One-Click Toggle Auto-Dimension All Exterior Walls (Click to show, Click again to remove)
   const handleAutoDimension = () => {
+    if (floorDimensionLines.length > 0) {
+      // Toggle OFF: Remove dimensions from this active floor
+      onUpdatePlan({
+        ...plan,
+        dimensionLines: (plan.dimensionLines || []).filter((d) => (d.floorLevel ?? 0) !== activeFloor),
+        updatedAt: new Date().toISOString(),
+      });
+      return;
+    }
+
+    // Toggle ON: Auto generate exterior wall dimension lines
     if (floorWalls.length === 0) return;
     const newDimensions: DimensionLine[] = [];
 
     floorWalls.forEach((w) => {
-      // Create offset dimension line along wall normal
       const dx = w.xEnd - w.xStart;
       const dy = w.yEnd - w.yStart;
       const len = Math.hypot(dx, dy);
-      if (len < 50) return;
+      if (len < 30) return;
 
       const normX = -dy / len;
       const normY = dx / len;
       const offsetDist = 35; // 35cm exterior offset
 
       newDimensions.push({
-        id: 'dim_auto_' + Date.now() + '_' + w.id,
+        id: 'dim_auto_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + '_' + w.id,
         xStart: Math.round(w.xStart + normX * offsetDist),
         yStart: Math.round(w.yStart + normY * offsetDist),
         xEnd: Math.round(w.xEnd + normX * offsetDist),
@@ -941,8 +951,11 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         const curWalls = plan.walls.filter((w) => (w.floorLevel ?? 0) === flLevel);
         const curFurniture = plan.furniture.filter((f) => (f.floorLevel ?? 0) === flLevel && f.isVisible !== false);
         const curDimensions = (plan.dimensionLines || []).filter((d) => (d.floorLevel ?? 0) === flLevel);
+        const curTextNotes = (plan.textNotes || []).filter((t) => (t.floorLevel ?? 0) === flLevel);
 
-        // 2. Draw Rooms
+        // ==========================================
+        // [Z-INDEX LAYER 1]: Room Polygon Fills
+        // ==========================================
         if (layers.rooms) {
           curRooms.forEach((room) => {
             if (room.points.length < 3) return;
@@ -961,43 +974,61 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             ctx.closePath();
             ctx.fill();
             ctx.stroke();
+          });
+        }
 
-            // Centered Badge
-            const avgX = room.points.reduce((acc, p) => acc + p.x, 0) / room.points.length;
-            const avgY = room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length;
-            const screenAvg = planToScreen(avgX, avgY, flLevel);
+        // ==========================================
+        // [Z-INDEX LAYER 2]: Furniture & Interior Items
+        // ==========================================
+        if (layers.furniture || layers.structure) {
+          curFurniture.forEach((item) => {
+            const isDoor = item.catalogId === 'door' || item.category === 'Doors & Windows';
+            if (isDoor) return; // Doors drawn in Layer 4 (Openings)
 
-            const roomTitle = room.name.toUpperCase();
-            const areaStr = formatArea(room.areaSquareMeters || 12.5, unit);
+            const isSelected = selectedId === item.id;
+            const sp = planToScreen(item.x, item.y, flLevel);
+            const w = item.width * scale;
+            const d = item.depth * scale;
 
             ctx.save();
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
-            ctx.shadowColor = 'rgba(15, 23, 42, 0.12)';
-            ctx.shadowBlur = 6;
-            ctx.shadowOffsetY = 2;
-            ctx.beginPath();
-            ctx.roundRect(screenAvg.x - 70, screenAvg.y - 17, 140, 34, 6);
-            ctx.fill();
+            ctx.translate(sp.x, sp.y);
+            ctx.rotate(item.angle || 0);
 
-            ctx.shadowColor = 'transparent';
-            ctx.strokeStyle = isSelected ? '#0284c7' : '#cbd5e1';
-            ctx.lineWidth = isSelected ? 1.8 : 1;
+            // Standard Furniture Item
+            ctx.fillStyle = item.color || '#f8fafc';
+            ctx.strokeStyle = isSelected ? '#0284c7' : '#334155';
+            ctx.lineWidth = isSelected ? 2.5 : 1.5;
+            ctx.beginPath();
+            ctx.roundRect(-w / 2, -d / 2, w, d, 4);
+            ctx.fill();
             ctx.stroke();
 
             ctx.fillStyle = '#0f172a';
-            ctx.font = 'bold 11px system-ui';
+            ctx.font = 'bold 9.5px system-ui';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(roomTitle, screenAvg.x, screenAvg.y - 6);
+            ctx.fillText(item.name, 0, 0);
 
-            ctx.fillStyle = '#0284c7';
-            ctx.font = 'bold 10px monospace';
-            ctx.fillText(areaStr, screenAvg.x, screenAvg.y + 7);
+            // Selection Handles
+            if (isSelected) {
+              ctx.strokeStyle = '#0284c7';
+              ctx.fillStyle = '#ffffff';
+              ctx.lineWidth = 1.5;
+              const handles = [
+                [-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]
+              ];
+              handles.forEach(([hx, hy]) => {
+                ctx.fillRect(hx - 4, hy - 4, 8, 8);
+                ctx.strokeRect(hx - 4, hy - 4, 8, 8);
+              });
+            }
             ctx.restore();
           });
         }
 
-        // 3. Draw Walls
+        // ==========================================
+        // [Z-INDEX LAYER 3]: Architectural Walls
+        // ==========================================
         if (layers.walls) {
           curWalls.forEach((wall) => {
             const isSelected = selectedId === wall.id;
@@ -1051,18 +1082,15 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
           });
         }
 
-        // 4. Draw Furniture & CAD Symbols
-        if (layers.furniture || layers.openings || layers.structure) {
+        // ==========================================
+        // [Z-INDEX LAYER 4]: Openings (Doors & Windows)
+        // ==========================================
+        if (layers.openings) {
           curFurniture.forEach((item) => {
-            const isSelected = selectedId === item.id;
             const isDoor = item.catalogId === 'door' || item.category === 'Doors & Windows';
-            const isCol = item.catalogId === 'column' || item.category === 'Structural';
-            const isStairs = item.catalogId === 'staircase' || item.category === 'Stairs';
+            if (!isDoor) return;
 
-            if (isDoor && !layers.openings) return;
-            if (isCol && !layers.structure) return;
-            if (!isDoor && !isCol && !isStairs && !layers.furniture) return;
-
+            const isSelected = selectedId === item.id;
             const sp = planToScreen(item.x, item.y, flLevel);
             const w = item.width * scale;
             const d = item.depth * scale;
@@ -1071,106 +1099,84 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             ctx.translate(sp.x, sp.y);
             ctx.rotate(item.angle || 0);
 
-            if (isDoor) {
-              // Architectural Door & 90 deg Swing Arc
-              ctx.strokeStyle = isSelected ? '#0284c7' : '#0f172a';
-              ctx.lineWidth = 2;
-              ctx.strokeRect(-w / 2, -d / 2, w, d);
+            // Architectural Door & 90 deg Swing Arc
+            ctx.strokeStyle = isSelected ? '#0284c7' : '#0f172a';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(-w / 2, -d / 2, w, d);
 
-              ctx.strokeStyle = isSelected ? '#0284c7' : '#0284c7';
-              ctx.lineWidth = 1.5;
-              ctx.setLineDash([4, 3]);
-              ctx.beginPath();
-              ctx.arc(-w / 2, d / 2, w, 0, -Math.PI / 2, true);
-              ctx.stroke();
-              ctx.setLineDash([]);
+            ctx.strokeStyle = isSelected ? '#0284c7' : '#0284c7';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.arc(-w / 2, d / 2, w, 0, -Math.PI / 2, true);
+            ctx.stroke();
+            ctx.setLineDash([]);
 
-              ctx.lineWidth = 2.5;
-              ctx.beginPath();
-              ctx.moveTo(-w / 2, d / 2);
-              ctx.lineTo(-w / 2, d / 2 - w);
-              ctx.stroke();
-            } else if (isCol) {
-              // Structural Reinforced Concrete Column with Cross-Hatch
-              ctx.fillStyle = '#475569';
-              ctx.fillRect(-w / 2, -d / 2, w, d);
-              ctx.strokeStyle = '#0f172a';
-              ctx.lineWidth = 2;
-              ctx.strokeRect(-w / 2, -d / 2, w, d);
-
-              ctx.strokeStyle = '#ffffff';
-              ctx.lineWidth = 1.2;
-              ctx.beginPath();
-              ctx.moveTo(-w / 2, -d / 2); ctx.lineTo(w / 2, d / 2);
-              ctx.moveTo(w / 2, -d / 2); ctx.lineTo(-w / 2, d / 2);
-              ctx.stroke();
-            } else if (isStairs) {
-              // Architectural Staircase with Steps & Direction Arrow
-              ctx.fillStyle = '#f8fafc';
-              ctx.fillRect(-w / 2, -d / 2, w, d);
-              ctx.strokeStyle = '#334155';
-              ctx.lineWidth = 2;
-              ctx.strokeRect(-w / 2, -d / 2, w, d);
-
-              const numSteps = 10;
-              const stepH = d / numSteps;
-              ctx.strokeStyle = '#94a3b8';
-              ctx.lineWidth = 1;
-              for (let s = 1; s < numSteps; s++) {
-                ctx.beginPath();
-                ctx.moveTo(-w / 2, -d / 2 + s * stepH);
-                ctx.lineTo(w / 2, -d / 2 + s * stepH);
-                ctx.stroke();
-              }
-
-              // Up Arrow
-              ctx.strokeStyle = '#0284c7';
-              ctx.lineWidth = 2;
-              ctx.beginPath();
-              ctx.moveTo(0, d / 2 - 10); ctx.lineTo(0, -d / 2 + 15);
-              ctx.lineTo(-6, -d / 2 + 25);
-              ctx.moveTo(0, -d / 2 + 15); ctx.lineTo(6, -d / 2 + 25);
-              ctx.stroke();
-
-              ctx.fillStyle = '#0284c7';
-              ctx.font = 'bold 9px system-ui';
-              ctx.textAlign = 'center';
-              ctx.fillText('UP', 0, d / 2 - 16);
-            } else {
-              // Standard Furniture
-              ctx.fillStyle = item.color || '#f8fafc';
-              ctx.strokeStyle = isSelected ? '#0284c7' : '#334155';
-              ctx.lineWidth = isSelected ? 2.5 : 1.5;
-              ctx.beginPath();
-              ctx.roundRect(-w / 2, -d / 2, w, d, 4);
-              ctx.fill();
-              ctx.stroke();
-
-              ctx.fillStyle = '#0f172a';
-              ctx.font = 'bold 9.5px system-ui';
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillText(item.name, 0, 0);
-            }
-
-            // Selection Handles
-            if (isSelected) {
-              ctx.strokeStyle = '#0284c7';
-              ctx.fillStyle = '#ffffff';
-              ctx.lineWidth = 1.5;
-              const handles = [
-                [-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]
-              ];
-              handles.forEach(([hx, hy]) => {
-                ctx.fillRect(hx - 4, hy - 4, 8, 8);
-                ctx.strokeRect(hx - 4, hy - 4, 8, 8);
-              });
-            }
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(-w / 2, d / 2);
+            ctx.lineTo(-w / 2, d / 2 - w);
+            ctx.stroke();
             ctx.restore();
           });
         }
 
-        // 5. Draw Dimension Lines
+        // ==========================================
+        // [Z-INDEX LAYER 5]: Room Badges & Text Notes
+        // ==========================================
+        if (layers.rooms) {
+          curRooms.forEach((room) => {
+            if (room.points.length < 3) return;
+            const isSelected = selectedId === room.id;
+            const avgX = room.points.reduce((acc, p) => acc + p.x, 0) / room.points.length;
+            const avgY = room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length;
+            const screenAvg = planToScreen(avgX, avgY, flLevel);
+
+            const roomTitle = room.name.toUpperCase();
+            const areaStr = formatArea(room.areaSquareMeters || 12.5, unit);
+
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+            ctx.shadowColor = 'rgba(15, 23, 42, 0.15)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetY = 2;
+            ctx.beginPath();
+            ctx.roundRect(screenAvg.x - 70, screenAvg.y - 17, 140, 34, 6);
+            ctx.fill();
+
+            ctx.shadowColor = 'transparent';
+            ctx.strokeStyle = isSelected ? '#0284c7' : '#cbd5e1';
+            ctx.lineWidth = isSelected ? 2 : 1;
+            ctx.stroke();
+
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 11px system-ui';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(roomTitle, screenAvg.x, screenAvg.y - 6);
+
+            ctx.fillStyle = '#0284c7';
+            ctx.font = 'bold 10px monospace';
+            ctx.fillText(areaStr, screenAvg.x, screenAvg.y + 7);
+            ctx.restore();
+          });
+        }
+
+        if (layers.notes) {
+          curTextNotes.forEach((note) => {
+            const np = planToScreen(note.x, note.y, flLevel);
+            ctx.save();
+            ctx.fillStyle = note.color || '#0f172a';
+            ctx.font = `${note.fontSize || 12}px system-ui`;
+            ctx.textAlign = 'center';
+            ctx.fillText(note.text, np.x, np.y);
+            ctx.restore();
+          });
+        }
+
+        // ==========================================
+        // [Z-INDEX LAYER 6]: Dimension Lines & Measurements
+        // ==========================================
         if (layers.dimensions) {
           curDimensions.forEach((dim) => {
             const p1 = planToScreen(dim.xStart, dim.yStart, flLevel);
@@ -1746,11 +1752,20 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             <Ruler className="w-3.5 h-3.5" />
           </button>
 
-          {/* Auto Dimension All Walls */}
+          {/* Auto Dimension All Walls (Toggle On/Off) */}
           <button
             onClick={handleAutoDimension}
-            className="p-1.5 rounded-lg text-xs font-semibold text-sky-700 hover:bg-sky-50 transition border border-sky-200"
-            title="Auto-Dimension All Exterior Walls"
+            className={
+              'p-1.5 rounded-lg text-xs font-semibold transition border ' +
+              (floorDimensionLines.length > 0
+                ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                : 'text-sky-700 bg-sky-50 hover:bg-sky-100 border-sky-200')
+            }
+            title={
+              floorDimensionLines.length > 0
+                ? 'Clear Measurements (Click to remove dimensions)'
+                : 'Auto-Dimension All Exterior Walls (Click to show measurements)'
+            }
           >
             <Sparkles className="w-3.5 h-3.5" />
           </button>
