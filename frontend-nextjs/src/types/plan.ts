@@ -167,6 +167,8 @@ export interface CatalogItem {
   placementType?: 'floor' | 'tabletop' | 'wall' | 'ceiling';
   placeOnTable?: boolean;
   allowedOnFloor?: boolean;
+  elevation?: number;
+  defaultElevation?: number;
 }
 
 export interface FloorTemplate {

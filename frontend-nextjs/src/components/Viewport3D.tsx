@@ -35,6 +35,11 @@ import {
   buildCabinetMeshGroup,
   buildBedMeshGroup,
   buildLampMeshGroup,
+  buildShelfMeshGroup,
+  buildDoorMeshGroup,
+  buildWindowMeshGroup,
+  buildWallDesignMeshGroup,
+  buildInteriorDecorMeshGroup,
   buildCustomPrimitivesMeshGroup,
 } from '../services/proceduralFurniture';
 
@@ -724,6 +729,16 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             procGroup = buildBedMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
           } else if (pType === 'lamp') {
             procGroup = buildLampMeshGroup({ ...parsed, shadeWidth: item.width, shadeHeight: item.depth, totalHeight: item.height }, itemMat);
+          } else if (pType === 'shelf') {
+            procGroup = buildShelfMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
+          } else if (pType === 'door') {
+            procGroup = buildDoorMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
+          } else if (pType === 'window') {
+            procGroup = buildWindowMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
+          } else if (pType === 'wallDesign') {
+            procGroup = buildWallDesignMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
+          } else if (pType === 'decor') {
+            procGroup = buildInteriorDecorMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
           } else if (pType === 'primitives' && parsed.primitives) {
             procGroup = buildCustomPrimitivesMeshGroup(parsed.primitives, itemMat);
           }

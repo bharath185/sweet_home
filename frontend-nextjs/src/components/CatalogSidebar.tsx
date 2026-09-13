@@ -26,11 +26,14 @@ interface CatalogSidebarProps {
 
 const CATEGORIES = [
   { id: 'All', name: 'All Furniture', icon: Building2 },
+  { id: 'Doors & Windows', name: 'Doors & Windows', icon: DoorOpen },
+  { id: 'Wall Designs', name: 'Wall Designs', icon: Sparkles },
+  { id: 'Shelves & Storage', name: 'Shelves & Storage', icon: Building2 },
+  { id: 'Decor & Plants', name: 'Decor & Plants', icon: Sparkles },
   { id: 'Living', name: 'Living Room', icon: Armchair },
   { id: 'Bedroom', name: 'Bedroom', icon: Bed },
   { id: 'Kitchen', name: 'Kitchen', icon: UtensilsCrossed },
   { id: 'Bathroom', name: 'Bathroom', icon: Bath },
-  { id: 'Doors & Windows', name: 'Doors & Windows', icon: DoorOpen },
   { id: 'Lighting', name: 'Lighting', icon: Lightbulb },
   { id: 'Stairs & Structural', name: 'Structural & Stairs', icon: Building2 },
 ];

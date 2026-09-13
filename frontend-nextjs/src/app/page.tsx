@@ -437,7 +437,7 @@ export default function HomeStudioPage() {
   const handleAddItem = (item: CatalogItem) => {
     let targetX = 0;
     let targetY = 0;
-    let targetElevation = 0;
+    let targetElevation = item.elevation || item.defaultElevation || 0;
     let hostId: string | undefined = undefined;
 
     if (item.placementType === 'tabletop' || item.placeOnTable || isTabletopItem(item)) {

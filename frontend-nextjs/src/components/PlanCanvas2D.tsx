@@ -618,11 +618,85 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
           ctx.stroke();
         } else if (cat.includes('door') || itemName.includes('door')) {
           ctx.strokeStyle = '#d97706';
+          ctx.lineWidth = 1.4;
+          if (itemName.includes('sliding') || itemName.includes('barn')) {
+            // Sliding door arrow indicator
+            ctx.beginPath();
+            ctx.moveTo(-w / 2, 0);
+            ctx.lineTo(w / 2, 0);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(w / 2 - 8, -4);
+            ctx.lineTo(w / 2, 0);
+            ctx.lineTo(w / 2 - 8, 4);
+            ctx.stroke();
+          } else {
+            // Standard / Arched / French swing arc
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.arc(-w / 2, d / 2, w, -Math.PI / 2, 0);
+            ctx.stroke();
+          }
+        } else if (cat.includes('window') || itemName.includes('window')) {
+          // Architectural Window symbol (Triple-glazing lines + sill)
+          ctx.strokeStyle = '#0284c7';
           ctx.lineWidth = 1.2;
-          ctx.setLineDash([3, 3]);
           ctx.beginPath();
-          ctx.arc(-w / 2, d / 2, w, -Math.PI / 2, 0);
+          ctx.moveTo(-w / 2, -d * 0.25);
+          ctx.lineTo(w / 2, -d * 0.25);
+          ctx.moveTo(-w / 2, 0);
+          ctx.lineTo(w / 2, 0);
+          ctx.moveTo(-w / 2, d * 0.25);
+          ctx.lineTo(w / 2, d * 0.25);
           ctx.stroke();
+        } else if (cat.includes('shelf') || itemName.includes('shelf')) {
+          // Wall Shelf symbol with mounting bracket indicators
+          ctx.strokeStyle = '#059669';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(-w / 2 + 2, -d / 2 + 2, w - 4, d - 4);
+          ctx.beginPath();
+          ctx.moveTo(-w * 0.35, -d / 2);
+          ctx.lineTo(-w * 0.35, d / 2);
+          ctx.moveTo(w * 0.35, -d / 2);
+          ctx.lineTo(w * 0.35, d / 2);
+          ctx.stroke();
+        } else if (cat.includes('wall') || itemName.includes('slat') || itemName.includes('wainscot') || itemName.includes('marble') || itemName.includes('brick')) {
+          // Accent Wall Slat / Panel symbol (Hatched lines)
+          ctx.strokeStyle = '#6366f1';
+          ctx.lineWidth = 1;
+          const step = Math.max(6, w / 10);
+          for (let sx = -w / 2 + step; sx < w / 2; sx += step) {
+            ctx.beginPath();
+            ctx.moveTo(sx, -d / 2);
+            ctx.lineTo(sx, d / 2);
+            ctx.stroke();
+          }
+        } else if (itemName.includes('rug') || itemName.includes('carpet')) {
+          // Rug dashed border + fringe
+          ctx.strokeStyle = '#ec4899';
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([4, 2]);
+          ctx.strokeRect(-w / 2 + 3, -d / 2 + 3, w - 6, d - 6);
+        } else if (itemName.includes('curtain') || itemName.includes('drape')) {
+          // Curtains wave pleats
+          ctx.strokeStyle = '#8b5cf6';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          for (let cx = -w / 2; cx <= w / 2; cx += 8) {
+            ctx.arc(cx, 0, 4, 0, Math.PI);
+          }
+          ctx.stroke();
+        } else if (itemName.includes('mirror') || itemName.includes('art') || itemName.includes('canvas')) {
+          // Mirror / Frame tick
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(-w / 2 + 2, -d / 2 + 2, w - 4, d - 4);
+        } else if (cat.includes('plant') || itemName.includes('plant')) {
+          // Foliage flower / leaves
+          ctx.fillStyle = 'rgba(34, 197, 94, 0.4)';
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.min(w, d) / 2, 0, Math.PI * 2);
+          ctx.fill();
         } else if (cat.includes('light') || itemName.includes('light') || itemName.includes('lamp') || isCeiling) {
           ctx.fillStyle = 'rgba(234, 179, 8, 0.2)';
           ctx.beginPath();

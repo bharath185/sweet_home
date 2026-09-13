@@ -536,6 +536,570 @@ export function buildCustomPrimitivesMeshGroup(primitives: CustomPrimitive[], fa
 }
 
 
+
+export interface ShelfParams {
+  type: 'floating' | 'hexagon' | 'modular_cubes' | 'industrial_pipe';
+  width: number;
+  depth: number;
+  height: number;
+  plankThickness?: number;
+}
+
+export interface DoorParams {
+  type: 'barn_sliding' | 'modern_flush' | 'glass_french' | 'arched_wood';
+  width: number;
+  depth: number;
+  height: number;
+}
+
+export interface WindowParams {
+  type: 'modern_sliding' | 'french_arch' | 'picture_panoramic' | 'grid_double_hung';
+  width: number;
+  depth: number;
+  height: number;
+}
+
+export interface WallDesignParams {
+  type: 'wood_slat' | 'wainscoting' | 'brick_cladding' | 'marble_slab' | 'geometric_3d';
+  width: number;
+  depth: number;
+  height: number;
+}
+
+export interface DecorParams {
+  type: 'wall_art' | 'arched_mirror' | 'vanity_mirror' | 'curtains' | 'area_rug' | 'potted_plant';
+  width: number;
+  depth: number;
+  height: number;
+}
+
+// ----------------------------------------------------
+// SHELF MESH BUILDER
+// ----------------------------------------------------
+export function buildShelfMeshGroup(params: ShelfParams, mat: THREE.Material): THREE.Group {
+  const group = new THREE.Group();
+  const w = Math.max(20, params.width) * CM;
+  const d = Math.max(10, params.depth) * CM;
+  const h = Math.max(5, params.height) * CM;
+  const thick = Math.max(1.5, params.plankThickness || 3) * CM;
+  const metalMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.3 });
+
+  if (params.type === 'hexagon') {
+    // Hexagonal Honeycomb Shelf
+    const radius = Math.min(w, h) / 2;
+    const sideCount = 6;
+    for (let i = 0; i < sideCount; i++) {
+      const angle = (i * Math.PI) / 3;
+      const nextAngle = ((i + 1) * Math.PI) / 3;
+      const p1 = new THREE.Vector2(Math.cos(angle) * radius, Math.sin(angle) * radius);
+      const p2 = new THREE.Vector2(Math.cos(nextAngle) * radius, Math.sin(nextAngle) * radius);
+      const segLen = p1.distanceTo(p2);
+      const mid = p1.clone().add(p2).multiplyScalar(0.5);
+      const segAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+
+      const plankGeom = new THREE.BoxGeometry(segLen, thick, d);
+      const plankMesh = new THREE.Mesh(plankGeom, mat);
+      plankMesh.position.set(mid.x, mid.y + radius, 0);
+      plankMesh.rotation.z = segAngle;
+      plankMesh.castShadow = true;
+      group.add(plankMesh);
+    }
+    // Center divider shelf
+    const midShelfGeom = new THREE.BoxGeometry(radius * 1.6, thick, d);
+    const midShelf = new THREE.Mesh(midShelfGeom, mat);
+    midShelf.position.set(0, radius, 0);
+    midShelf.castShadow = true;
+    group.add(midShelf);
+  } else if (params.type === 'modular_cubes') {
+    // 3 Staggered Display Cubes
+    const cubeW = w * 0.45;
+    const cubeH = h * 0.55;
+    const cubes = [
+      { x: -w * 0.25, y: cubeH / 2, w: cubeW, h: cubeH },
+      { x: w * 0.25, y: h * 0.45, w: cubeW, h: cubeH },
+      { x: 0, y: h * 0.75, w: cubeW * 0.8, h: cubeH * 0.8 },
+    ];
+    cubes.forEach((c) => {
+      // Top & Bottom
+      const tbGeom = new THREE.BoxGeometry(c.w, thick, d);
+      const topM = new THREE.Mesh(tbGeom, mat);
+      topM.position.set(c.x, c.y + c.h / 2, 0);
+      const botM = new THREE.Mesh(tbGeom, mat);
+      botM.position.set(c.x, c.y - c.h / 2, 0);
+      // Sides
+      const sideGeom = new THREE.BoxGeometry(thick, c.h, d);
+      const leftM = new THREE.Mesh(sideGeom, mat);
+      leftM.position.set(c.x - c.w / 2, c.y, 0);
+      const rightM = new THREE.Mesh(sideGeom, mat);
+      rightM.position.set(c.x + c.w / 2, c.y, 0);
+      group.add(topM, botM, leftM, rightM);
+    });
+  } else if (params.type === 'industrial_pipe') {
+    // 2 Shelves with Black Iron Pipes
+    const shelfCount = 2;
+    const pipeMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.9, roughness: 0.2 });
+    for (let s = 0; s < shelfCount; s++) {
+      const sy = (s + 0.4) * (h / shelfCount);
+      const plankGeom = new THREE.BoxGeometry(w, thick, d);
+      const plank = new THREE.Mesh(plankGeom, mat);
+      plank.position.set(0, sy, 0);
+      plank.castShadow = true;
+      group.add(plank);
+    }
+    // Vertical pipes & flanges
+    [-w * 0.4, w * 0.4].forEach((px) => {
+      const pipeGeom = new THREE.CylinderGeometry(0.015, 0.015, h, 12);
+      const pipe = new THREE.Mesh(pipeGeom, pipeMat);
+      pipe.position.set(px, h / 2, 0);
+      group.add(pipe);
+      // Wall flanges
+      [0.05, h - 0.05].forEach((fy) => {
+        const flangeGeom = new THREE.CylinderGeometry(0.035, 0.035, 0.01, 16);
+        flangeGeom.rotateX(Math.PI / 2);
+        const flange = new THREE.Mesh(flangeGeom, pipeMat);
+        flange.position.set(px, fy, -d / 2);
+        group.add(flange);
+      });
+    });
+  } else {
+    // Floating Solid Plank
+    const plankGeom = new THREE.BoxGeometry(w, thick, d);
+    const plank = new THREE.Mesh(plankGeom, mat);
+    plank.position.set(0, thick / 2, 0);
+    plank.castShadow = true;
+    group.add(plank);
+
+    // Wall mounting lip at rear
+    const mountGeom = new THREE.BoxGeometry(w * 0.95, thick * 1.8, 0.02);
+    const mount = new THREE.Mesh(mountGeom, mat);
+    mount.position.set(0, thick * 0.9, -d / 2 + 0.01);
+    group.add(mount);
+  }
+
+  return group;
+}
+
+// ----------------------------------------------------
+// DOOR MESH BUILDER
+// ----------------------------------------------------
+export function buildDoorMeshGroup(params: DoorParams, mat: THREE.Material): THREE.Group {
+  const group = new THREE.Group();
+  const w = Math.max(50, params.width) * CM;
+  const d = Math.max(4, params.depth) * CM;
+  const h = Math.max(150, params.height) * CM;
+  const ironMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.9, roughness: 0.25 });
+  const brassMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.85, roughness: 0.2 });
+  const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, roughness: 0.05, transmission: 0.9 });
+
+  if (params.type === 'barn_sliding') {
+    // Top Steel Track
+    const railGeom = new THREE.BoxGeometry(w * 1.8, 0.04, 0.02);
+    const rail = new THREE.Mesh(railGeom, ironMat);
+    rail.position.set(0, h + 0.08, d * 0.6);
+    group.add(rail);
+
+    // Rollers & Hangers
+    [-w * 0.35, w * 0.35].forEach((hx) => {
+      const wheelGeom = new THREE.CylinderGeometry(0.03, 0.03, 0.015, 16);
+      wheelGeom.rotateZ(Math.PI / 2);
+      const wheel = new THREE.Mesh(wheelGeom, ironMat);
+      wheel.position.set(hx, h + 0.08, d * 0.6 + 0.02);
+      const strapGeom = new THREE.BoxGeometry(0.03, 0.18, 0.01);
+      const strap = new THREE.Mesh(strapGeom, ironMat);
+      strap.position.set(hx, h + 0.01, d * 0.6 + 0.02);
+      group.add(wheel, strap);
+    });
+
+    // Main Barn Door Leaf with Z-brace
+    const leafGeom = new THREE.BoxGeometry(w, h, 0.035);
+    const leaf = new THREE.Mesh(leafGeom, mat);
+    leaf.position.set(0, h / 2, 0);
+    leaf.castShadow = true;
+    group.add(leaf);
+
+    // Z-Brace Trim
+    const braceThick = 0.008;
+    const topBar = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 0.08, braceThick), mat);
+    topBar.position.set(0, h * 0.85, 0.02);
+    const botBar = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 0.08, braceThick), mat);
+    botBar.position.set(0, h * 0.15, 0.02);
+    group.add(topBar, botBar);
+
+    // Handle Bar
+    const handleGeom = new THREE.BoxGeometry(0.03, 0.3, 0.025);
+    const handle = new THREE.Mesh(handleGeom, ironMat);
+    handle.position.set(w * 0.35, h * 0.5, 0.03);
+    group.add(handle);
+  } else if (params.type === 'glass_french') {
+    // 2-Leaf French Doors
+    const leafW = w / 2 - 0.01;
+    [-w / 4, w / 4].forEach((lx) => {
+      // Outer Wood Frame
+      const frameGeom = new THREE.BoxGeometry(leafW, h, 0.04);
+      const frame = new THREE.Mesh(frameGeom, mat);
+      frame.position.set(lx, h / 2, 0);
+      group.add(frame);
+
+      // Glass Inset
+      const glassGeom = new THREE.BoxGeometry(leafW * 0.75, h * 0.8, 0.01);
+      const glass = new THREE.Mesh(glassGeom, glassMat);
+      glass.position.set(lx, h / 2, 0);
+      group.add(glass);
+
+      // Mullion Grids
+      const horizMullion = new THREE.Mesh(new THREE.BoxGeometry(leafW * 0.75, 0.02, 0.015), mat);
+      horizMullion.position.set(lx, h / 2, 0);
+      group.add(horizMullion);
+    });
+
+    // Center Brass Handles
+    [-0.03, 0.03].forEach((hx) => {
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.12, 12), brassMat);
+      handle.position.set(hx, h * 0.5, 0.03);
+      group.add(handle);
+    });
+  } else if (params.type === 'arched_wood') {
+    // Mediterranean Arched Door
+    const rectH = h * 0.75;
+    const archR = w / 2;
+    const rectGeom = new THREE.BoxGeometry(w, rectH, 0.04);
+    const rectMesh = new THREE.Mesh(rectGeom, mat);
+    rectMesh.position.set(0, rectH / 2, 0);
+    group.add(rectMesh);
+
+    const archGeom = new THREE.CylinderGeometry(archR, archR, 0.04, 32, 1, false, 0, Math.PI);
+    archGeom.rotateX(Math.PI / 2);
+    archGeom.rotateZ(Math.PI / 2);
+    const archMesh = new THREE.Mesh(archGeom, mat);
+    archMesh.position.set(0, rectH, 0);
+    group.add(archMesh);
+
+    // Antique Brass Knob
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.025, 16, 16), brassMat);
+    knob.position.set(w * 0.35, h * 0.45, 0.03);
+    group.add(knob);
+  } else {
+    // Modern Flush Door with Frame & Handle
+    // Outer Frame
+    const frameThick = 0.04;
+    const leftPost = new THREE.Mesh(new THREE.BoxGeometry(frameThick, h, d), mat);
+    leftPost.position.set(-w / 2 + frameThick / 2, h / 2, 0);
+    const rightPost = new THREE.Mesh(new THREE.BoxGeometry(frameThick, h, d), mat);
+    rightPost.position.set(w / 2 - frameThick / 2, h / 2, 0);
+    const topPost = new THREE.Mesh(new THREE.BoxGeometry(w, frameThick, d), mat);
+    topPost.position.set(0, h - frameThick / 2, 0);
+    group.add(leftPost, rightPost, topPost);
+
+    // Door Slab
+    const slabW = w - frameThick * 2;
+    const slabH = h - frameThick;
+    const slabGeom = new THREE.BoxGeometry(slabW, slabH, 0.038);
+    const slab = new THREE.Mesh(slabGeom, mat);
+    slab.position.set(0, slabH / 2, 0);
+    slab.castShadow = true;
+    group.add(slab);
+
+    // Stainless Lever Handle
+    const leverGeom = new THREE.BoxGeometry(0.12, 0.02, 0.04);
+    const lever = new THREE.Mesh(leverGeom, ironMat);
+    lever.position.set(slabW * 0.35, h * 0.48, 0.03);
+    group.add(lever);
+  }
+
+  return group;
+}
+
+// ----------------------------------------------------
+// WINDOW MESH BUILDER
+// ----------------------------------------------------
+export function buildWindowMeshGroup(params: WindowParams, mat: THREE.Material): THREE.Group {
+  const group = new THREE.Group();
+  const w = Math.max(50, params.width) * CM;
+  const d = Math.max(10, params.depth) * CM;
+  const h = Math.max(60, params.height) * CM;
+  const frameThick = 0.05;
+  const glassMat = new THREE.MeshPhysicalMaterial({
+    color: 0xe0f2fe,
+    transparent: true,
+    opacity: 0.35,
+    roughness: 0.05,
+    transmission: 0.92,
+    reflectivity: 0.6,
+  });
+
+  // Sill at bottom
+  const sillGeom = new THREE.BoxGeometry(w * 1.08, 0.04, d * 1.3);
+  const sill = new THREE.Mesh(sillGeom, mat);
+  sill.position.set(0, 0.02, 0);
+  group.add(sill);
+
+  // Outer Window Frame
+  const topFrame = new THREE.Mesh(new THREE.BoxGeometry(w, frameThick, d), mat);
+  topFrame.position.set(0, h - frameThick / 2, 0);
+  const leftFrame = new THREE.Mesh(new THREE.BoxGeometry(frameThick, h - 0.04, d), mat);
+  leftFrame.position.set(-w / 2 + frameThick / 2, h / 2, 0);
+  const rightFrame = new THREE.Mesh(new THREE.BoxGeometry(frameThick, h - 0.04, d), mat);
+  rightFrame.position.set(w / 2 - frameThick / 2, h / 2, 0);
+  group.add(topFrame, leftFrame, rightFrame);
+
+  // Center Glass Pane
+  const glassW = w - frameThick * 2;
+  const glassH = h - frameThick - 0.04;
+  const glassGeom = new THREE.BoxGeometry(glassW, glassH, 0.015);
+  const glass = new THREE.Mesh(glassGeom, glassMat);
+  glass.position.set(0, h / 2, 0);
+  group.add(glass);
+
+  if (params.type === 'grid_double_hung') {
+    // 6-pane / 4-pane Grids
+    const vertMullion = new THREE.Mesh(new THREE.BoxGeometry(0.02, glassH, 0.02), mat);
+    vertMullion.position.set(0, h / 2, 0);
+    const horizMullion1 = new THREE.Mesh(new THREE.BoxGeometry(glassW, 0.02, 0.02), mat);
+    horizMullion1.position.set(0, h * 0.35, 0);
+    const horizMullion2 = new THREE.Mesh(new THREE.BoxGeometry(glassW, 0.02, 0.02), mat);
+    horizMullion2.position.set(0, h * 0.65, 0);
+    group.add(vertMullion, horizMullion1, horizMullion2);
+  } else if (params.type === 'french_arch') {
+    // Arched Top with Sunburst
+    const archR = w / 2;
+    const archGeom = new THREE.CylinderGeometry(archR, archR, d, 32, 1, false, 0, Math.PI);
+    archGeom.rotateX(Math.PI / 2);
+    archGeom.rotateZ(Math.PI / 2);
+    const archMesh = new THREE.Mesh(archGeom, mat);
+    archMesh.position.set(0, h, 0);
+    group.add(archMesh);
+  } else if (params.type === 'modern_sliding') {
+    // Center divider sash
+    const sash = new THREE.Mesh(new THREE.BoxGeometry(0.035, glassH, d * 0.8), mat);
+    sash.position.set(0, h / 2, 0);
+    group.add(sash);
+  }
+
+  return group;
+}
+
+// ----------------------------------------------------
+// WALL DESIGN / ACCENT PANEL MESH BUILDER
+// ----------------------------------------------------
+export function buildWallDesignMeshGroup(params: WallDesignParams, mat: THREE.Material): THREE.Group {
+  const group = new THREE.Group();
+  const w = Math.max(60, params.width) * CM;
+  const d = Math.max(2, params.depth) * CM;
+  const h = Math.max(100, params.height) * CM;
+
+  if (params.type === 'wood_slat') {
+    // Dark Acoustic Felt Backer
+    const backerMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.95 });
+    const backerGeom = new THREE.BoxGeometry(w, h, 0.01);
+    const backer = new THREE.Mesh(backerGeom, backerMat);
+    backer.position.set(0, h / 2, -d / 2 + 0.005);
+    group.add(backer);
+
+    // Vertical Wooden Slats
+    const slatWidth = 0.035; // 3.5cm slat
+    const slatGap = 0.02;   // 2cm gap
+    const slatCount = Math.floor(w / (slatWidth + slatGap));
+    const startX = -((slatCount - 1) * (slatWidth + slatGap)) / 2;
+
+    for (let i = 0; i < slatCount; i++) {
+      const sx = startX + i * (slatWidth + slatGap);
+      const slatGeom = new THREE.BoxGeometry(slatWidth, h, d);
+      const slatMesh = new THREE.Mesh(slatGeom, mat);
+      slatMesh.position.set(sx, h / 2, 0);
+      slatMesh.castShadow = true;
+      group.add(slatMesh);
+    }
+  } else if (params.type === 'marble_slab') {
+    // Luxury Marble Feature Wall with Gold Brass Inlay Strips
+    const slabGeom = new THREE.BoxGeometry(w, h, d);
+    const slabMesh = new THREE.Mesh(slabGeom, mat);
+    slabMesh.position.set(0, h / 2, 0);
+    slabMesh.castShadow = true;
+    group.add(slabMesh);
+
+    // Brass Metallic Strips
+    const brassMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.9, roughness: 0.15 });
+    [-w * 0.25, w * 0.25].forEach((bx) => {
+      const stripGeom = new THREE.BoxGeometry(0.012, h, 0.005);
+      const strip = new THREE.Mesh(stripGeom, brassMat);
+      strip.position.set(bx, h / 2, d / 2 + 0.003);
+      group.add(strip);
+    });
+  } else if (params.type === 'wainscoting') {
+    // Baseboard + Chair Rail + Picture Frame Moldings
+    const baseMat = mat;
+    const basePlate = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.015), baseMat);
+    basePlate.position.set(0, h / 2, 0);
+    group.add(basePlate);
+
+    // Top Chair Rail
+    const railGeom = new THREE.BoxGeometry(w, 0.06, 0.03);
+    const rail = new THREE.Mesh(railGeom, baseMat);
+    rail.position.set(0, h - 0.03, 0.01);
+    group.add(rail);
+
+    // Molded Rectangles
+    const panelCount = Math.max(2, Math.floor(w / 0.6));
+    const pw = (w - (panelCount + 1) * 0.08) / panelCount;
+    const ph = h * 0.7;
+    for (let p = 0; p < panelCount; p++) {
+      const px = -w / 2 + 0.08 + pw / 2 + p * (pw + 0.08);
+      const moldThick = 0.025;
+      const topM = new THREE.Mesh(new THREE.BoxGeometry(pw, moldThick, 0.01), baseMat);
+      topM.position.set(px, h * 0.45 + ph / 2, 0.015);
+      const botM = new THREE.Mesh(new THREE.BoxGeometry(pw, moldThick, 0.01), baseMat);
+      botM.position.set(px, h * 0.45 - ph / 2, 0.015);
+      const leftM = new THREE.Mesh(new THREE.BoxGeometry(moldThick, ph, 0.01), baseMat);
+      leftM.position.set(px - pw / 2, h * 0.45, 0.015);
+      const rightM = new THREE.Mesh(new THREE.BoxGeometry(moldThick, ph, 0.01), baseMat);
+      rightM.position.set(px + pw / 2, h * 0.45, 0.015);
+      group.add(topM, botM, leftM, rightM);
+    }
+  } else {
+    // General Accent / Brick Cladding Panel
+    const panelGeom = new THREE.BoxGeometry(w, h, d);
+    const panelMesh = new THREE.Mesh(panelGeom, mat);
+    panelMesh.position.set(0, h / 2, 0);
+    panelMesh.castShadow = true;
+    group.add(panelMesh);
+  }
+
+  return group;
+}
+
+// ----------------------------------------------------
+// INTERIOR DECOR & FIXTURES MESH BUILDER
+// ----------------------------------------------------
+export function buildInteriorDecorMeshGroup(params: DecorParams, mat: THREE.Material): THREE.Group {
+  const group = new THREE.Group();
+  const w = Math.max(20, params.width) * CM;
+  const d = Math.max(5, params.depth) * CM;
+  const h = Math.max(20, params.height) * CM;
+
+  if (params.type === 'wall_art') {
+    // Framed Canvas Wall Painting
+    const frameThick = 0.035;
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.3, roughness: 0.5 });
+    const frameGeom = new THREE.BoxGeometry(w, h, 0.03);
+    const frame = new THREE.Mesh(frameGeom, frameMat);
+    frame.position.set(0, h / 2, 0);
+    group.add(frame);
+
+    // Canvas Art Inset
+    const canvasGeom = new THREE.BoxGeometry(w - frameThick * 2, h - frameThick * 2, 0.01);
+    const canvas = new THREE.Mesh(canvasGeom, mat);
+    canvas.position.set(0, h / 2, 0.012);
+    group.add(canvas);
+  } else if (params.type === 'arched_mirror') {
+    // Floor-Standing Arched Mirror
+    const mirrorMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.02, metalness: 0.95 });
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.85, roughness: 0.2 });
+
+    const archR = w / 2;
+    const rectH = h - archR;
+    const rectGeom = new THREE.BoxGeometry(w, rectH, 0.03);
+    const rectMesh = new THREE.Mesh(rectGeom, goldMat);
+    rectMesh.position.set(0, rectH / 2, 0);
+    group.add(rectMesh);
+
+    const archGeom = new THREE.CylinderGeometry(archR, archR, 0.03, 32, 1, false, 0, Math.PI);
+    archGeom.rotateX(Math.PI / 2);
+    archGeom.rotateZ(Math.PI / 2);
+    const archMesh = new THREE.Mesh(archGeom, goldMat);
+    archMesh.position.set(0, rectH, 0);
+    group.add(archMesh);
+
+    // Mirror Inset
+    const mirrorPane = new THREE.Mesh(new THREE.BoxGeometry(w * 0.92, h * 0.92, 0.005), mirrorMat);
+    mirrorPane.position.set(0, h / 2, 0.016);
+    group.add(mirrorPane);
+  } else if (params.type === 'vanity_mirror') {
+    // Backlit Round Vanity Mirror with LED Glow Halo
+    const radius = Math.min(w, h) / 2;
+    const rimGeom = new THREE.CylinderGeometry(radius, radius, 0.02, 36);
+    rimGeom.rotateX(Math.PI / 2);
+    const mirrorMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.02, metalness: 0.98 });
+    const mirror = new THREE.Mesh(rimGeom, mirrorMat);
+    mirror.position.set(0, radius, 0);
+    group.add(mirror);
+
+    // Glowing LED Ring
+    const ledGeom = new THREE.TorusGeometry(radius * 1.02, 0.015, 16, 48);
+    const ledMat = new THREE.MeshStandardMaterial({ color: 0xffedd5, emissive: 0xffedd5, emissiveIntensity: 1.2 });
+    const ledRing = new THREE.Mesh(ledGeom, ledMat);
+    ledRing.position.set(0, radius, -0.01);
+    group.add(ledRing);
+  } else if (params.type === 'curtains') {
+    // Window Curtains / Drapery with Top Rod & Finials
+    const rodMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.9, roughness: 0.2 });
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, w * 1.15, 16), rodMat);
+    rod.rotateZ(Math.PI / 2);
+    rod.position.set(0, h - 0.03, 0);
+    group.add(rod);
+
+    // Left and Right Drapes with Wave Pleats
+    [-w * 0.35, w * 0.35].forEach((dx) => {
+      const drapeW = w * 0.28;
+      const drapeH = h - 0.06;
+      const drapeGeom = new THREE.BoxGeometry(drapeW, drapeH, 0.06);
+      const drape = new THREE.Mesh(drapeGeom, mat);
+      drape.position.set(dx, drapeH / 2, 0);
+      drape.castShadow = true;
+      group.add(drape);
+    });
+  } else if (params.type === 'area_rug') {
+    // Plush Floor Area Rug
+    const rugGeom = new THREE.BoxGeometry(w, 0.012, d);
+    const rug = new THREE.Mesh(rugGeom, mat);
+    rug.position.set(0, 0.006, 0);
+    rug.receiveShadow = true;
+    group.add(rug);
+  } else if (params.type === 'potted_plant') {
+    // Lush Indoor Potted Plant (Monstera / Ficus) on Tripod Stand
+    const potMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+    const standMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.6 });
+    const leafMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.4 });
+
+    const potR = Math.min(w, d) * 0.35;
+    const potH = h * 0.35;
+
+    // Ceramic Pot
+    const potGeom = new THREE.CylinderGeometry(potR, potR * 0.8, potH, 24);
+    const pot = new THREE.Mesh(potGeom, potMat);
+    pot.position.set(0, potH / 2 + 0.1, 0);
+    pot.castShadow = true;
+    group.add(pot);
+
+    // Wood Stand Legs
+    for (let l = 0; l < 4; l++) {
+      const legTheta = (l * Math.PI) / 2;
+      const legGeom = new THREE.CylinderGeometry(0.012, 0.012, potH * 0.9, 12);
+      const leg = new THREE.Mesh(legGeom, standMat);
+      leg.position.set(Math.cos(legTheta) * (potR + 0.015), potH * 0.45, Math.sin(legTheta) * (potR + 0.015));
+      group.add(leg);
+    }
+
+    // Plant Foliage (Multiple fan leaves)
+    const stemCount = 8;
+    for (let s = 0; s < stemCount; s++) {
+      const theta = (s / stemCount) * Math.PI * 2;
+      const leafGeom = new THREE.SphereGeometry(potR * 0.7, 8, 8);
+      leafGeom.scale(1, 0.2, 1.6);
+      const leafMesh = new THREE.Mesh(leafGeom, leafMat);
+      leafMesh.position.set(
+        Math.cos(theta) * potR * 0.5,
+        potH + 0.1 + (s % 3) * 0.08,
+        Math.sin(theta) * potR * 0.5
+      );
+      leafMesh.rotation.set(0.3, theta, 0.4);
+      leafMesh.castShadow = true;
+      group.add(leafMesh);
+    }
+  }
+
+  return group;
+}
+
 export function buildProceduralMeshGroup(
   archetype: string,
   params: any,
@@ -551,6 +1115,11 @@ export function buildProceduralMeshGroup(
   if (archetype === 'cabinet') return buildCabinetMeshGroup(merged, material);
   if (archetype === 'bed') return buildBedMeshGroup(merged, material);
   if (archetype === 'lamp') return buildLampMeshGroup({ ...params, shadeWidth: widthCm, shadeHeight: depthCm, totalHeight: heightCm }, material);
+  if (archetype === 'shelf') return buildShelfMeshGroup(merged, material);
+  if (archetype === 'door') return buildDoorMeshGroup(merged, material);
+  if (archetype === 'window') return buildWindowMeshGroup(merged, material);
+  if (archetype === 'wallDesign') return buildWallDesignMeshGroup(merged, material);
+  if (archetype === 'decor') return buildInteriorDecorMeshGroup(merged, material);
   if (archetype === 'primitives' && params.primitives) return buildCustomPrimitivesMeshGroup(params.primitives, material);
   
   const grp = new THREE.Group();

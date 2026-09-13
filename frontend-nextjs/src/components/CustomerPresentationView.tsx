@@ -212,7 +212,7 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
   const handleAddCatalogItem = (item: CatalogItem) => {
     let targetX = 0;
     let targetY = 0;
-    let targetElevation = 0;
+    let targetElevation = item.elevation || item.defaultElevation || 0;
     let hostId: string | undefined = undefined;
 
     if (selectedRoom && selectedRoom.points.length > 0) {
