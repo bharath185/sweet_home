@@ -6,14 +6,10 @@ import {
   Sparkles,
   LayoutDashboard,
   Box,
-  Eye,
-  Save,
-  Share2,
-  Undo2,
-  Redo2,
+  Users,
+  Palette,
   LogOut,
-  Settings,
-  AlertTriangle
+  ChevronRight
 } from 'lucide-react';
 import { HomePlan, UserRole, User } from '../types/plan';
 
@@ -21,237 +17,151 @@ interface NavbarProps {
   plan: HomePlan;
   activeView: 'split' | '2d' | '3d' | 'customer' | 'dashboard';
   setActiveView: (v: 'split' | '2d' | '3d' | 'customer' | 'dashboard') => void;
-  isBackendConnected: boolean;
-  onSave: () => void;
-  onNew: () => void;
-  onExport: () => void;
-  onOpenShare: () => void;
-  onOpenBlueprint: () => void;
-  onOpenPreferences: () => void;
-  onOpenAddUserModal?: () => void;
-  onOpenCreateItemModal?: () => void;
-  isSaving: boolean;
-  cloudSyncStatus?: 'synced' | 'saving' | 'offline';
-  lastSyncedAt?: string | null;
+  adminTab?: string;
+  setAdminTab?: (t: any) => void;
   userRole: UserRole;
   setUserRole: (role: UserRole) => void;
-  collidingCount: number;
-  activeFloor: number;
-  onFloorChange: (floor: number) => void;
-  onToggleAdminSidebar?: () => void;
-  canUndo?: boolean;
-  canRedo?: boolean;
-  onUndo?: () => void;
-  onRedo?: () => void;
+  cloudSyncStatus?: 'synced' | 'saving' | 'offline';
+  lastSyncedAt?: string | null;
   currentUser?: User | null;
   onLogout?: () => void;
-  clientProjects?: any[];
-  onSelectClientProject?: (planId: string) => void;
-  onOpenClientSelectModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   plan,
   activeView,
   setActiveView,
-  onSave,
-  onOpenShare,
-  onOpenPreferences,
-  isSaving,
+  adminTab = 'dashboard',
+  setAdminTab,
+  userRole,
   cloudSyncStatus = 'synced',
   lastSyncedAt,
-  userRole,
-  collidingCount,
-  canUndo = false,
-  canRedo = false,
-  onUndo,
-  onRedo,
   currentUser,
   onLogout,
 }) => {
+  // Determine active state for each of the 4 requested tabs
+  const isDashboardActive =
+    activeView === 'dashboard' &&
+    (adminTab === 'dashboard' || adminTab === 'overview' || adminTab === 'floors' || !adminTab);
+  const isStudioActive =
+    activeView === 'split' || activeView === '2d' || activeView === '3d' || activeView === 'customer';
+  const isCatalogActive = activeView === 'dashboard' && adminTab === 'catalog';
+  const isUsersActive = activeView === 'dashboard' && adminTab === 'users';
+
   return (
-    <header className="h-14 bg-white/95 backdrop-blur-xl border-b border-slate-200/90 px-3 sm:px-5 flex items-center justify-between select-none z-30 shadow-2xs relative">
+    <header className="h-14 bg-[#0a1224] border-b border-slate-800/90 px-4 sm:px-6 flex items-center justify-between select-none z-30 shadow-xl relative text-white">
       {/* 1. Left Brand & Active Plan Title */}
-      <div className="flex items-center gap-2.5 min-w-[170px]">
-        <div
-          className={`flex items-center justify-center w-8 h-8 rounded-xl text-white font-bold shadow-sm shrink-0 ${
-            userRole === 'ADMIN'
-              ? 'bg-gradient-to-tr from-sky-500 to-indigo-600 shadow-sky-500/20'
-              : userRole === 'DESIGNER'
-              ? 'bg-gradient-to-tr from-indigo-500 to-purple-600 shadow-indigo-500/20'
-              : 'bg-gradient-to-tr from-emerald-500 to-teal-600 shadow-emerald-500/20'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
+      <div className="flex items-center gap-3 min-w-[200px]">
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 p-[1px] shadow-sm shadow-sky-500/30 shrink-0">
+          <div className="w-full h-full bg-[#091020] rounded-xl flex items-center justify-center text-sky-400">
+            <Layers className="w-4 h-4" />
+          </div>
         </div>
 
         <div className="flex flex-col min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="font-extrabold text-slate-900 text-sm tracking-tight truncate">
+          <div className="flex items-center gap-2">
+            <span className="font-extrabold text-white text-sm tracking-tight truncate">
               Visual Rendered
             </span>
             <span
               className={`text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded-full border shrink-0 ${
                 userRole === 'ADMIN'
-                  ? 'bg-sky-50 text-sky-700 border-sky-200'
+                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
                   : userRole === 'DESIGNER'
-                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
               }`}
             >
               {userRole}
             </span>
           </div>
 
-          <span className="text-[10px] font-semibold text-slate-500 truncate max-w-[160px]">
+          <span className="text-[10px] font-medium text-slate-400 truncate max-w-[170px]">
             {plan.name || 'Untitled Plan'}
           </span>
         </div>
       </div>
 
-      {/* 2. Center View Switches (Dashboard | 2D Plan | 3D Plan | 2D/3D Plan | Client Tour) */}
-      <div className="flex items-center bg-slate-100 p-0.5 sm:p-1 rounded-2xl border border-slate-200 shadow-inner">
-        {/* Dashboard button for ADMIN */}
-        {userRole === 'ADMIN' && (
-          <button
-            onClick={() => setActiveView('dashboard')}
-            className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeView === 'dashboard'
-                ? 'bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-            }`}
-            title="Admin Dashboard & Client Projects Directory"
-          >
-            <LayoutDashboard className="w-3.5 h-3.5 text-indigo-600" />
-            <span className="hidden md:inline">Dashboard</span>
-          </button>
-        )}
-
-        {/* 2D Plan Mode */}
-        {userRole !== 'CLIENT' && (
-          <button
-            onClick={() => setActiveView('2d')}
-            className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeView === '2d'
-                ? 'bg-white text-sky-700 shadow-xs border border-slate-200 font-bold'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-            }`}
-            title="Full 2D CAD Floor Plan Workspace"
-          >
-            <Box className="w-3.5 h-3.5 text-sky-600" />
-            <span>2D Plan</span>
-          </button>
-        )}
-
-        {/* 3D Plan Mode */}
-        {userRole !== 'CLIENT' && (
-          <button
-            onClick={() => setActiveView('3d')}
-            className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeView === '3d'
-                ? 'bg-white text-sky-700 shadow-xs border border-slate-200 font-bold'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-            }`}
-            title="Full 3D WebGL Render Scene"
-          >
-            <Eye className="w-3.5 h-3.5 text-sky-600" />
-            <span>3D Plan</span>
-          </button>
-        )}
-
-        {/* 2D/3D Plan Mode */}
-        {userRole !== 'CLIENT' && (
-          <button
-            onClick={() => setActiveView('split')}
-            className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeView === 'split'
-                ? 'bg-white text-sky-700 shadow-xs border border-slate-200 font-bold'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-            }`}
-            title="Side-by-Side 2D CAD + 3D Studio"
-          >
-            <Layers className="w-3.5 h-3.5 text-sky-600" />
-            <span>2D/3D Plan</span>
-          </button>
-        )}
-
-        {/* Client Tour */}
+      {/* 2. Center Navigation Tabs (EXACTLY: Dashboard | Design Studio | 3D Catalog | Users & Roles) */}
+      <nav className="flex items-center bg-slate-900/90 p-1 rounded-2xl border border-slate-800 shadow-inner">
+        {/* Tab 1: Dashboard */}
         <button
-          onClick={() => setActiveView('customer')}
-          className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-            activeView === 'customer'
-              ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-xs font-bold'
-              : 'text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50'
+          onClick={() => {
+            setActiveView('dashboard');
+            if (setAdminTab) setAdminTab('overview');
+          }}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            isDashboardActive
+              ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/20'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
           }`}
-          title="Client Presentation & 3D Interactive Walkthrough"
+          title="Enterprise Overview, Analytics & Recent Projects"
         >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Client Tour</span>
+          <LayoutDashboard className="w-3.5 h-3.5" />
+          <span>Dashboard</span>
         </button>
-      </div>
 
-      {/* 3. Right Side Actions (Cleanly aligned without clutter) */}
-      <div className="flex items-center gap-2">
-        {/* Undo & Redo (for Admin & Designer) */}
-        {userRole !== 'CLIENT' && (
-          <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 shadow-2xs">
-            <button
-              onClick={onUndo}
-              disabled={!canUndo}
-              className={`p-1.5 rounded-lg transition ${
-                canUndo
-                  ? 'text-slate-700 hover:text-slate-950 hover:bg-white active:scale-95 cursor-pointer'
-                  : 'text-slate-300 cursor-not-allowed opacity-40'
-              }`}
-              title="Undo (Ctrl+Z)"
-            >
-              <Undo2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={onRedo}
-              disabled={!canRedo}
-              className={`p-1.5 rounded-lg transition ${
-                canRedo
-                  ? 'text-slate-700 hover:text-slate-950 hover:bg-white active:scale-95 cursor-pointer'
-                  : 'text-slate-300 cursor-not-allowed opacity-40'
-              }`}
-              title="Redo (Ctrl+Y)"
-            >
-              <Redo2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
+        {/* Tab 2: Design Studio */}
+        <button
+          onClick={() => {
+            setActiveView('split');
+          }}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            isStudioActive
+              ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/20'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+          }`}
+          title="2D CAD Blueprint & 3D WebGL Studio Workspace"
+        >
+          <Palette className="w-3.5 h-3.5" />
+          <span>Design Studio</span>
+        </button>
 
-        {/* Preferences / Settings */}
-        {userRole !== 'CLIENT' && (
-          <button
-            onClick={onOpenPreferences}
-            className="p-1.5 sm:p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition border border-slate-200 bg-slate-50 shadow-2xs"
-            title="Project Preferences & Grid Settings"
-          >
-            <Settings className="w-3.5 h-3.5" />
-          </button>
-        )}
+        {/* Tab 3: 3D Catalog */}
+        <button
+          onClick={() => {
+            setActiveView('dashboard');
+            if (setAdminTab) setAdminTab('catalog');
+          }}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            isCatalogActive
+              ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/20'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+          }`}
+          title="3D Model Assets Library & Custom Furniture"
+        >
+          <Box className="w-3.5 h-3.5" />
+          <span>3D Catalog</span>
+        </button>
 
-        {/* Collision Warning indicator if any */}
-        {collidingCount > 0 && (
-          <div
-            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse"
-            title={`${collidingCount} overlapping item(s)`}
-          >
-            <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-            <span>${collidingCount} Overlap</span>
-          </div>
-        )}
+        {/* Tab 4: Users & Roles */}
+        <button
+          onClick={() => {
+            setActiveView('dashboard');
+            if (setAdminTab) setAdminTab('users');
+          }}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            isUsersActive
+              ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/20'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+          }`}
+          title="Team Roles, Client Portals & Permissions"
+        >
+          <Users className="w-3.5 h-3.5" />
+          <span>Users & Roles</span>
+        </button>
+      </nav>
 
+      {/* 3. Right Side: Cloud Sync & User Profile */}
+      <div className="flex items-center gap-3">
         {/* Real-time PostgreSQL Cloud Sync Status Badge */}
         <div
           className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all ${
             cloudSyncStatus === 'saving'
-              ? 'bg-amber-50 text-amber-700 border-amber-300 animate-pulse'
+              ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 animate-pulse'
               : cloudSyncStatus === 'offline'
-              ? 'bg-slate-100 text-slate-600 border-slate-300'
-              : 'bg-emerald-50 text-emerald-700 border-emerald-300'
+              ? 'bg-slate-800 text-slate-400 border-slate-700'
+              : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
           }`}
           title={
             cloudSyncStatus === 'saving'
@@ -261,50 +171,29 @@ export const Navbar: React.FC<NavbarProps> = ({
               : `Cloud sync active${lastSyncedAt ? ' (Synced at ' + lastSyncedAt + ')' : ''}`
           }
         >
-          <span className={`w-2 h-2 rounded-full ${
-            cloudSyncStatus === 'saving'
-              ? 'bg-amber-500 animate-ping'
-              : cloudSyncStatus === 'offline'
-              ? 'bg-slate-400'
-              : 'bg-emerald-500'
-          }`} />
+          <span
+            className={`w-2 h-2 rounded-full ${
+              cloudSyncStatus === 'saving'
+                ? 'bg-amber-400 animate-ping'
+                : cloudSyncStatus === 'offline'
+                ? 'bg-slate-500'
+                : 'bg-emerald-400'
+            }`}
+          />
           <span>
             {cloudSyncStatus === 'saving'
-              ? '💾 Auto-saving to Cloud...'
+              ? '💾 Auto-saving...'
               : cloudSyncStatus === 'offline'
               ? '⚠️ Local Cache'
-              : '☁️ Cloud Synced'}
+              : '☁️ Synced'}
           </span>
         </div>
 
-        {/* Save Plan Button */}
-        {userRole !== 'CLIENT' && (
-          <button
-            onClick={onSave}
-            disabled={isSaving}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold shadow-2xs transition active:scale-95 disabled:opacity-50"
-            title="Save plan to backend"
-          >
-            <Save className="w-3.5 h-3.5 text-sky-600" />
-            <span>{isSaving ? 'Saving...' : 'Save'}</span>
-          </button>
-        )}
-
-        {/* Share 3D Link */}
-        <button
-          onClick={onOpenShare}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-bold shadow-sm shadow-sky-600/20 transition active:scale-95"
-          title="Share 3D Client Presentation Link"
-        >
-          <Share2 className="w-3.5 h-3.5" />
-          <span>Share</span>
-        </button>
-
         {/* User profile & Logout */}
         {currentUser && (
-          <div className="flex items-center gap-1.5 pl-1 border-l border-slate-200">
+          <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
             <div
-              className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-slate-50 border border-slate-200"
+              className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800"
               title={`Logged in as ${currentUser.name} (${currentUser.role})`}
             >
               <div
@@ -318,7 +207,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 {currentUser.name.charAt(0).toUpperCase()}
               </div>
-              <span className="hidden sm:inline text-xs font-bold text-slate-700 truncate max-w-[75px]">
+              <span className="hidden sm:inline text-xs font-bold text-slate-200 truncate max-w-[85px]">
                 {currentUser.name}
               </span>
             </div>
@@ -326,7 +215,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {onLogout && (
               <button
                 onClick={onLogout}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 bg-white shadow-2xs transition"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-slate-800 bg-slate-900 transition"
                 title="Log out"
               >
                 <LogOut className="w-3.5 h-3.5" />

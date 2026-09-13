@@ -815,33 +815,14 @@ export default function HomeStudioPage() {
         plan={plan}
         activeView={activeView}
         setActiveView={setActiveView}
-        isBackendConnected={isBackendConnected}
-        onSave={handleSave}
-        onNew={handleNewPlan}
-        onExport={handleExport}
-        onOpenShare={() => setIsShareModalOpen(true)}
-        onOpenBlueprint={() => setIsBlueprintModalOpen(true)}
-        onOpenPreferences={() => setIsPreferencesModalOpen(true)}
-        onOpenAddUserModal={() => setIsAddUserModalOpen(true)}
-        onOpenCreateItemModal={() => setIsAddItemModalOpen(true)}
-        isSaving={isSaving}
-              cloudSyncStatus={cloudSyncStatus}
-              lastSyncedAt={lastSyncedAt}
-              userRole={userRole}
+        adminTab={adminTab}
+        setAdminTab={setAdminTab}
+        userRole={userRole}
         setUserRole={setUserRole}
-        collidingCount={collisionReport.totalCollisions}
-        activeFloor={activeFloor}
-        onFloorChange={setActiveFloor}
-        onToggleAdminSidebar={() => setIsAdminSidebarOpen(!isAdminSidebarOpen)}
-        clientProjects={clientProjects}
-        onSelectClientProject={handleSelectClientProject}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
+        cloudSyncStatus={cloudSyncStatus}
+        lastSyncedAt={lastSyncedAt}
         currentUser={currentUser}
         onLogout={handleLogout}
-        onOpenClientSelectModal={() => setIsClientSelectModalOpen(true)}
       />
 
       {/* Main Workspace Body */}
@@ -904,7 +885,163 @@ export default function HomeStudioPage() {
 
         {/* VIEW 3: 4-PANE CAD & 3D DESIGN STUDIO */}
         {(activeView === 'split' || activeView === '2d' || activeView === '3d') && (
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden bg-slate-900 text-slate-100">
+            {/* DESIGN STUDIO DEDICATED TOOLBAR (All design-related controls consolidated here) */}
+            <div className="h-12 bg-[#0c162d] border-b border-slate-800 px-3 sm:px-4 flex items-center justify-between select-none shrink-0 z-20 shadow-md">
+              {/* Left: 2D/3D Mode Switcher */}
+              <div className="flex items-center gap-1 bg-slate-900/90 p-0.5 rounded-xl border border-slate-800">
+                <button
+                  onClick={() => setActiveView('2d')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeView === '2d'
+                      ? 'bg-sky-500 text-slate-950 shadow-xs'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                  title="2D CAD Blueprint Mode"
+                >
+                  <span>📐 2D CAD</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveView('3d')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeView === '3d'
+                      ? 'bg-sky-500 text-slate-950 shadow-xs'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                  title="3D WebGL Viewport Mode"
+                >
+                  <span>🌐 3D WebGL</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveView('split')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeView === 'split'
+                      ? 'bg-sky-500 text-slate-950 shadow-xs'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                  title="Side-by-Side 2D CAD + 3D Studio"
+                >
+                  <span>🔀 2D / 3D Split</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveView('customer')}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-400 hover:text-white hover:bg-emerald-500/20 transition flex items-center gap-1"
+                  title="Switch to Client Interactive Presentation"
+                >
+                  <span>✨ Client Tour</span>
+                </button>
+              </div>
+
+              {/* Center: Floor Level Switcher */}
+              <div className="hidden md:flex items-center gap-1 bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-xs">
+                {(plan.floors || [
+                  { level: 0, name: 'Ground Floor' },
+                  { level: 1, name: '1st Floor' },
+                ]).map((fl) => (
+                  <button
+                    key={fl.level}
+                    onClick={() => setActiveFloor(fl.level)}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition ${
+                      activeFloor === fl.level
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    Level {fl.level}: {fl.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Right: Studio Action Buttons (Undo, Redo, Blueprint, Preferences, Save, Share) */}
+              <div className="flex items-center gap-1.5">
+                {/* Undo / Redo */}
+                <div className="flex items-center bg-slate-900 p-0.5 rounded-xl border border-slate-800">
+                  <button
+                    onClick={handleUndo}
+                    disabled={!canUndo}
+                    className={`p-1.5 rounded-lg transition ${
+                      canUndo
+                        ? 'text-slate-200 hover:text-white hover:bg-slate-800 active:scale-95 cursor-pointer'
+                        : 'text-slate-600 cursor-not-allowed opacity-40'
+                    }`}
+                    title="Undo (Ctrl+Z)"
+                  >
+                    ↩
+                  </button>
+                  <button
+                    onClick={handleRedo}
+                    disabled={!canRedo}
+                    className={`p-1.5 rounded-lg transition ${
+                      canRedo
+                        ? 'text-slate-200 hover:text-white hover:bg-slate-800 active:scale-95 cursor-pointer'
+                        : 'text-slate-600 cursor-not-allowed opacity-40'
+                    }`}
+                    title="Redo (Ctrl+Y)"
+                  >
+                    ↪
+                  </button>
+                </div>
+
+                {/* Switch Client Project */}
+                <button
+                  onClick={() => setIsClientSelectModalOpen(true)}
+                  className="px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
+                  title="Switch Client Project Plan"
+                >
+                  📁 Projects
+                </button>
+
+                {/* Import Blueprint */}
+                <button
+                  onClick={() => setIsBlueprintModalOpen(true)}
+                  className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition"
+                  title="Import Blueprint Scan"
+                >
+                  📐 Blueprint
+                </button>
+
+                {/* Preferences */}
+                <button
+                  onClick={() => setIsPreferencesModalOpen(true)}
+                  className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition"
+                  title="Grid & Unit Preferences"
+                >
+                  ⚙️
+                </button>
+
+                {/* Collision Warning */}
+                {collisionReport.totalCollisions > 0 && (
+                  <span
+                    className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse"
+                    title={`${collisionReport.totalCollisions} collision(s) detected`}
+                  >
+                    ⚠️ {collisionReport.totalCollisions} Overlap
+                  </span>
+                )}
+
+                {/* Save Button */}
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="px-3 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 border border-sky-500/30 text-xs font-bold transition flex items-center gap-1 active:scale-95 disabled:opacity-50"
+                  title="Save plan to backend"
+                >
+                  💾 <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                </button>
+
+                {/* Share Button */}
+                <button
+                  onClick={() => setIsShareModalOpen(true)}
+                  className="px-3 py-1 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-bold shadow-sm shadow-sky-500/20 transition active:scale-95"
+                  title="Share 3D Client Presentation Link"
+                >
+                  🔗 <span>Share</span>
+                </button>
+              </div>
+            </div>
             <div className="flex-1 flex overflow-hidden">
               {/* Left Pane 1: Furniture & Element Catalog */}
               <CatalogSidebar
