@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles,
   Layers,
@@ -22,7 +22,13 @@ import {
   Palette,
   Copy,
   Sliders,
-  X
+  X,
+  GripHorizontal,
+  ChevronDown,
+  ChevronUp,
+  Minimize2,
+  Maximize2,
+  Pin
 } from 'lucide-react';
 import { HomePlan, Room, CatalogItem, FurnitureItem } from '../types/plan';
 import { Viewport3D } from './Viewport3D';
@@ -58,6 +64,59 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
   const [showSpecDrawer, setShowSpecDrawer] = useState<boolean>(false);
   const [consultationBooked, setConsultationBooked] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Draggable & Collapsible Customizer Panel State
+  const [panelPos, setPanelPos] = useState<{ x: number; y: number }>({ x: 24, y: 140 });
+  const [isMinimized, setIsMinimized] = useState<boolean>(false);
+  const [isDraggingPanel, setIsDraggingPanel] = useState<boolean>(false);
+  const dragStartRef = useRef<{ mouseX: number; mouseY: number; startX: number; startY: number } | null>(null);
+
+  const handleStartDrag = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button, input')) return;
+    e.preventDefault();
+    setIsDraggingPanel(true);
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startX: panelPos.x,
+      startY: panelPos.y,
+    };
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragStartRef.current) return;
+      const dx = e.clientX - dragStartRef.current.mouseX;
+      const dy = e.clientY - dragStartRef.current.mouseY;
+      const newX = Math.max(10, Math.min(window.innerWidth - 340, dragStartRef.current.startX + dx));
+      const newY = Math.max(70, Math.min(window.innerHeight - 80, dragStartRef.current.startY + dy));
+      setPanelPos({ x: newX, y: newY });
+    };
+
+    const handleMouseUp = () => {
+      dragStartRef.current = null;
+      setIsDraggingPanel(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  const dockPanel = (position: 'bottom-left' | 'bottom-right' | 'top-right' | 'top-left') => {
+    if (position === 'bottom-left') {
+      setPanelPos({ x: 24, y: Math.max(80, window.innerHeight - 560) });
+    } else if (position === 'bottom-right') {
+      setPanelPos({ x: Math.max(20, window.innerWidth - 360), y: Math.max(80, window.innerHeight - 560) });
+    } else if (position === 'top-right') {
+      setPanelPos({ x: Math.max(20, window.innerWidth - 360), y: 90 });
+    } else if (position === 'top-left') {
+      setPanelPos({ x: 24, y: 90 });
+    }
+  };
 
   const selectedFurniture = plan.furniture.find((f) => f.id === selectedId);
   const isSelectedColliding = selectedFurniture ? collidingItemIds.has(selectedFurniture.id) : false;
@@ -255,62 +314,147 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
         ))}
       </div>
 
-      {/* FLOATING ITEM CUSTOMIZER (PICK, PLACE, MOVE, ROTATE & DELETE) */}
-      {selectedFurniture && (
-        <div className="absolute bottom-16 left-6 z-30 bg-white/95 border border-slate-200 p-4 rounded-2xl shadow-xl w-84 flex flex-col gap-3.5 animate-in slide-in-from-bottom duration-150 backdrop-blur-xl">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
-                <Move className="w-4 h-4" />
+      {/* FLOATING DRAGGABLE & COLLAPSIBLE ITEM CUSTOMIZER */}
+      {selectedFurniture && isMinimized && (
+        <div
+          style={{ left: `${panelPos.x}px`, top: `${panelPos.y}px` }}
+          className="absolute z-30 bg-white/95 border border-slate-200 px-3.5 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 backdrop-blur-xl animate-in fade-in select-none cursor-grab active:cursor-grabbing border-sky-200"
+          onMouseDown={handleStartDrag}
+        >
+          <div className="flex items-center gap-2">
+            <GripHorizontal className="w-4 h-4 text-slate-400" />
+            <div className="w-7 h-7 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
+              <Move className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-900 max-w-[150px] truncate">
+                {selectedFurniture.name}
+              </div>
+              <div className="text-[10px] text-sky-700 font-mono font-semibold">
+                {Math.round(selectedFurniture.width)}×{Math.round(selectedFurniture.depth)}×{Math.round(selectedFurniture.height)} cm
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+            <button
+              onClick={() => setIsMinimized(false)}
+              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 transition"
+              title="Expand full properties panel"
+            >
+              <Maximize2 className="w-4 h-4 text-sky-600" />
+            </button>
+            <button
+              onClick={() => setSelectedId(null)}
+              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-800 transition"
+              title="Deselect item"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {selectedFurniture && !isMinimized && (
+        <div
+          style={{ left: `${panelPos.x}px`, top: `${panelPos.y}px` }}
+          className="absolute z-30 bg-white/95 border border-slate-200 p-3.5 rounded-2xl shadow-2xl w-84 max-h-[85vh] overflow-y-auto custom-scrollbar flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl"
+        >
+          {/* Draggable Header */}
+          <div
+            onMouseDown={handleStartDrag}
+            className={`flex items-center justify-between border-b border-slate-200 pb-2.5 cursor-grab select-none ${
+              isDraggingPanel ? 'cursor-grabbing' : ''
+            }`}
+            title="Click and drag anywhere on screen"
+          >
+            <div className="flex items-center gap-2">
+              <GripHorizontal className="w-4 h-4 text-slate-400 shrink-0" />
+              <div className="w-7 h-7 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100 shrink-0">
+                <Move className="w-3.5 h-3.5" />
               </div>
               <div>
-                <div className="text-xs font-bold text-slate-900 truncate max-w-[160px]">
+                <div className="text-xs font-bold text-slate-900 truncate max-w-[140px]">
                   {selectedFurniture.name}
                 </div>
-                <div className="text-[10px] text-sky-700 font-mono font-bold">
-                  {Math.round(selectedFurniture.width)}×{Math.round(selectedFurniture.depth)}×{Math.round(selectedFurniture.height)} cm
+                <div className="text-[10px] text-slate-400 font-medium">
+                  ⠿ Drag to move anywhere
                 </div>
               </div>
             </div>
 
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setIsMinimized(true)}
+                className="p-1.5 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition"
+                title="Minimize menu (leave screen unobstructed)"
+              >
+                <Minimize2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setSelectedId(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Dock Presets */}
+          <div className="flex items-center justify-between gap-1 text-[10px] text-slate-500 bg-slate-50 p-1 rounded-xl border border-slate-200/60">
+            <span className="font-semibold px-1 text-slate-400 flex items-center gap-0.5">
+              <Pin className="w-3 h-3" /> Dock:
+            </span>
             <button
-              onClick={() => setSelectedId(null)}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
+              onClick={() => dockPanel('bottom-left')}
+              className="flex-1 py-0.5 rounded-lg hover:bg-white hover:text-slate-800 hover:shadow-2xs transition font-semibold"
             >
-              <X className="w-4 h-4" />
+              Bottom-L
+            </button>
+            <button
+              onClick={() => dockPanel('bottom-right')}
+              className="flex-1 py-0.5 rounded-lg hover:bg-white hover:text-slate-800 hover:shadow-2xs transition font-semibold"
+            >
+              Bottom-R
+            </button>
+            <button
+              onClick={() => dockPanel('top-right')}
+              className="flex-1 py-0.5 rounded-lg hover:bg-white hover:text-slate-800 hover:shadow-2xs transition font-semibold"
+            >
+              Top-R
             </button>
           </div>
 
           {/* Collision Warning if overlapping */}
           {isSelectedColliding && (
-            <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-[11px] font-semibold flex items-center gap-1.5 shadow-xs">
+            <div className="p-2 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-[11px] font-semibold flex items-center gap-1.5 shadow-xs">
               <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
               <span>Overlapping obstacle! Glowing red in 3D.</span>
             </div>
           )}
 
           {/* Size & Scale Controls */}
-          <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-xl shadow-xs">
-            <div className="flex items-center justify-between text-[11px] font-bold text-slate-800 mb-2">
+          <div className="bg-slate-50 border border-slate-200/80 p-2.5 rounded-xl shadow-xs">
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-800 mb-1.5">
               <span>Size & Scale</span>
-              <span className="font-mono text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+              <span className="font-mono text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-[10px]">
                 {Math.round(selectedFurniture.width)}×{Math.round(selectedFurniture.depth)}×{Math.round(selectedFurniture.height)} cm
               </span>
             </div>
 
             {/* Quick Scale Buttons */}
-            <div className="flex items-center gap-1.5 mb-2.5">
+            <div className="flex items-center gap-1.5 mb-2">
               <button
                 onClick={() => scaleItem(0.9)}
-                className="flex-1 py-1.5 px-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold transition text-center border border-slate-200 shadow-2xs"
+                className="flex-1 py-1 px-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold transition text-center border border-slate-200 shadow-2xs"
                 title="Scale Down (-10%)"
               >
                 -10% Size
               </button>
               <button
                 onClick={() => scaleItem(1.1)}
-                className="flex-1 py-1.5 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition text-center shadow-2xs"
+                className="flex-1 py-1 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition text-center shadow-2xs"
                 title="Scale Up (+10%)"
               >
                 +10% Size
@@ -319,54 +463,54 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
 
             {/* Dimension Steppers */}
             <div className="grid grid-cols-3 gap-1.5 text-center">
-              <div className="bg-white p-1.5 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[10px] text-slate-500 font-semibold block mb-1">W ({Math.round(selectedFurniture.width)})</span>
+              <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
+                <span className="text-[10px] text-slate-500 font-semibold block mb-0.5">W ({Math.round(selectedFurniture.width)})</span>
                 <div className="flex items-center justify-center gap-1">
                   <button
                     onClick={() => adjustDimension('width', -5)}
-                    className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
+                    className="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
                   >
                     -
                   </button>
                   <button
                     onClick={() => adjustDimension('width', 5)}
-                    className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
+                    className="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
                   >
                     +
                   </button>
                 </div>
               </div>
 
-              <div className="bg-white p-1.5 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[10px] text-slate-500 font-semibold block mb-1">D ({Math.round(selectedFurniture.depth)})</span>
+              <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
+                <span className="text-[10px] text-slate-500 font-semibold block mb-0.5">D ({Math.round(selectedFurniture.depth)})</span>
                 <div className="flex items-center justify-center gap-1">
                   <button
                     onClick={() => adjustDimension('depth', -5)}
-                    className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
+                    className="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
                   >
                     -
                   </button>
                   <button
                     onClick={() => adjustDimension('depth', 5)}
-                    className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
+                    className="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
                   >
                     +
                   </button>
                 </div>
               </div>
 
-              <div className="bg-white p-1.5 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[10px] text-slate-500 font-semibold block mb-1">H ({Math.round(selectedFurniture.height)})</span>
+              <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
+                <span className="text-[10px] text-slate-500 font-semibold block mb-0.5">H ({Math.round(selectedFurniture.height)})</span>
                 <div className="flex items-center justify-center gap-1">
                   <button
                     onClick={() => adjustDimension('height', -5)}
-                    className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
+                    className="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
                   >
                     -
                   </button>
                   <button
                     onClick={() => adjustDimension('height', 5)}
-                    className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
+                    className="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
                   >
                     +
                   </button>
@@ -376,56 +520,56 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
           </div>
 
           {/* Pick & Move Nudge Controls */}
-          <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-xl shadow-xs">
-            <label className="text-[11px] font-bold text-slate-800 block mb-2">
+          <div className="bg-slate-50 border border-slate-200/80 p-2.5 rounded-xl shadow-xs">
+            <label className="text-[11px] font-bold text-slate-800 block mb-1.5">
               Nudge Position (20cm)
             </label>
             <div className="flex items-center justify-center gap-2">
               <button
                 onClick={() => nudgeItem(-20, 0)}
-                className="p-2 rounded-xl bg-white hover:bg-sky-600 text-slate-700 hover:text-white transition active:scale-90 border border-slate-200 shadow-2xs"
+                className="p-1.5 rounded-xl bg-white hover:bg-sky-600 text-slate-700 hover:text-white transition active:scale-90 border border-slate-200 shadow-2xs"
                 title="Move Left / West (-20cm)"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-3.5 h-3.5" />
               </button>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1">
                 <button
                   onClick={() => nudgeItem(0, -20)}
-                  className="p-2 rounded-xl bg-white hover:bg-sky-600 text-slate-700 hover:text-white transition active:scale-90 border border-slate-200 shadow-2xs"
+                  className="p-1.5 rounded-xl bg-white hover:bg-sky-600 text-slate-700 hover:text-white transition active:scale-90 border border-slate-200 shadow-2xs"
                   title="Move North (-20cm)"
                 >
-                  <ArrowUp className="w-4 h-4" />
+                  <ArrowUp className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => nudgeItem(0, 20)}
-                  className="p-2 rounded-xl bg-white hover:bg-sky-600 text-slate-700 hover:text-white transition active:scale-90 border border-slate-200 shadow-2xs"
+                  className="p-1.5 rounded-xl bg-white hover:bg-sky-600 text-slate-700 hover:text-white transition active:scale-90 border border-slate-200 shadow-2xs"
                   title="Move South (+20cm)"
                 >
-                  <ArrowDown className="w-4 h-4" />
+                  <ArrowDown className="w-3.5 h-3.5" />
                 </button>
               </div>
               <button
                 onClick={() => nudgeItem(20, 0)}
-                className="p-2 rounded-xl bg-white hover:bg-sky-600 text-slate-700 hover:text-white transition active:scale-90 border border-slate-200 shadow-2xs"
+                className="p-1.5 rounded-xl bg-white hover:bg-sky-600 text-slate-700 hover:text-white transition active:scale-90 border border-slate-200 shadow-2xs"
                 title="Move Right / East (+20cm)"
               >
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
           {/* Rotation Controls */}
-          <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-xl shadow-xs">
-            <div className="flex items-center justify-between text-[11px] font-bold text-slate-800 mb-2">
+          <div className="bg-slate-50 border border-slate-200/80 p-2.5 rounded-xl shadow-xs">
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-800 mb-1.5">
               <span>Rotation Angle</span>
-              <span className="font-mono text-sky-700 font-bold bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200">
+              <span className="font-mono text-sky-700 font-bold bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200 text-[10px]">
                 {Math.round(((selectedFurniture.angle || 0) * 180) / Math.PI)}°
               </span>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => rotateItem(-Math.PI / 4)}
-                className="p-2 rounded-xl bg-white hover:bg-sky-600 text-slate-700 hover:text-white transition border border-slate-200 shadow-2xs"
+                className="p-1.5 rounded-xl bg-white hover:bg-sky-600 text-slate-700 hover:text-white transition border border-slate-200 shadow-2xs"
                 title="Rotate -45°"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -441,7 +585,7 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
               />
               <button
                 onClick={() => rotateItem(Math.PI / 4)}
-                className="p-2 rounded-xl bg-white hover:bg-sky-600 text-slate-700 hover:text-white transition border border-slate-200 shadow-2xs"
+                className="p-1.5 rounded-xl bg-white hover:bg-sky-600 text-slate-700 hover:text-white transition border border-slate-200 shadow-2xs"
                 title="Rotate +45°"
               >
                 <RotateCw className="w-3.5 h-3.5" />
@@ -450,17 +594,17 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
           </div>
 
           {/* Color Finish Picker */}
-          <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-xl shadow-xs">
-            <label className="text-[11px] font-bold text-slate-800 block mb-2">
+          <div className="bg-slate-50 border border-slate-200/80 p-2.5 rounded-xl shadow-xs">
+            <label className="text-[11px] font-bold text-slate-800 block mb-1.5">
               Finish Color
             </label>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {CLIENT_PRESET_COLORS.map((c) => (
                 <button
                   key={c}
                   onClick={() => updateSelected({ color: c })}
                   style={{ backgroundColor: c }}
-                  className={`w-6 h-6 rounded-lg border transition-all ${
+                  className={`w-5 h-5 rounded-lg border transition-all ${
                     selectedFurniture.color === c
                       ? 'border-sky-600 scale-125 shadow-md ring-2 ring-sky-300'
                       : 'border-slate-300 hover:scale-110 shadow-2xs'
@@ -474,14 +618,14 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
           <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
             <button
               onClick={duplicateSelected}
-              className="flex-1 py-2 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold transition flex items-center justify-center gap-1.5 border border-slate-200 shadow-2xs"
+              className="flex-1 py-1.5 px-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold transition flex items-center justify-center gap-1.5 border border-slate-200 shadow-2xs"
             >
               <Copy className="w-3.5 h-3.5 text-sky-600" />
               <span>Duplicate</span>
             </button>
             <button
               onClick={() => handleDeleteFurniture(selectedFurniture.id)}
-              className="py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 text-xs font-bold transition flex items-center justify-center gap-1.5 active:scale-95"
+              className="py-1.5 px-2.5 rounded-xl bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 text-xs font-bold transition flex items-center justify-center gap-1.5 active:scale-95"
               title="Delete this furniture item"
             >
               <Trash2 className="w-3.5 h-3.5" />
