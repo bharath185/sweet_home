@@ -862,25 +862,6 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         });
       }
 
-      // Render sleek wireframe highlight bounding box for selected or hovered item
-      if (isSelected || hoveredId === item.id) {
-        const boxGeom = new THREE.BoxGeometry(
-          item.width * CM + 0.02,
-          item.height * CM + 0.02,
-          item.depth * CM + 0.02
-        );
-        const boxEdges = new THREE.EdgesGeometry(boxGeom);
-        const lineMat = new THREE.LineBasicMaterial({
-          color: isSelected ? 0x6366f1 : 0x38bdf8,
-          linewidth: isSelected ? 2 : 1,
-          transparent: true,
-          opacity: isSelected ? 0.9 : 0.6,
-        });
-        const lineBox = new THREE.LineSegments(boxEdges, lineMat);
-        lineBox.position.y = (item.height * CM) / 2;
-        itemGroup.add(lineBox);
-      }
-
       if (item.model && item.model.startsWith('procedural:')) {
         try {
           const parts = item.model.split(':');
