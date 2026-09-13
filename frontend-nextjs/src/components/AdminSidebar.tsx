@@ -9,6 +9,8 @@ import {
   Layers,
   Sparkles,
   ShieldCheck,
+  Palette,
+  User,
   ChevronLeft,
   ChevronRight,
   Pin,
@@ -49,6 +51,40 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const isExpanded = isOpen || isHovered;
 
+  // Header role styling
+  const getHeaderInfo = () => {
+    switch (userRole) {
+      case 'ADMIN':
+        return {
+          title: 'Admin Center',
+          subtitle: 'Executive Studio Control',
+          icon: ShieldCheck,
+          gradient: 'from-sky-500 to-indigo-600',
+          shadow: 'shadow-sky-500/25',
+        };
+      case 'DESIGNER':
+        return {
+          title: 'Designer Studio',
+          subtitle: 'CAD & 3D Interior Suite',
+          icon: Palette,
+          gradient: 'from-indigo-600 to-purple-600',
+          shadow: 'shadow-indigo-500/25',
+        };
+      case 'CLIENT':
+      default:
+        return {
+          title: 'Client Portal',
+          subtitle: '3D Virtual Walkthrough',
+          icon: User,
+          gradient: 'from-emerald-600 to-teal-600',
+          shadow: 'shadow-emerald-500/25',
+        };
+    }
+  };
+
+  const headerInfo = getHeaderInfo();
+  const HeaderIcon = headerInfo.icon;
+
   return (
     <aside
       onMouseEnter={() => setIsHovered(true)}
@@ -60,16 +96,16 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       {/* Header / Brand */}
       <div className="h-14 border-b border-slate-200 flex items-center justify-between px-3 bg-slate-50/50">
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-sky-500/25 shrink-0">
-            <ShieldCheck className="w-5 h-5" />
+          <div className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${headerInfo.gradient} flex items-center justify-center text-white shadow-md ${headerInfo.shadow} shrink-0`}>
+            <HeaderIcon className="w-5 h-5" />
           </div>
           {isExpanded && (
             <div className="flex flex-col overflow-hidden animate-in fade-in duration-200">
               <span className="font-extrabold text-sm text-slate-900 tracking-tight truncate">
-                Admin Center
+                {headerInfo.title}
               </span>
-              <span className="text-[10px] text-sky-600 font-semibold truncate">
-                Control & Multi-Floor Studio
+              <span className="text-[10px] text-slate-500 font-semibold truncate">
+                {headerInfo.subtitle}
               </span>
             </div>
           )}
@@ -90,11 +126,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         )}
       </div>
 
-      {/* Role Switcher Pill */}
-      {isExpanded && (
+      {/* Role Switcher Pill - Strictly only accessible by ADMIN */}
+      {isExpanded && userRole === 'ADMIN' && (
         <div className="p-3 border-b border-slate-200 bg-slate-50/40 animate-in fade-in duration-200">
           <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1.5">
-            Active Workspace Role
+            Admin Role Simulator
           </label>
           <div className="grid grid-cols-3 gap-1 bg-slate-200/60 p-1 rounded-xl text-[11px] font-semibold">
             {(['ADMIN', 'DESIGNER', 'CLIENT'] as UserRole[]).map((r) => (
@@ -125,34 +161,40 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           {isExpanded ? 'Workspaces' : '•'}
         </div>
 
-        <button
-          onClick={() => {
-            setCurrentView('dashboard');
-            setAdminTab('overview');
-          }}
-          className={`w-full flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center px-0'} py-2.5 rounded-xl text-xs font-semibold transition ${
-            currentView === 'dashboard'
-              ? 'bg-sky-50 text-sky-700 border border-sky-200 shadow-sm font-bold'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
-          }`}
-          title="Admin Control Dashboard"
-        >
-          <LayoutDashboard className="w-4 h-4 shrink-0 text-sky-600" />
-          {isExpanded && <span className="truncate">Admin Dashboard</span>}
-        </button>
+        {/* Admin Dashboard: ONLY FOR ADMIN */}
+        {userRole === 'ADMIN' && (
+          <button
+            onClick={() => {
+              setCurrentView('dashboard');
+              setAdminTab('overview');
+            }}
+            className={`w-full flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center px-0'} py-2.5 rounded-xl text-xs font-semibold transition ${
+              currentView === 'dashboard'
+                ? 'bg-sky-50 text-sky-700 border border-sky-200 shadow-sm font-bold'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
+            }`}
+            title="Admin Control Dashboard"
+          >
+            <LayoutDashboard className="w-4 h-4 shrink-0 text-sky-600" />
+            {isExpanded && <span className="truncate">Admin Dashboard</span>}
+          </button>
+        )}
 
-        <button
-          onClick={() => setCurrentView('studio')}
-          className={`w-full flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center px-0'} py-2.5 rounded-xl text-xs font-semibold transition ${
-            currentView === 'studio'
-              ? 'bg-sky-50 text-sky-700 border border-sky-200 shadow-sm font-bold'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
-          }`}
-          title="2D CAD & 3D WebGL Design Studio"
-        >
-          <Layers className="w-4 h-4 shrink-0 text-sky-600" />
-          {isExpanded && <span className="truncate">CAD Design Studio</span>}
-        </button>
+        {/* CAD Design Studio: FOR ADMIN & DESIGNER */}
+        {(userRole === 'ADMIN' || userRole === 'DESIGNER') && (
+          <button
+            onClick={() => setCurrentView('studio')}
+            className={`w-full flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center px-0'} py-2.5 rounded-xl text-xs font-semibold transition ${
+              currentView === 'studio'
+                ? 'bg-sky-50 text-sky-700 border border-sky-200 shadow-sm font-bold'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
+            }`}
+            title="2D CAD & 3D WebGL Design Studio"
+          >
+            <Layers className="w-4 h-4 shrink-0 text-sky-600" />
+            {isExpanded && <span className="truncate">CAD Design Studio</span>}
+          </button>
+        )}
 
         <button
           onClick={() => setCurrentView('customer')}
@@ -230,26 +272,60 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             </button>
           </>
         )}
+
+        {/* Designer Resources Section */}
+        {userRole === 'DESIGNER' && (
+          <>
+            <div className={`px-2 pt-3 pb-1 text-[10px] uppercase tracking-wider text-slate-400 font-bold ${!isExpanded ? 'text-center' : ''}`}>
+              {isExpanded ? 'Design Resources' : '•'}
+            </div>
+
+            <button
+              onClick={onOpenAddItemModal}
+              className={`w-full flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center px-0'} py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition border border-transparent`}
+              title="Procedural 3D Item Sculptor Studio"
+            >
+              <Box className="w-4 h-4 shrink-0 text-indigo-600" />
+              {isExpanded && <span className="truncate">3D Sculptor Studio</span>}
+            </button>
+          </>
+        )}
       </div>
 
       {/* Quick Action Buttons at Bottom */}
-      {isExpanded && userRole === 'ADMIN' && (
+      {isExpanded && (
         <div className="p-3 border-t border-slate-200 bg-slate-50 space-y-2 animate-in fade-in duration-200">
-          <button
-            onClick={onOpenAddItemModal}
-            className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-sky-600/20 transition flex items-center justify-center gap-2 active:scale-95"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>Add / Import 3D Item</span>
-          </button>
+          {/* Admin Actions */}
+          {userRole === 'ADMIN' && (
+            <>
+              <button
+                onClick={onOpenAddItemModal}
+                className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-sky-600/20 transition flex items-center justify-center gap-2 active:scale-95"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                <span>Add / Import 3D Item</span>
+              </button>
 
-          <button
-            onClick={onOpenAddUserModal}
-            className="w-full py-2 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold shadow-sm transition flex items-center justify-center gap-2"
-          >
-            <Users className="w-3.5 h-3.5 text-sky-600" />
-            <span>Create New User</span>
-          </button>
+              <button
+                onClick={onOpenAddUserModal}
+                className="w-full py-2 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold shadow-sm transition flex items-center justify-center gap-2"
+              >
+                <Users className="w-3.5 h-3.5 text-sky-600" />
+                <span>Create New User</span>
+              </button>
+            </>
+          )}
+
+          {/* Designer Action */}
+          {userRole === 'DESIGNER' && (
+            <button
+              onClick={onOpenAddItemModal}
+              className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition flex items-center justify-center gap-2 active:scale-95"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>+ Create 3D Item</span>
+            </button>
+          )}
         </div>
       )}
 

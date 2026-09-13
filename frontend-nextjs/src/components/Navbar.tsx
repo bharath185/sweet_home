@@ -96,32 +96,50 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="h-14 bg-white/95 backdrop-blur-xl border-b border-slate-200/90 px-4 flex items-center justify-between select-none z-30 shadow-sm shadow-slate-900/5 relative">
       {/* Brand, Admin Menu Toggle & Plan Title / Client Project Switcher */}
       <div className="flex items-center gap-3">
-        <button
-          onClick={onToggleAdminSidebar}
-          className="p-1.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition border border-transparent hover:border-slate-200"
-          title="Toggle Navigation Menu"
-        >
-          <Menu className="w-5 h-5 text-sky-600" />
-        </button>
+        {userRole !== 'CLIENT' && (
+          <button
+            onClick={onToggleAdminSidebar}
+            className="p-1.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition border border-transparent hover:border-slate-200"
+            title="Toggle Navigation Menu"
+          >
+            <Menu className="w-5 h-5 text-sky-600" />
+          </button>
+        )}
 
-        <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white font-bold shadow-md shadow-sky-500/25">
+        <div className={`flex items-center justify-center w-8 h-8 rounded-xl text-white font-bold shadow-md ${
+          userRole === 'ADMIN'
+            ? 'bg-gradient-to-tr from-sky-500 to-indigo-600 shadow-sky-500/25'
+            : userRole === 'DESIGNER'
+            ? 'bg-gradient-to-tr from-indigo-500 to-purple-600 shadow-indigo-500/25'
+            : 'bg-gradient-to-tr from-emerald-500 to-teal-600 shadow-emerald-500/25'
+        }`}>
           <Layers className="w-4 h-4" />
         </div>
 
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
             <span className="font-extrabold text-slate-900 text-sm tracking-tight">
-              SweetHome <span className="text-sky-600 font-semibold">CAD Studio</span>
+              SweetHome <span className={userRole === 'CLIENT' ? 'text-emerald-600 font-semibold' : userRole === 'DESIGNER' ? 'text-indigo-600 font-semibold' : 'text-sky-600 font-semibold'}>
+                {userRole === 'CLIENT' ? '3D Presentation' : userRole === 'DESIGNER' ? 'Design Studio' : 'CAD Studio'}
+              </span>
             </span>
-            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+            <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full border ${
+              userRole === 'ADMIN'
+                ? 'bg-sky-50 text-sky-700 border-sky-200'
+                : userRole === 'DESIGNER'
+                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            }`}>
               {userRole}
             </span>
           </div>
 
           {/* Client Project Switcher Dropdown */}
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[10px] text-slate-400 uppercase font-semibold">Client:</span>
-            {clientProjects.length > 0 && onSelectClientProject ? (
+            <span className="text-[10px] text-slate-400 uppercase font-semibold">
+              {userRole === 'CLIENT' ? 'Your Suite:' : 'Client:'}
+            </span>
+            {userRole !== 'CLIENT' && clientProjects.length > 0 && onSelectClientProject ? (
               <div className="flex items-center gap-1">
                 <select
                   value={plan.id}
@@ -135,7 +153,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </option>
                   ))}
                 </select>
-                {onOpenAddUserModal && (
+                {userRole === 'ADMIN' && onOpenAddUserModal && (
                   <button
                     onClick={onOpenAddUserModal}
                     className="px-2 py-0.5 rounded-md bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 text-[10px] font-bold transition flex items-center gap-1"
@@ -156,62 +174,72 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Center Viewport & Workspace Switches */}
       <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 shadow-inner">
-        <button
-          onClick={() => setActiveView('dashboard')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-            activeView === 'dashboard'
-              ? 'bg-white text-indigo-700 shadow-sm border border-slate-200 font-bold'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-          }`}
-          title="Admin Control Dashboard & User Directory"
-        >
-          <LayoutDashboard className="w-3.5 h-3.5 text-indigo-600" />
-          <span>Dashboard</span>
-        </button>
+        {/* Dashboard button strictly for ADMIN */}
+        {userRole === 'ADMIN' && (
+          <>
+            <button
+              onClick={() => setActiveView('dashboard')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeView === 'dashboard'
+                  ? 'bg-white text-indigo-700 shadow-sm border border-slate-200 font-bold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+              title="Admin Control Dashboard & User Directory"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Dashboard</span>
+            </button>
+            <div className="w-[1px] h-4 bg-slate-300 mx-1" />
+          </>
+        )}
 
-        <div className="w-[1px] h-4 bg-slate-300 mx-1" />
+        {/* Studio CAD views for ADMIN & DESIGNER */}
+        {userRole !== 'CLIENT' && (
+          <>
+            <button
+              onClick={() => setActiveView('split')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeView === 'split'
+                  ? 'bg-white text-sky-700 shadow-sm border border-slate-200 font-bold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+              title="4-Pane CAD & 3D WebGL View"
+            >
+              <Layers className="w-3.5 h-3.5 text-sky-600" />
+              <span>2D / 3D Studio</span>
+            </button>
 
-        <button
-          onClick={() => setActiveView('split')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-            activeView === 'split'
-              ? 'bg-white text-sky-700 shadow-sm border border-slate-200 font-bold'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-          }`}
-          title="4-Pane CAD & 3D WebGL View"
-        >
-          <Layers className="w-3.5 h-3.5 text-sky-600" />
-          <span>2D / 3D Studio</span>
-        </button>
+            <button
+              onClick={() => setActiveView('2d')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeView === '2d'
+                  ? 'bg-white text-sky-700 shadow-sm border border-slate-200 font-bold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+              title="Full 2D Floor Plan CAD Canvas"
+            >
+              <Box className="w-3.5 h-3.5 text-sky-600" />
+              <span>2D Plan</span>
+            </button>
 
-        <button
-          onClick={() => setActiveView('2d')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-            activeView === '2d'
-              ? 'bg-white text-sky-700 shadow-sm border border-slate-200 font-bold'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-          }`}
-          title="Full 2D Floor Plan CAD Canvas"
-        >
-          <Box className="w-3.5 h-3.5 text-sky-600" />
-          <span>2D Plan</span>
-        </button>
+            <button
+              onClick={() => setActiveView('3d')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeView === '3d'
+                  ? 'bg-white text-sky-700 shadow-sm border border-slate-200 font-bold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+              title="Full 3D WebGL Render View"
+            >
+              <Eye className="w-3.5 h-3.5 text-sky-600" />
+              <span>3D View</span>
+            </button>
 
-        <button
-          onClick={() => setActiveView('3d')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-            activeView === '3d'
-              ? 'bg-white text-sky-700 shadow-sm border border-slate-200 font-bold'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-          }`}
-          title="Full 3D WebGL Render View"
-        >
-          <Eye className="w-3.5 h-3.5 text-sky-600" />
-          <span>3D View</span>
-        </button>
+            <div className="w-[1px] h-4 bg-slate-300 mx-1" />
+          </>
+        )}
 
-        <div className="w-[1px] h-4 bg-slate-300 mx-1" />
-
+        {/* Client Tour for All */}
         <button
           onClick={() => setActiveView('customer')}
           className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
@@ -228,56 +256,62 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Action Controls, Unit Toggle & Settings */}
       <div className="flex items-center gap-2">
-        {/* Undo & Redo History Controls */}
-        <div className="flex items-center bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/90 shadow-2xs">
+        {/* Undo & Redo History Controls - for Admin & Designer only */}
+        {userRole !== 'CLIENT' && (
+          <div className="flex items-center bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/90 shadow-2xs">
+            <button
+              onClick={onUndo}
+              disabled={!canUndo}
+              className={`p-1.5 rounded-lg transition flex items-center gap-1 ${
+                canUndo
+                  ? 'text-slate-700 hover:text-slate-950 hover:bg-white shadow-2xs active:scale-95 cursor-pointer'
+                  : 'text-slate-300 cursor-not-allowed opacity-50'
+              }`}
+              title="Undo Last Action (Ctrl+Z)"
+            >
+              <Undo2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onRedo}
+              disabled={!canRedo}
+              className={`p-1.5 rounded-lg transition flex items-center gap-1 ${
+                canRedo
+                  ? 'text-slate-700 hover:text-slate-950 hover:bg-white shadow-2xs active:scale-95 cursor-pointer'
+                  : 'text-slate-300 cursor-not-allowed opacity-50'
+              }`}
+              title="Redo Next Action (Ctrl+Y / Ctrl+Shift+Z)"
+            >
+              <Redo2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Unit & Preferences Button - for Admin & Designer only */}
+        {userRole !== 'CLIENT' && (
           <button
-            onClick={onUndo}
-            disabled={!canUndo}
-            className={`p-1.5 rounded-lg transition flex items-center gap-1 ${
-              canUndo
-                ? 'text-slate-700 hover:text-slate-950 hover:bg-white shadow-2xs active:scale-95 cursor-pointer'
-                : 'text-slate-300 cursor-not-allowed opacity-50'
-            }`}
-            title="Undo Last Action (Ctrl+Z)"
+            onClick={onOpenPreferences}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-mono font-bold text-slate-700 transition shadow-sm"
+            title="Units & Project Preferences"
           >
-            <Undo2 className="w-4 h-4" />
+            <Ruler className="w-3.5 h-3.5 text-sky-600" />
+            <span>{unit}</span>
+            <Settings className="w-3.5 h-3.5 text-slate-400 ml-0.5" />
           </button>
+        )}
+
+        {/* Blueprint Import Button - for Admin & Designer only */}
+        {userRole !== 'CLIENT' && (
           <button
-            onClick={onRedo}
-            disabled={!canRedo}
-            className={`p-1.5 rounded-lg transition flex items-center gap-1 ${
-              canRedo
-                ? 'text-slate-700 hover:text-slate-950 hover:bg-white shadow-2xs active:scale-95 cursor-pointer'
-                : 'text-slate-300 cursor-not-allowed opacity-50'
-            }`}
-            title="Redo Next Action (Ctrl+Y / Ctrl+Shift+Z)"
+            onClick={onOpenBlueprint}
+            className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition border border-slate-200 bg-slate-50 shadow-sm"
+            title="Import Blueprint Scan (Background Image)"
           >
-            <Redo2 className="w-4 h-4" />
+            <ImageIcon className="w-4 h-4 text-sky-600" />
           </button>
-        </div>
+        )}
 
-        {/* Unit & Preferences Button */}
-        <button
-          onClick={onOpenPreferences}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-mono font-bold text-slate-700 transition shadow-sm"
-          title="Units & Project Preferences"
-        >
-          <Ruler className="w-3.5 h-3.5 text-sky-600" />
-          <span>{unit}</span>
-          <Settings className="w-3.5 h-3.5 text-slate-400 ml-0.5" />
-        </button>
-
-        {/* Blueprint Import Button */}
-        <button
-          onClick={onOpenBlueprint}
-          className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition border border-slate-200 bg-slate-50 shadow-sm"
-          title="Import Blueprint Scan (Background Image)"
-        >
-          <ImageIcon className="w-4 h-4 text-sky-600" />
-        </button>
-
-        {/* 3D Item Creator Studio Button */}
-        {onOpenCreateItemModal && (
+        {/* 3D Item Creator Studio Button - for Admin & Designer */}
+        {userRole !== 'CLIENT' && onOpenCreateItemModal && (
           <button
             onClick={onOpenCreateItemModal}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-50 to-indigo-50 hover:from-sky-100 hover:to-indigo-100 border border-sky-200 text-xs font-bold text-sky-800 transition shadow-2xs active:scale-95"
@@ -307,31 +341,36 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         )}
 
-        <button
-          onClick={onNew}
-          className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition border border-slate-200 bg-slate-50 shadow-sm"
-          title="Create New Blank Plan"
-        >
-          <PlusCircle className="w-4 h-4" />
-        </button>
+        {/* New Plan & Export JSON - for Admin & Designer */}
+        {userRole !== 'CLIENT' && (
+          <>
+            <button
+              onClick={onNew}
+              className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition border border-slate-200 bg-slate-50 shadow-sm"
+              title="Create New Blank Plan"
+            >
+              <PlusCircle className="w-4 h-4" />
+            </button>
 
-        <button
-          onClick={onExport}
-          className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition border border-slate-200 bg-slate-50 shadow-sm"
-          title="Export Plan JSON"
-        >
-          <Download className="w-4 h-4" />
-        </button>
+            <button
+              onClick={onExport}
+              className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition border border-slate-200 bg-slate-50 shadow-sm"
+              title="Export Plan JSON"
+            >
+              <Download className="w-4 h-4" />
+            </button>
 
-        <button
-          onClick={onSave}
-          disabled={isSaving}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50"
-          title="Save Plan to Spring Boot backend"
-        >
-          <Save className="w-3.5 h-3.5 text-sky-600" />
-          <span>{isSaving ? 'Saving...' : 'Save'}</span>
-        </button>
+            <button
+              onClick={onSave}
+              disabled={isSaving}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50"
+              title="Save Plan to Spring Boot backend"
+            >
+              <Save className="w-3.5 h-3.5 text-sky-600" />
+              <span>{isSaving ? 'Saving...' : 'Save'}</span>
+            </button>
+          </>
+        )}
 
         <button
           onClick={onOpenShare}

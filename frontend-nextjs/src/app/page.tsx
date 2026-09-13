@@ -705,24 +705,26 @@ export default function HomeStudioPage() {
 
       {/* Main Workspace Body */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Collapsible Admin Sidebar */}
-        <AdminSidebar
-          currentView={activeView === 'dashboard' ? 'dashboard' : activeView === 'customer' ? 'customer' : 'studio'}
-          setCurrentView={(v) => {
-            if (v === 'dashboard') setActiveView('dashboard');
-            else if (v === 'customer') setActiveView('customer');
-            else setActiveView('split');
-          }}
-          adminTab={adminTab}
-          setAdminTab={setAdminTab}
-          userRole={userRole}
-          setUserRole={setUserRole}
-          onlineCount={onlineUsersCount}
-          isOpen={isAdminSidebarOpen}
-          setIsOpen={setIsAdminSidebarOpen}
-          onOpenAddItemModal={() => setIsAddItemModalOpen(true)}
-          onOpenAddUserModal={() => setIsAddUserModalOpen(true)}
-        />
+        {/* Left Collapsible Admin Sidebar - Restricted to Admin & Designer */}
+        {userRole !== 'CLIENT' && (
+          <AdminSidebar
+            currentView={activeView === 'dashboard' ? 'dashboard' : activeView === 'customer' ? 'customer' : 'studio'}
+            setCurrentView={(v) => {
+              if (v === 'dashboard') setActiveView('dashboard');
+              else if (v === 'customer') setActiveView('customer');
+              else setActiveView('split');
+            }}
+            adminTab={adminTab}
+            setAdminTab={setAdminTab}
+            userRole={userRole}
+            setUserRole={setUserRole}
+            onlineCount={onlineUsersCount}
+            isOpen={isAdminSidebarOpen}
+            setIsOpen={setIsAdminSidebarOpen}
+            onOpenAddItemModal={() => setIsAddItemModalOpen(true)}
+            onOpenAddUserModal={() => setIsAddUserModalOpen(true)}
+          />
+        )}
 
         {/* VIEW 1: ADMIN CONTROL DASHBOARD */}
         {activeView === 'dashboard' && (
