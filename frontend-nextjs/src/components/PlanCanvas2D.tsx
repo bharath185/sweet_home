@@ -22,7 +22,6 @@ import {
   Download,
   Sparkles,
   Compass,
-  CornerDownRight,
   Maximize2
 } from 'lucide-react';
 import { HomePlan, Wall, FurnitureItem, Room, DimensionLine, TextNote, VisitorCameraState } from '../types/plan';
@@ -56,7 +55,6 @@ export type ToolMode =
   | 'drawRoom'
   | 'door'
   | 'window'
-  | 'staircase'
   | 'dimension'
   | 'text'
   | 'pan';
@@ -574,34 +572,6 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     });
     setToolMode('select');
     onSelectId(newWindow.id);
-  };
-
-  // Insert Architectural Staircase
-  const handleInsertStaircase = (clickPt: { x: number; y: number }) => {
-    const newStairs: FurnitureItem = {
-      id: 'stairs_' + Date.now(),
-      catalogId: 'staircase',
-      name: 'Main Architectural Staircase',
-      category: 'Stairs',
-      x: Math.round(clickPt.x),
-      y: Math.round(clickPt.y),
-      elevation: 0,
-      angle: 0,
-      width: 100,
-      depth: 260,
-      height: 250,
-      model: '/models/stairs.obj',
-      color: '#334155',
-      floorLevel: activeFloor,
-    };
-
-    onUpdatePlan({
-      ...plan,
-      furniture: [...plan.furniture, newStairs],
-      updatedAt: new Date().toISOString(),
-    });
-    setToolMode('select');
-    onSelectId(newStairs.id);
   };
 
   // Export Scalable Vector SVG Blueprint
@@ -1548,12 +1518,6 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       return;
     }
 
-    // CAD Tool: Staircase
-    if (toolMode === 'staircase') {
-      handleInsertStaircase(clickPlan);
-      return;
-    }
-
     // CAD Tool: Dimension Line
     if (toolMode === 'dimension') {
       const snap = findSnapVertex(clickPlan.x, clickPlan.y);
@@ -1771,16 +1735,6 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
           >
             <Split className="w-3.5 h-3.5" />
             <span className="hidden md:inline text-[11px]">Window</span>
-          </button>
-
-          {/* Staircase Inserter */}
-          <button
-            onClick={() => setToolMode('staircase')}
-            className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'staircase' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
-            title="Insert Architectural Staircase"
-          >
-            <CornerDownRight className="w-3.5 h-3.5" />
-            <span className="hidden md:inline text-[11px]">Stairs</span>
           </button>
 
           {/* Aligned Dimension */}
