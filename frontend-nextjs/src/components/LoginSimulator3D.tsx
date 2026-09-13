@@ -21,8 +21,8 @@ export const LoginSimulator3D: React.FC = () => {
   // Mouse orbit state
   const isDraggingRef = useRef(false);
   const prevMouseRef = useRef({ x: 0, y: 0 });
-  // Camera spherical coordinates (radius generous so no cropping occurs at any 360 angle)
-  const cameraAngleRef = useRef({ theta: Math.PI / 4.2, phi: Math.PI / 3.4, radius: 9.6 });
+  // Camera spherical coordinates (generous radius and angle so nothing ever crops)
+  const cameraAngleRef = useRef({ theta: Math.PI / 4.2, phi: Math.PI / 3.1, radius: 11.2 });
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -31,13 +31,13 @@ export const LoginSimulator3D: React.FC = () => {
     const width = mount.clientWidth || 700;
     const height = mount.clientHeight || 640;
 
-    // 1. Three.js Scene Setup (Transparent alpha, No scene background, No fog)
+    // 1. Three.js Scene Setup
     const scene = new THREE.Scene();
 
-    // Field of view 36 with radius ~9.6 ensures the full room is visible with generous margins
-    const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 100);
-    camera.position.set(7.0, 5.2, 7.0);
-    camera.lookAt(0, 0.7, 0);
+    // Field of view 32 with radius ~11.2 ensures the entire room is comfortably framed
+    const camera = new THREE.PerspectiveCamera(32, width / height, 0.1, 100);
+    camera.position.set(7.8, 5.8, 7.8);
+    camera.lookAt(0, 0.55, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     renderer.setClearColor(0x000000, 0);
@@ -55,38 +55,41 @@ export const LoginSimulator3D: React.FC = () => {
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.95);
     scene.add(ambientLight);
 
-    // Warm Sun Directional Light
     const sunLight = new THREE.DirectionalLight(0xffedd5, 1.9);
-    sunLight.position.set(7, 14, 8);
+    sunLight.position.set(8, 16, 9);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 2048;
     sunLight.shadow.mapSize.height = 2048;
     sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 30;
-    sunLight.shadow.camera.left = -5;
-    sunLight.shadow.camera.right = 5;
-    sunLight.shadow.camera.top = 5;
-    sunLight.shadow.camera.bottom = -5;
+    sunLight.shadow.camera.far = 35;
+    sunLight.shadow.camera.left = -6;
+    sunLight.shadow.camera.right = 6;
+    sunLight.shadow.camera.top = 6;
+    sunLight.shadow.camera.bottom = -6;
     sunLight.shadow.bias = -0.0003;
     scene.add(sunLight);
 
-    // Soft Blue Fill Light
     const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.75);
-    fillLight.position.set(-8, 10, -7);
+    fillLight.position.set(-9, 10, -8);
     scene.add(fillLight);
+
+    // 3. Root Room Group (Scaled to 0.72 so entire architectural design fits with zero edge cropping)
+    const roomRoot = new THREE.Group();
+    roomRoot.scale.set(0.72, 0.72, 0.72);
+    scene.add(roomRoot);
 
     // Warm Interior Chandelier Point Light
     const chandelierPoint = new THREE.PointLight(0xfef08a, 0, 9, 1.4);
     chandelierPoint.position.set(0, 2.1, 0);
     chandelierPoint.castShadow = true;
-    scene.add(chandelierPoint);
+    roomRoot.add(chandelierPoint);
 
     // Floor Standing Lamp Accent Light
     const floorLampPoint = new THREE.PointLight(0xffedd5, 0, 5, 1.8);
     floorLampPoint.position.set(1.7, 1.5, -1.2);
-    scene.add(floorLampPoint);
+    roomRoot.add(floorLampPoint);
 
-    // 3. Room Floor (Walnut Hardwood Floor with soft bevel edge)
+    // 4. Room Floor (Walnut Hardwood Floor with soft bevel edge)
     const floorGeom = new THREE.BoxGeometry(4.4, 0.04, 3.8);
     const floorMat = new THREE.MeshStandardMaterial({
       color: 0x6e4e37,
@@ -97,9 +100,9 @@ export const LoginSimulator3D: React.FC = () => {
     roomFloor.position.set(0, -0.02, 0);
     roomFloor.receiveShadow = true;
 
-    // 4. Blueprint 2D CAD Line Segments (Stage 0)
+    // 5. Blueprint 2D CAD Line Segments (Stage 0)
     const blueprintGroup = new THREE.Group();
-    scene.add(blueprintGroup);
+    roomRoot.add(blueprintGroup);
 
     const bpLineMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 2 });
     const wallPerimeter = [
@@ -113,10 +116,10 @@ export const LoginSimulator3D: React.FC = () => {
     const bpLine = new THREE.Line(bpGeom, bpLineMat);
     blueprintGroup.add(bpLine);
 
-    // 5. 3D Architectural Walls Group (Stage 1)
+    // 6. 3D Architectural Walls Group (Stage 1)
     const wallsGroup = new THREE.Group();
     wallsGroup.add(roomFloor);
-    scene.add(wallsGroup);
+    roomRoot.add(wallsGroup);
 
     const wallMat = new THREE.MeshStandardMaterial({
       color: 0xf8fafc,
@@ -153,9 +156,9 @@ export const LoginSimulator3D: React.FC = () => {
     woodSlatPanel.position.set(-0.95, 0, -1.82);
     wallsGroup.add(woodSlatPanel);
 
-    // 6. Windows & Doors Group (Stage 2)
+    // 7. Windows & Doors Group (Stage 2)
     const architecturalFittingsGroup = new THREE.Group();
-    scene.add(architecturalFittingsGroup);
+    roomRoot.add(architecturalFittingsGroup);
 
     // Panoramic Sliding Glass Window on Back Wall
     const winMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.85, roughness: 0.1, transparent: true, opacity: 0.65 });
@@ -183,9 +186,9 @@ export const LoginSimulator3D: React.FC = () => {
     wallArt.position.set(-0.95, 1.45, -1.78);
     architecturalFittingsGroup.add(wallArt);
 
-    // 7. Ceiling Lighting Fixtures Group (Stage 3)
+    // 8. Ceiling Lighting Fixtures Group (Stage 3)
     const lightingGroup = new THREE.Group();
-    scene.add(lightingGroup);
+    roomRoot.add(lightingGroup);
 
     // Modern Multi-Light Designer Chandelier
     const lampMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.85, roughness: 0.2 });
@@ -199,9 +202,9 @@ export const LoginSimulator3D: React.FC = () => {
     floorArcLamp.position.set(1.7, 0, -1.2);
     lightingGroup.add(floorArcLamp);
 
-    // 8. Rich Luxury Interior Furniture Suite Group (Stage 4 & 5)
+    // 9. Rich Luxury Interior Furniture Suite Group (Stage 4 & 5)
     const furnitureGroup = new THREE.Group();
-    scene.add(furnitureGroup);
+    roomRoot.add(furnitureGroup);
 
     // A. Luxury L-Shape Royal Navy Velvet Sectional Sofa
     const sofaMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.45, metalness: 0.1 });
@@ -311,7 +314,7 @@ export const LoginSimulator3D: React.FC = () => {
     rugMesh.receiveShadow = true;
     furnitureGroup.add(rugMesh);
 
-    // 9. 60 FPS Progressive Animation Loop
+    // 10. 60 FPS Progressive Animation Loop
     let animationId: number;
     let clock = new THREE.Clock();
     let totalTime = 0;
@@ -321,18 +324,17 @@ export const LoginSimulator3D: React.FC = () => {
       const delta = clock.getDelta();
       totalTime += delta;
 
-      // 18-second progressive construction cycle (3s per stage)
       const loopDuration = 18.0;
       const stageIdx = Math.min(5, Math.floor((totalTime % loopDuration) / 3.0));
       const stageTime = (totalTime % 3.0);
-      const stageNorm = Math.min(1.0, stageTime / 2.0); // 0 to 1 over first 2s
+      const stageNorm = Math.min(1.0, stageTime / 2.0);
 
-      // --- Stage 0: 2D CAD Blueprint Lines ---
+      // Stage 0: 2D Blueprint Lines
       blueprintGroup.visible = true;
       bpLineMat.opacity = stageIdx === 0 ? 0.9 + Math.sin(totalTime * 6) * 0.1 : 0.35;
       bpLineMat.transparent = true;
 
-      // --- Stage 1: 3D Walls Extrusion ---
+      // Stage 1: 3D Walls Extrusion
       if (stageIdx >= 1) {
         wallsGroup.visible = true;
         const wallScale = stageIdx === 1 ? Math.min(1.0, stageNorm * 1.2) : 1.0;
@@ -342,7 +344,7 @@ export const LoginSimulator3D: React.FC = () => {
         wallsGroup.visible = false;
       }
 
-      // --- Stage 2: Windows & Doors Fitting ---
+      // Stage 2: Windows & Doors
       if (stageIdx >= 2) {
         architecturalFittingsGroup.visible = true;
         const fitScale = stageIdx === 2 ? Math.min(1.0, stageNorm * 1.1) : 1.0;
@@ -351,7 +353,7 @@ export const LoginSimulator3D: React.FC = () => {
         architecturalFittingsGroup.visible = false;
       }
 
-      // --- Stage 3: Ceiling Lighting & Soft Interior Glow ---
+      // Stage 3: Ceiling Lighting
       if (stageIdx >= 3) {
         lightingGroup.visible = true;
         const lightProgress = stageIdx === 3 ? stageNorm : 1.0;
@@ -363,7 +365,7 @@ export const LoginSimulator3D: React.FC = () => {
         floorLampPoint.intensity = 0;
       }
 
-      // --- Stage 4 & 5: Luxury Furniture Suite & Full Complete Room ---
+      // Stage 4 & 5: Luxury Furniture Suite
       if (stageIdx >= 4) {
         furnitureGroup.visible = true;
         const furnProgress = stageIdx === 4 ? Math.min(1.0, stageNorm) : 1.0;
@@ -383,14 +385,14 @@ export const LoginSimulator3D: React.FC = () => {
       const camY = s.radius * Math.cos(s.phi);
       const camZ = s.radius * Math.sin(s.phi) * Math.cos(s.theta);
       camera.position.set(camX, camY, camZ);
-      camera.lookAt(0, 0.7, 0);
+      camera.lookAt(0, 0.55, 0);
 
       renderer.render(scene, camera);
     };
 
     animate();
 
-    // Mouse Drag Listeners for 360 Orbit Interaction
+    // Mouse Drag Orbit
     const handleMouseDown = (e: MouseEvent) => {
       isDraggingRef.current = true;
       prevMouseRef.current = { x: e.clientX, y: e.clientY };
@@ -416,7 +418,6 @@ export const LoginSimulator3D: React.FC = () => {
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
 
-    // Responsive window resize
     const handleResize = () => {
       if (!mount || !renderer || !camera) return;
       const w = mount.clientWidth;
