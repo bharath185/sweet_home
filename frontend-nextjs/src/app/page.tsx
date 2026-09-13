@@ -46,7 +46,7 @@ export default function HomeStudioPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthLoaded, setIsAuthLoaded] = useState<boolean>(false);
 
-  const [activeView, setActiveView] = useState<'split' | '2d' | '3d' | 'customer' | 'dashboard'>('split');
+  const [activeView, setActiveView] = useState<'split' | '2d' | '3d' | 'customer' | 'dashboard'>('dashboard');
   const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'catalog' | 'floors'>('overview');
   const [userRole, setUserRole] = useState<UserRole>('ADMIN');
   const [activeFloor, setActiveFloor] = useState<number>(0);
@@ -868,6 +868,11 @@ export default function HomeStudioPage() {
             onOpenAddUserModal={() => setIsAddUserModalOpen(true)}
             onOpenClientSelectModal={() => setIsClientSelectModalOpen(true)}
             plan={plan}
+            onOpenBlueprintModal={() => setIsBlueprintModalOpen(true)}
+            onNewPlan={handleNewPlan}
+            onSwitchToStudio={() => setActiveView('split')}
+            currentUser={currentUser}
+            onLogout={handleLogout}
           />
         )}
 
