@@ -206,9 +206,9 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     [canvasFloorMode, allFloors]
   );
 
-  // Convert Screen pixel coordinates to Plan (cm) coordinates
+  // Convert Screen pixel coordinates to Plan (cm) coordinates for a specific floor
   const screenToPlan = useCallback(
-    (clientX: number, clientY: number, bypassSnap: boolean = false) => {
+    (clientX: number, clientY: number, targetFloorLevel?: number, bypassSnap: boolean = false) => {
       if (!canvasRef.current) return { x: 0, y: 0 };
       const rect = canvasRef.current.getBoundingClientRect();
       const centerX = rect.width / 2 + panOffset.x;
@@ -217,9 +217,11 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       let rawX = (clientX - rect.left - centerX) / scale;
       let rawY = (clientY - rect.top - centerY) / scale;
 
-      // In side-by-side mode, subtract the active floor offset
+      const effectiveFloor = targetFloorLevel !== undefined ? targetFloorLevel : activeFloor;
+
+      // In side-by-side mode, subtract the floor offset
       if (canvasFloorMode === 'sideBySide') {
-        const offset = getFloorOffset(activeFloor);
+        const offset = getFloorOffset(effectiveFloor);
         rawX -= offset.x;
         rawY -= offset.y;
       }
@@ -252,6 +254,30 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       };
     },
     [scale, panOffset, getFloorOffset]
+  );
+
+  // Helper to determine which floor is currently under the screen cursor
+  const getFloorAtScreen = useCallback(
+    (clientX: number, clientY: number): number => {
+      if (!canvasRef.current || canvasFloorMode === 'single') return activeFloor;
+      const rect = canvasRef.current.getBoundingClientRect();
+      const clickScreenX = clientX - rect.left;
+      const clickScreenY = clientY - rect.top;
+
+      for (const fl of allFloors) {
+        const centerScreen = planToScreen(0, 0, fl.level);
+        const boxW = 860 * scale;
+        const boxH = 720 * scale;
+        if (
+          Math.abs(clickScreenX - centerScreen.x) <= boxW / 2 &&
+          Math.abs(clickScreenY - centerScreen.y) <= boxH / 2
+        ) {
+          return fl.level;
+        }
+      }
+      return activeFloor;
+    },
+    [canvasFloorMode, activeFloor, allFloors, planToScreen, scale]
   );
 
   // Filter items for current floor
@@ -1487,12 +1513,17 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     const currentPlan = screenToPlan(e.clientX, e.clientY);
     setMouseCanvasPos(currentPlan);
 
-    // 2D Virtual Visitor Dragging
+    // 2D Virtual Visitor Dragging across any floor
     if (isDraggingVisitor && onUpdateVisitorCamera) {
+      const targetFloor = getFloorAtScreen(e.clientX, e.clientY);
+      if (targetFloor !== activeFloor && onFloorChange) {
+        onFloorChange(targetFloor);
+      }
+      const curFloorPlan = screenToPlan(e.clientX, e.clientY, targetFloor, true);
       onUpdateVisitorCamera({
-        x: Math.round(currentPlan.x),
-        y: Math.round(currentPlan.y),
-        floorLevel: activeFloor,
+        x: Math.round(curFloorPlan.x),
+        y: Math.round(curFloorPlan.y),
+        floorLevel: targetFloor,
       });
       return;
     }

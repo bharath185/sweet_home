@@ -175,8 +175,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       if (visitorCameraProp.yaw !== undefined && Math.abs(visitorCameraProp.yaw - visitorYawRef.current) > 0.03) {
         visitorYawRef.current = visitorCameraProp.yaw;
       }
+      if (visitorCameraProp.floorLevel !== undefined && visitorCameraProp.floorLevel !== activeFloorRef.current && onFloorChange) {
+        onFloorChange(visitorCameraProp.floorLevel);
+      }
     }
-  }, [visitorCameraProp, cameraMode]);
+  }, [visitorCameraProp, cameraMode, onFloorChange]);
 
   const cameraModeRef = useRef<'aerial' | 'visitor'>('aerial');
   cameraModeRef.current = cameraMode;
@@ -507,9 +510,9 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         const vp = visitorPosRef.current;
         const curOffset = getFloor3DOffset(activeFloorRef.current || 0);
         camera.position.set(
-          vp.x + (floor3DModeRef.current === 'sideBySide' ? curOffset.x : 0),
+          vp.x + curOffset.x,
           curOffset.y + 1.6,
-          vp.z + (floor3DModeRef.current === 'sideBySide' ? curOffset.z : 0)
+          vp.z + curOffset.z
         );
 
         const lookDir = new THREE.Vector3(
@@ -616,6 +619,14 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
   // Synchronize visitor position when switching activeFloor
   useEffect(() => {
+    // If external visitorCamera already has a position on this activeFloor, preserve it
+    if (visitorCameraProp && (visitorCameraProp.floorLevel === activeFloor || visitorCameraProp.floorLevel === undefined)) {
+      const curX = (visitorCameraProp.x || 0) * 0.01;
+      const curZ = (visitorCameraProp.y || 0) * 0.01;
+      visitorPosRef.current.set(curX, 1.6, curZ);
+      return;
+    }
+
     const targetRoom = plan.rooms.find((r) => (r.floorLevel ?? 0) === (activeFloor ?? 0)) || plan.rooms[0];
     let initX = 0;
     let initZ = 0;
