@@ -1312,20 +1312,24 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+
+    // Mouse position relative to center of canvas
+    const cursorOffsetX = (e.clientX - rect.left) - rect.width / 2;
+    const cursorOffsetY = (e.clientY - rect.top) - rect.height / 2;
+
+    const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
 
     setScale((prevScale) => {
       // Allow deep CAD zoom: 5% (overview) to 1200% (max close-up detail)
       const nextScale = Math.min(Math.max(prevScale * zoomFactor, 0.05), 12.0);
       const ratio = nextScale / prevScale;
-      // Focus zoom towards current cursor position
+
+      // Perfectly anchor 2D zoom to the exact point under mouse cursor
       setPanOffset((prevPan) => ({
-        x: mouseX - (mouseX - prevPan.x) * ratio,
-        y: mouseY - (mouseY - prevPan.y) * ratio,
+        x: cursorOffsetX - (cursorOffsetX - prevPan.x) * ratio,
+        y: cursorOffsetY - (cursorOffsetY - prevPan.y) * ratio,
       }));
       return nextScale;
     });
