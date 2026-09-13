@@ -40,7 +40,9 @@ import {
   RefreshCw,
   LogOut,
   BarChart2,
-  Layers3
+  Layers3,
+  HardDrive,
+  Gauge
 } from 'lucide-react';
 import { User, CatalogItem, FloorTemplate, HomePlan, UserRole } from '../types/plan';
 import { ALL_CLIENT_PLANS } from '../services/api';
@@ -185,12 +187,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Dataset 1: Monthly Bar Chart (Projects Created vs Clients Onboarded)
   const barChartData = [
-    { month: 'Apr', projects: 8, clients: 5, renders: 340 },
-    { month: 'May', projects: 12, clients: 8, renders: 520 },
-    { month: 'Jun', projects: 15, clients: 11, renders: 480 },
-    { month: 'Jul', projects: 19, clients: 14, renders: 690 },
-    { month: 'Aug', projects: 24, clients: 18, renders: 890 },
-    { month: 'Sep', projects: 31, clients: 22, renders: 1140 },
+    { month: 'Apr', projects: 8, clients: 5, renders: 340, trend: 12 },
+    { month: 'May', projects: 12, clients: 8, renders: 520, trend: 18 },
+    { month: 'Jun', projects: 15, clients: 11, renders: 480, trend: 22 },
+    { month: 'Jul', projects: 19, clients: 14, renders: 690, trend: 28 },
+    { month: 'Aug', projects: 24, clients: 18, renders: 890, trend: 35 },
+    { month: 'Sep', projects: 31, clients: 22, renders: 1140, trend: 44 },
   ];
 
   // Client Projects List for Projects Tab
@@ -237,134 +239,158 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full bg-[#080f1e] text-slate-100 overflow-hidden font-sans select-none">
       {/* ========================================================= */}
-      {/* FIT-SCREEN DASHBOARD VIEW (NO VERTICAL SCROLL) */}
+      {/* FIT-SCREEN ADJUSTABLE DASHBOARD (HIGH DENSITY, NO GAPS) */}
       {/* ========================================================= */}
-      <main className="flex-1 h-full flex flex-col p-3 sm:p-4 lg:p-4.5 gap-3 overflow-hidden select-none">
+      <main className="flex-1 h-full flex flex-col p-3 lg:p-4 gap-3 overflow-hidden select-none">
         {/* ========================================================= */}
-        {/* TAB 1: DASHBOARD HOME (FITS 100% OF SCREEN) */}
+        {/* TAB 1: DASHBOARD HOME (PERFECTLY SCALED TO FIT SCREEN) */}
         {/* ========================================================= */}
         {currentTab === 'dashboard' && (
           <div className="flex-1 flex flex-col justify-between gap-3 h-full min-h-0 overflow-hidden">
-            {/* ROW 1: 4 COMPACT ESSENTIAL KPI CARDS (~14% Height) */}
+            {/* ROW 1: 4 HIGH-IMPACT KPI METRIC CARDS (SHRINK-0) */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
               {/* Card 1: Clients & Team */}
-              <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-xl p-3 border border-slate-800/90 shadow-lg shadow-black/20 flex items-center justify-between hover:border-emerald-500/40 transition">
-                <div className="min-w-0">
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block truncate">
+              <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-3 sm:p-3.5 border border-slate-800/90 shadow-xl shadow-black/20 flex flex-col justify-between hover:border-emerald-500/40 transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
                     Clients & Team
                   </span>
-                  <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-xl font-black text-white">{users.length} Users</span>
-                    <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      {onlineUsersCount} Online
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5 truncate">
-                    {clientCount} Clients • {designerCount} Designers
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center">
+                    <Users className="w-3.5 h-3.5" />
                   </div>
                 </div>
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                  <Users className="w-4 h-4" />
+                <div className="flex items-baseline justify-between mt-1">
+                  <div className="text-2xl font-black text-white tracking-tight">
+                    {users.length} <span className="text-xs font-normal text-slate-400">Users</span>
+                  </div>
+                  <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    {onlineUsersCount} Online
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-800/80 pt-1.5 mt-1">
+                  <span className="text-sky-400 font-semibold">{clientCount} Clients</span>
+                  <span>•</span>
+                  <span className="text-indigo-400 font-semibold">{designerCount} Designers</span>
+                  <span>•</span>
+                  <span className="text-slate-300 font-semibold">{adminCount} Admins</span>
                 </div>
               </div>
 
-              {/* Card 2: Projects */}
-              <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-xl p-3 border border-slate-800/90 shadow-lg shadow-black/20 flex items-center justify-between hover:border-sky-500/40 transition">
-                <div className="min-w-0">
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block truncate">
+              {/* Card 2: Architectural Plans */}
+              <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-3 sm:p-3.5 border border-slate-800/90 shadow-xl shadow-black/20 flex flex-col justify-between hover:border-sky-500/40 transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
                     Architectural Plans
                   </span>
-                  <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-xl font-black text-white">{users.length + templates.length} Projects</span>
-                    <span className="text-[11px] font-bold text-sky-400">+24% Active</span>
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5 truncate">
-                    {users.length} Suites • {templates.length} Templates
+                  <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center justify-center">
+                    <FolderKanban className="w-3.5 h-3.5" />
                   </div>
                 </div>
-                <div className="w-8 h-8 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center justify-center shrink-0">
-                  <FolderKanban className="w-4 h-4" />
+                <div className="flex items-baseline justify-between mt-1">
+                  <div className="text-2xl font-black text-white tracking-tight">
+                    {users.length + templates.length} <span className="text-xs font-normal text-slate-400">Plans</span>
+                  </div>
+                  <span className="text-[11px] font-bold text-sky-400 flex items-center gap-0.5 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
+                    <TrendingUp className="w-3 h-3" /> +24% MoM
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-800/80 pt-1.5 mt-1">
+                  <span>{users.length} Custom Suites</span>
+                  <span>•</span>
+                  <span className="text-sky-400 font-semibold">{templates.length} Blueprints</span>
                 </div>
               </div>
 
-              {/* Card 3: 3D Catalog Items */}
-              <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-xl p-3 border border-slate-800/90 shadow-lg shadow-black/20 flex items-center justify-between hover:border-amber-500/40 transition">
-                <div className="min-w-0">
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block truncate">
+              {/* Card 3: 3D Catalog Models */}
+              <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-3 sm:p-3.5 border border-slate-800/90 shadow-xl shadow-black/20 flex flex-col justify-between hover:border-amber-500/40 transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
                     3D Element Catalog
                   </span>
-                  <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-xl font-black text-amber-400">{catalog.length} Models</span>
-                    <span className="text-[11px] font-bold text-slate-400">OBJ / GLTF</span>
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5 truncate">
-                    {catalog.filter((c) => c.isCustom).length} Custom • 6 Room Categories
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center">
+                    <Box className="w-3.5 h-3.5" />
                   </div>
                 </div>
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0">
-                  <Box className="w-4 h-4" />
+                <div className="flex items-baseline justify-between mt-1">
+                  <div className="text-2xl font-black text-amber-400 tracking-tight">
+                    {catalog.length} <span className="text-xs font-normal text-slate-400">Models</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-300 bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700">
+                    OBJ & GLTF
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-800/80 pt-1.5 mt-1">
+                  <span>{catalog.filter((c) => c.isCustom).length} Custom Assets</span>
+                  <span>•</span>
+                  <span className="text-amber-400 font-semibold">6 Categories</span>
                 </div>
               </div>
 
-              {/* Card 4: Multi-Floor Total Area */}
-              <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-xl p-3 border border-slate-800/90 shadow-lg shadow-black/20 flex items-center justify-between hover:border-purple-500/40 transition">
-                <div className="min-w-0">
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block truncate">
+              {/* Card 4: Multi-Floor Total Space */}
+              <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-3 sm:p-3.5 border border-slate-800/90 shadow-xl shadow-black/20 flex flex-col justify-between hover:border-purple-500/40 transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
                     Multi-Floor Area & Walls
                   </span>
-                  <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-xl font-black text-purple-300">
-                      {totalFloorAreaSqM > 0 ? `${totalFloorAreaSqM.toFixed(1)} m²` : '240 m²'}
-                    </span>
-                    <span className="text-[11px] font-bold text-purple-400">
-                      {plan.floors?.length || 2} Levels
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5 truncate">
-                    {plan.rooms.length} Rooms • {plan.walls.length} CAD Walls
+                  <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center">
+                    <Building className="w-3.5 h-3.5" />
                   </div>
                 </div>
-                <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center shrink-0">
-                  <Building className="w-4 h-4" />
+                <div className="flex items-baseline justify-between mt-1">
+                  <div className="text-2xl font-black text-purple-300 tracking-tight">
+                    {totalFloorAreaSqM > 0 ? `${totalFloorAreaSqM.toFixed(1)} m²` : '240.0 m²'}
+                  </div>
+                  <span className="text-[10px] font-bold text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
+                    {plan.floors?.length || 2} Floors
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-800/80 pt-1.5 mt-1">
+                  <span>{plan.rooms.length} Defined Rooms</span>
+                  <span>•</span>
+                  <span className="text-purple-400 font-semibold">{plan.walls.length} CAD Walls</span>
                 </div>
               </div>
             </div>
 
-            {/* ROW 2: MAIN VISUAL CHARTS GRID (FLEXIBLE HEIGHT, ~72% Height) */}
+            {/* ROW 2: MAIN HIGH-DENSITY VISUAL CHARTS GRID (FLEX-1, ZERO EMPTY VOIDS) */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1 min-h-0 overflow-hidden">
-              {/* CHART 1: MONTHLY PROJECTS & CLIENTS BAR CHART (6 Cols) */}
+              {/* 1. CHART 1: MONTHLY PROJECTS & CLIENT GROWTH BAR CHART (6 COLS) */}
               <div className="lg:col-span-6 bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-4 border border-slate-800/90 shadow-xl shadow-black/20 flex flex-col justify-between overflow-hidden">
-                <div className="flex items-center justify-between gap-2 mb-1">
+                {/* Header */}
+                <div className="flex items-center justify-between gap-2 shrink-0 mb-1">
                   <div className="flex items-center gap-2">
-                    <span className="p-1 rounded-md bg-sky-500/10 text-sky-400">
-                      <BarChart2 className="w-3.5 h-3.5" />
+                    <span className="p-1.5 rounded-lg bg-sky-500/10 text-sky-400">
+                      <BarChart2 className="w-4 h-4" />
                     </span>
-                    <h2 className="text-xs font-bold text-white">Monthly Projects & Client Growth</h2>
+                    <div>
+                      <h2 className="text-xs font-bold text-white leading-tight">Monthly Projects & Client Growth</h2>
+                      <span className="text-[10px] text-slate-400">Architectural velocity vs client onboarding</span>
+                    </div>
                   </div>
 
                   {/* Legend */}
-                  <div className="flex items-center gap-3 text-[11px] font-semibold bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
-                    <div className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded bg-sky-400" />
+                  <div className="flex items-center gap-3 text-[10px] font-semibold bg-slate-900/90 px-2.5 py-1 rounded-lg border border-slate-800">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded bg-sky-400 shadow-sm shadow-sky-400/50" />
                       <span className="text-slate-300">Projects ({users.length + templates.length})</span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded bg-indigo-500" />
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded bg-indigo-500 shadow-sm shadow-indigo-400/50" />
                       <span className="text-slate-300">Clients ({clientCount})</span>
                     </div>
                   </div>
                 </div>
 
-                {/* SVG Bar Chart Graphic */}
-                <div className="relative w-full flex-1 min-h-[140px] flex items-center justify-center my-1">
-                  <svg viewBox="0 0 520 160" className="w-full h-full overflow-visible">
+                {/* SVG Bar Chart (Fills available vertical area dynamically) */}
+                <div className="relative w-full flex-1 min-h-[160px] flex items-center justify-center my-1">
+                  <svg viewBox="0 0 520 200" className="w-full h-full overflow-visible">
                     <defs>
-                      <linearGradient id="skyBarG" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient id="skyBarGradFill" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#38bdf8" />
                         <stop offset="100%" stopColor="#0284c7" />
                       </linearGradient>
-                      <linearGradient id="indigoBarG" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient id="indigoBarGradFill" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#818cf8" />
                         <stop offset="100%" stopColor="#4f46e5" />
                       </linearGradient>
@@ -372,20 +398,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                     {/* Gridlines */}
                     {[0, 10, 20, 30].map((val) => {
-                      const y = 135 - (val / 35) * 115;
+                      const y = 165 - (val / 35) * 145;
                       return (
                         <g key={val}>
-                          <line x1="30" y1={y} x2="505" y2={y} stroke="#1e293b" strokeDasharray="3 3" strokeWidth="1" />
-                          <text x="20" y={y + 3} fill="#64748b" fontSize="9" fontWeight="bold" textAnchor="end">{val}</text>
+                          <line x1="30" y1={y} x2="510" y2={y} stroke="#1e293b" strokeDasharray="3 3" strokeWidth="1" />
+                          <text x="20" y={y + 3} fill="#64748b" fontSize="10" fontWeight="bold" textAnchor="end">{val}</text>
                         </g>
                       );
                     })}
 
                     {/* Bars */}
                     {barChartData.map((d, idx) => {
-                      const groupX = 55 + idx * 75;
-                      const pHeight = (d.projects / 35) * 115;
-                      const cHeight = (d.clients / 35) * 115;
+                      const groupX = 55 + idx * 76;
+                      const pHeight = (d.projects / 35) * 145;
+                      const cHeight = (d.clients / 35) * 145;
                       const isHovered = hoveredBarIndex === idx;
 
                       return (
@@ -396,20 +422,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           onMouseLeave={() => setHoveredBarIndex(null)}
                         >
                           {isHovered && (
-                            <rect x={groupX - 6} y="15" width="56" height="122" rx="6" fill="#1e293b" opacity="0.6" />
+                            <rect x={groupX - 6} y="15" width="58" height="152" rx="6" fill="#1e293b" opacity="0.6" />
                           )}
-                          <rect x={groupX} y={135 - pHeight} width="18" height={pHeight} rx="3" fill="url(#skyBarG)" />
-                          <rect x={groupX + 22} y={135 - cHeight} width="18" height={cHeight} rx="3" fill="url(#indigoBarG)" />
-                          <text x={groupX + 20} y="150" fill={isHovered ? '#ffffff' : '#94a3b8'} fontSize="10" fontWeight="bold" textAnchor="middle">
+                          
+                          {/* Project Bar */}
+                          <rect
+                            x={groupX}
+                            y={165 - pHeight}
+                            width="20"
+                            height={pHeight}
+                            rx="4"
+                            fill="url(#skyBarGradFill)"
+                            filter={isHovered ? 'drop-shadow(0 0 8px rgba(56, 189, 248, 0.5))' : undefined}
+                          />
+
+                          {/* Client Bar */}
+                          <rect
+                            x={groupX + 24}
+                            y={165 - cHeight}
+                            width="20"
+                            height={cHeight}
+                            rx="4"
+                            fill="url(#indigoBarGradFill)"
+                            filter={isHovered ? 'drop-shadow(0 0 8px rgba(129, 140, 248, 0.5))' : undefined}
+                          />
+
+                          {/* Value above bar if hovered */}
+                          {isHovered && (
+                            <>
+                              <text x={groupX + 10} y={158 - pHeight} fill="#38bdf8" fontSize="9" fontWeight="bold" textAnchor="middle">{d.projects}</text>
+                              <text x={groupX + 34} y={158 - cHeight} fill="#818cf8" fontSize="9" fontWeight="bold" textAnchor="middle">{d.clients}</text>
+                            </>
+                          )}
+
+                          {/* Month Label */}
+                          <text x={groupX + 22} y="185" fill={isHovered ? '#ffffff' : '#94a3b8'} fontSize="11" fontWeight="bold" textAnchor="middle">
                             {d.month}
                           </text>
 
-                          {/* Hover Tooltip */}
+                          {/* Tooltip */}
                           {isHovered && (
                             <g>
-                              <rect x={groupX - 22} y={Math.min(135 - pHeight, 135 - cHeight) - 30} width="84" height="24" rx="5" fill="#091020" stroke="#38bdf8" strokeWidth="1" />
-                              <text x={groupX + 20} y={Math.min(135 - pHeight, 135 - cHeight) - 14} fill="#ffffff" fontSize="9" fontWeight="bold" textAnchor="middle">
-                                {d.projects} Proj • {d.clients} Cli
+                              <rect x={groupX - 25} y={Math.min(165 - pHeight, 165 - cHeight) - 34} width="95" height="26" rx="6" fill="#091020" stroke="#38bdf8" strokeWidth="1" />
+                              <text x={groupX + 22} y={Math.min(165 - pHeight, 165 - cHeight) - 17} fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">
+                                {d.projects} Plans • {d.clients} Clients
                               </text>
                             </g>
                           )}
@@ -419,145 +475,179 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </svg>
                 </div>
 
-                {/* Bottom Bar Metrics */}
-                <div className="grid grid-cols-3 gap-2 border-t border-slate-800/80 pt-2 text-center text-[10px]">
-                  <div><span className="text-slate-400 block">Average</span><strong className="text-sky-400 font-bold">18 Proj/mo</strong></div>
-                  <div><span className="text-slate-400 block">Conversion</span><strong className="text-emerald-400 font-bold">86.5%</strong></div>
-                  <div><span className="text-slate-400 block">Peak Month</span><strong className="text-indigo-400 font-bold">+31 (Sep)</strong></div>
+                {/* Dense Metric Summary Strip */}
+                <div className="grid grid-cols-4 gap-2 border-t border-slate-800/80 pt-2 text-center text-[10px] shrink-0">
+                  <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
+                    <span className="text-slate-400 block">Monthly Avg</span>
+                    <strong className="text-sky-400 font-bold text-xs">18 Plans/mo</strong>
+                  </div>
+                  <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
+                    <span className="text-slate-400 block">Conversion</span>
+                    <strong className="text-emerald-400 font-bold text-xs">86.5% Closed</strong>
+                  </div>
+                  <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
+                    <span className="text-slate-400 block">CAD Exports</span>
+                    <strong className="text-indigo-400 font-bold text-xs">380/mo</strong>
+                  </div>
+                  <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
+                    <span className="text-slate-400 block">Peak Month</span>
+                    <strong className="text-purple-400 font-bold text-xs">+31 (Sep)</strong>
+                  </div>
                 </div>
               </div>
 
-              {/* CHART 2: 3D CATALOG DONUT & PROGRESS BARS (3 Cols) */}
+              {/* 2. CHART 2: 3D CATALOG DONUT & COMPLETE CATEGORY BREAKDOWN (3 COLS) */}
               <div className="lg:col-span-3 bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-4 border border-slate-800/90 shadow-xl shadow-black/20 flex flex-col justify-between overflow-hidden">
-                <div className="flex items-center justify-between mb-1">
+                {/* Header */}
+                <div className="flex items-center justify-between shrink-0 mb-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="p-1 rounded-md bg-amber-500/10 text-amber-400">
-                      <PieChartIcon className="w-3.5 h-3.5" />
+                    <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+                      <PieChartIcon className="w-4 h-4" />
                     </span>
-                    <h2 className="text-xs font-bold text-white">3D Catalog Mix</h2>
+                    <div>
+                      <h2 className="text-xs font-bold text-white leading-tight">3D Catalog Mix</h2>
+                      <span className="text-[10px] text-slate-400">{catalog.length} Verified Models</span>
+                    </div>
                   </div>
-                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    {catalog.length} Total
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    OBJ/GLTF
                   </span>
                 </div>
 
-                {/* Donut Graphic */}
-                <div className="flex items-center justify-center my-0.5 relative">
-                  <svg className="w-24 h-24 transform -rotate-90">
-                    <circle cx="48" cy="48" r="36" stroke="#1e293b" strokeWidth="11" fill="transparent" />
-                    <circle cx="48" cy="48" r="36" stroke="#38bdf8" strokeWidth="11" strokeDasharray="226" strokeDashoffset="120" fill="transparent" strokeLinecap="round" />
-                    <circle cx="48" cy="48" r="36" stroke="#818cf8" strokeWidth="11" strokeDasharray="226" strokeDashoffset="180" fill="transparent" strokeLinecap="round" />
-                    <circle cx="48" cy="48" r="36" stroke="#f59e0b" strokeWidth="11" strokeDasharray="226" strokeDashoffset="205" fill="transparent" strokeLinecap="round" />
+                {/* Large Donut Graphic */}
+                <div className="flex items-center justify-center my-1 relative shrink-0">
+                  <svg className="w-28 h-28 transform -rotate-90">
+                    <circle cx="56" cy="56" r="42" stroke="#1e293b" strokeWidth="12" fill="transparent" />
+                    <circle cx="56" cy="56" r="42" stroke="#38bdf8" strokeWidth="12" strokeDasharray="264" strokeDashoffset="140" fill="transparent" strokeLinecap="round" />
+                    <circle cx="56" cy="56" r="42" stroke="#818cf8" strokeWidth="12" strokeDasharray="264" strokeDashoffset="200" fill="transparent" strokeLinecap="round" />
+                    <circle cx="56" cy="56" r="42" stroke="#f59e0b" strokeWidth="12" strokeDasharray="264" strokeDashoffset="230" fill="transparent" strokeLinecap="round" />
+                    <circle cx="56" cy="56" r="42" stroke="#10b981" strokeWidth="12" strokeDasharray="264" strokeDashoffset="250" fill="transparent" strokeLinecap="round" />
                   </svg>
                   <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase">Models</span>
-                    <span className="text-sm font-black text-white">{catalog.length}</span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">3D Models</span>
+                    <span className="text-base font-black text-white">{catalog.length}</span>
                   </div>
                 </div>
 
-                {/* Compact Progress Bars */}
-                <div className="space-y-1.5 text-[10px]">
+                {/* High Density Room Category Progress Bars */}
+                <div className="space-y-1.5 text-[10px] flex-1 flex flex-col justify-center overflow-hidden">
                   <div>
                     <div className="flex justify-between font-semibold mb-0.5">
-                      <span className="text-slate-300">🛋️ Living</span>
-                      <span className="text-white font-bold">{categoryCounts.Living}</span>
+                      <span className="text-slate-300">🛋️ Living & Seating</span>
+                      <span className="text-sky-400 font-bold">{categoryCounts.Living} items</span>
                     </div>
-                    <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
+                    <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
                       <div className="h-full bg-sky-400" style={{ width: `${Math.min(100, (categoryCounts.Living / (catalog.length || 1)) * 100)}%` }} />
                     </div>
                   </div>
 
                   <div>
                     <div className="flex justify-between font-semibold mb-0.5">
-                      <span className="text-slate-300">🛏️ Bedroom</span>
-                      <span className="text-white font-bold">{categoryCounts.Bedroom}</span>
+                      <span className="text-slate-300">💡 Lighting & Ceiling</span>
+                      <span className="text-amber-400 font-bold">{categoryCounts.Lighting} items</span>
                     </div>
-                    <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
-                      <div className="h-full bg-indigo-400" style={{ width: `${Math.min(100, (categoryCounts.Bedroom / (catalog.length || 1)) * 100)}%` }} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between font-semibold mb-0.5">
-                      <span className="text-slate-300">💡 Lighting</span>
-                      <span className="text-white font-bold">{categoryCounts.Lighting}</span>
-                    </div>
-                    <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
+                    <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
                       <div className="h-full bg-amber-400" style={{ width: `${Math.min(100, (categoryCounts.Lighting / (catalog.length || 1)) * 100)}%` }} />
                     </div>
                   </div>
 
                   <div>
                     <div className="flex justify-between font-semibold mb-0.5">
-                      <span className="text-slate-300">🍳 Kitchen</span>
-                      <span className="text-white font-bold">{categoryCounts.Kitchen}</span>
+                      <span className="text-slate-300">🛏️ Bedroom & Storage</span>
+                      <span className="text-indigo-400 font-bold">{categoryCounts.Bedroom} items</span>
                     </div>
-                    <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
+                    <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                      <div className="h-full bg-indigo-400" style={{ width: `${Math.min(100, (categoryCounts.Bedroom / (catalog.length || 1)) * 100)}%` }} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between font-semibold mb-0.5">
+                      <span className="text-slate-300">🍳 Kitchen & Dining</span>
+                      <span className="text-emerald-400 font-bold">{categoryCounts.Kitchen} items</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
                       <div className="h-full bg-emerald-400" style={{ width: `${Math.min(100, (categoryCounts.Kitchen / (catalog.length || 1)) * 100)}%` }} />
                     </div>
                   </div>
                 </div>
+
+                {/* Format Tags Footer */}
+                <div className="flex items-center justify-between border-t border-slate-800/80 pt-2 text-[9px] text-slate-400 shrink-0">
+                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-sky-300 font-mono">.OBJ</span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-indigo-300 font-mono">.GLTF</span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-amber-300 font-mono">PBR Shaders</span>
+                  <span className="text-emerald-400 font-bold">100% CAD Ready</span>
+                </div>
               </div>
 
-              {/* CHART 3: MULTI-FLOOR LEVEL DISTRIBUTION & COMPUTE (3 Cols) */}
+              {/* 3. CHART 3: MULTI-FLOOR ARCHITECTURE & 3D ENGINE TELEMETRY (3 COLS) */}
               <div className="lg:col-span-3 bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-4 border border-slate-800/90 shadow-xl shadow-black/20 flex flex-col justify-between overflow-hidden">
-                <div className="flex items-center justify-between mb-1">
+                {/* Header */}
+                <div className="flex items-center justify-between shrink-0 mb-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="p-1 rounded-md bg-purple-500/10 text-purple-400">
-                      <Layers3 className="w-3.5 h-3.5" />
+                    <span className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400">
+                      <Layers3 className="w-4 h-4" />
                     </span>
-                    <h2 className="text-xs font-bold text-white">Multi-Floor Space</h2>
+                    <div>
+                      <h2 className="text-xs font-bold text-white leading-tight">Multi-Floor Space</h2>
+                      <span className="text-[10px] text-slate-400">Vertical level distribution</span>
+                    </div>
                   </div>
-                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
                     {plan.floors?.length || 2} Floors
                   </span>
                 </div>
 
-                {/* Level Stack Cards */}
-                <div className="space-y-2 my-1 text-[11px]">
+                {/* Level Cards Stack */}
+                <div className="space-y-2 my-1 flex-1 flex flex-col justify-center overflow-hidden">
                   {(plan.floors || [
-                    { level: 0, name: 'Ground Floor', height: 250 },
-                    { level: 1, name: '1st Floor', height: 250 },
-                  ]).slice(0, 2).map((fl, i) => {
+                    { level: 0, name: 'Ground Floor (Living & Dining)', height: 250 },
+                    { level: 1, name: '1st Floor (Master Suite & Terrace)', height: 250 },
+                  ]).map((fl, i) => {
                     const areaSqM = i === 0 ? 120 : 95;
                     return (
-                      <div key={fl.level} className="bg-slate-900/70 p-2 rounded-xl border border-slate-800">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-white text-[10px]">L{fl.level}: {fl.name}</span>
-                          <span className="text-emerald-400 font-bold text-[10px]">{areaSqM} m²</span>
+                      <div key={fl.level} className="bg-slate-900/80 p-2 rounded-xl border border-slate-800 flex flex-col justify-between">
+                        <div className="flex items-center justify-between text-[11px] mb-1">
+                          <span className="font-bold text-white truncate max-w-[150px]">L{fl.level}: {fl.name}</span>
+                          <span className="text-emerald-400 font-bold font-mono">{areaSqM} m²</span>
                         </div>
-                        <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-purple-500 to-indigo-500" style={{ width: `${(areaSqM / 140) * 100}%` }} />
+                        <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden mb-1">
+                          <div className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full" style={{ width: `${(areaSqM / 140) * 100}%` }} />
+                        </div>
+                        <div className="flex items-center justify-between text-[9px] text-slate-400">
+                          <span>{i === 0 ? '4 Rooms • 18 Items' : '3 Rooms • 12 Items'}</span>
+                          <span className="text-purple-300 font-mono">H: {fl.height}cm</span>
                         </div>
                       </div>
                     );
                   })}
                 </div>
 
-                {/* WebGL 60 FPS Telemetry Pill */}
-                <div className="bg-slate-900/60 p-2 rounded-xl border border-slate-800 flex items-center justify-between text-[10px]">
+                {/* Real-Time WebGL 60 FPS Telemetry Pill */}
+                <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800 flex items-center justify-between text-[10px] my-1 shrink-0">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-slate-300 font-semibold">WebGL 2.0 Engine</span>
+                    <span className="text-slate-200 font-bold">Three.js WebGL 2.0</span>
                   </div>
-                  <strong className="text-sky-400 font-bold">60 FPS Active</strong>
+                  <span className="text-sky-400 font-mono font-bold">60 FPS • 128 Draws</span>
                 </div>
 
-                {/* Action Link */}
+                {/* Primary Launch Action Button */}
                 <button
                   onClick={() => {
                     if (onSwitchToStudio) onSwitchToStudio();
                     else onOpenStudioWithTemplate('duplex_2floor');
                   }}
-                  className="w-full py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 text-white text-[11px] font-bold shadow-md shadow-sky-500/20 transition flex items-center justify-center gap-1 active:scale-95"
+                  className="w-full py-2 rounded-xl bg-gradient-to-r from-sky-500 via-indigo-600 to-purple-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-sky-500/25 transition flex items-center justify-center gap-1.5 active:scale-95 shrink-0"
                 >
-                  <Sparkles className="w-3 h-3" />
-                  <span>Open 3D Viewport</span>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Open 3D Viewport Studio</span>
                 </button>
               </div>
             </div>
 
-            {/* ROW 3: COMPACT 1-LINE STUDIO QUICK SHORTCUTS & TELEMETRY (~14% Height) */}
+            {/* ROW 3: STUDIO QUICK SHORTCUTS & SERVER HEALTH (SHRINK-0) */}
             <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-xl p-2.5 border border-slate-800/90 shadow-xl shadow-black/20 flex flex-wrap items-center justify-between gap-2 shrink-0">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider hidden sm:inline">
