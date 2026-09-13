@@ -88,7 +88,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex flex-col min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="font-extrabold text-slate-900 text-sm tracking-tight truncate">
-              SweetHome
+              Visual Rendered
             </span>
             <span
               className={`text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded-full border shrink-0 ${

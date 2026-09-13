@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Sweet Home 3D - Web CAD Studio & 3D Interactive Client Tour',
-  description: 'Full-featured architectural CAD studio & 3D WebGL presentation platform powered by Next.js and Spring Boot.',
+  title: 'Visual Rendered — Web CAD Studio & 3D Interactive Client Tour',
+  description: 'Full-featured architectural CAD studio & 3D WebGL presentation platform with real-time PostgreSQL synchronization.',
 };
 
 export default function RootLayout({
