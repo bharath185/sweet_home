@@ -305,10 +305,10 @@ export const LoginSimulator3D: React.FC = () => {
       furnitureGroup.add(tableMesh);
     });
 
-    // C. Armchair from inventory (/models/armchair.obj) - Angled to face northwest directly toward the coffee table
+    // C. Single Seater Armchair from inventory (/models/armchair.obj) - Angled correctly to face inward directly toward the coffee table
     loadInventoryItem('/models/armchair.obj', 0.8, 0.8, 0.8, armchairMat).then((chairMesh) => {
-      chairMesh.rotation.y = Math.PI * 0.75;
-      chairMesh.position.set(1.25, 0, 0.15);
+      chairMesh.rotation.y = -Math.PI * 0.70;
+      chairMesh.position.set(1.15, 0, 0.1);
       furnitureGroup.add(chairMesh);
     });
 
