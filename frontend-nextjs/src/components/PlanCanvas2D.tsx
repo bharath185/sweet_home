@@ -110,6 +110,16 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   const [scale, setScale] = useState<number>(0.8);
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDraggingVisitor, setIsDraggingVisitor] = useState(false);
+  const [walkWarning, setWalkWarning] = useState<string | null>(null);
+  const walkWarningTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const triggerWalkWarning = (msg: string) => {
+    setWalkWarning(msg);
+    if (walkWarningTimerRef.current) clearTimeout(walkWarningTimerRef.current);
+    walkWarningTimerRef.current = setTimeout(() => {
+      setWalkWarning(null);
+    }, 2800);
+  };
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
 
@@ -1541,6 +1551,10 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       const clampedX = Math.max(minX, Math.min(maxX, curFloorPlan.x));
       const clampedY = Math.max(minY, Math.min(maxY, curFloorPlan.y));
 
+      if (clampedX !== curFloorPlan.x || clampedY !== curFloorPlan.y) {
+        triggerWalkWarning(`⚠️ Walk View locked to ${activeFloor === 0 ? 'Ground Floor' : '1st Floor'}. Click a floor tab above to switch floors.`);
+      }
+
       onUpdateVisitorCamera({
         x: Math.round(clampedX),
         y: Math.round(clampedY),
@@ -2289,6 +2303,14 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Walk View Floor Constraint Warning Banner */}
+      {walkWarning && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-amber-500 text-slate-950 font-bold px-4 py-2 rounded-xl shadow-xl border border-amber-400 text-xs animate-bounce">
+          <AlertTriangle className="w-4 h-4 text-slate-950 shrink-0" />
+          <span>{walkWarning}</span>
+        </div>
+      )}
 
       {/* Collision Alert Banner (Non-overlapping at Bottom Left) */}
       {collidingItemIds.size > 0 && (

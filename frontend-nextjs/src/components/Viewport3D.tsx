@@ -192,6 +192,18 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
   const [timeOfDay, setTimeOfDay] = useState<number>(plan.environment?.timeOfDay || 14.5);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [walkWarning, setWalkWarning] = useState<string | null>(null);
+  const walkWarningRef = useRef<string | null>(null);
+  walkWarningRef.current = walkWarning;
+  const walkWarningTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const triggerWalkWarning = (msg: string) => {
+    setWalkWarning(msg);
+    if (walkWarningTimerRef.current) clearTimeout(walkWarningTimerRef.current);
+    walkWarningTimerRef.current = setTimeout(() => {
+      setWalkWarning(null);
+    }, 2800);
+  };
 
   // Aerial Orbit State
   const isDraggingRef = useRef(false);
@@ -506,10 +518,47 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           visitorYawRef.current -= 1.8 * delta;
         }
 
-        // Apply Visitor Camera Position & Look Direction with exact 3D Floor Offset
-        const vp = visitorPosRef.current;
-        const curLevel = visitorCameraProp?.floorLevel !== undefined ? visitorCameraProp.floorLevel : (activeFloorRef.current || 0);
+        // Apply Visitor Camera Position & Look Direction with exact 3D Floor Offset strictly on activeFloor
+        const curLevel = activeFloorRef.current ?? 0;
         const curOffset = getFloor3DOffset(curLevel);
+
+        // Clamp visitor position within active floor boundary in 3D
+        const flRooms = planRef.current.rooms.filter((r) => (r.floorLevel ?? 0) === curLevel);
+        const flWalls = planRef.current.walls.filter((w) => (w.floorLevel ?? 0) === curLevel);
+        let fMinX = -3.8, fMaxX = 3.8, fMinZ = -2.8, fMaxZ = 2.8;
+        if (flRooms.length > 0 || flWalls.length > 0) {
+          fMinX = Infinity; fMaxX = -Infinity; fMinZ = Infinity; fMaxZ = -Infinity;
+          flRooms.forEach((r) => {
+            r.points.forEach((p) => {
+              fMinX = Math.min(fMinX, p.x * 0.01);
+              fMaxX = Math.max(fMaxX, p.x * 0.01);
+              fMinZ = Math.min(fMinZ, p.y * 0.01);
+              fMaxZ = Math.max(fMaxZ, p.y * 0.01);
+            });
+          });
+          flWalls.forEach((w) => {
+            fMinX = Math.min(fMinX, w.xStart * 0.01, w.xEnd * 0.01);
+            fMaxX = Math.max(fMaxX, w.xStart * 0.01, w.xEnd * 0.01);
+            fMinZ = Math.min(fMinZ, w.yStart * 0.01, w.yEnd * 0.01);
+            fMaxZ = Math.max(fMaxZ, w.yStart * 0.01, w.yEnd * 0.01);
+          });
+          fMinX -= 0.2; fMaxX += 0.2; fMinZ -= 0.2; fMaxZ += 0.2;
+        }
+
+        const rawVx = visitorPosRef.current.x;
+        const rawVz = visitorPosRef.current.z;
+        const clampedVx = Math.max(fMinX, Math.min(fMaxX, rawVx));
+        const clampedVz = Math.max(fMinZ, Math.min(fMaxZ, rawVz));
+
+        if (clampedVx !== rawVx || clampedVz !== rawVz) {
+          visitorPosRef.current.x = clampedVx;
+          visitorPosRef.current.z = clampedVz;
+          if (!walkWarningRef.current) {
+            triggerWalkWarning(`⚠️ Walk View locked to ${curLevel === 0 ? 'Ground Floor' : '1st Floor'}. Please switch floor in top bar to walk other levels.`);
+          }
+        }
+
+        const vp = visitorPosRef.current;
         camera.position.set(
           vp.x + curOffset.x,
           curOffset.y + 1.6,
@@ -1630,12 +1679,13 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     }
   };
 
-  // Switch to Virtual Visitor mode and place in center of primary room
+  // Switch to Virtual Visitor mode and place in center of primary room on the currently selected floor
   const handleSwitchToVisitor = () => {
     setCameraMode('visitor');
-    onSelectId(null); // Close all properties and inspector panels in walk view!
+    onSelectId(null);
 
-    const targetRoom = plan.rooms.find((r) => (r.floorLevel ?? 0) === (activeFloor ?? 0)) || plan.rooms[0];
+    const currentTargetFloor = activeFloorRef.current !== undefined ? activeFloorRef.current : (activeFloor || 0);
+    const targetRoom = plan.rooms.find((r) => (r.floorLevel ?? 0) === currentTargetFloor) || plan.rooms[0];
     let initX = 0;
     let initZ = 0;
     if (targetRoom && targetRoom.points.length > 0) {
@@ -1653,7 +1703,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         y: Math.round(initZ * 100),
         yaw: 0,
         elevation: 160,
-        floorLevel: activeFloor,
+        floorLevel: currentTargetFloor,
       });
     }
   };
@@ -2021,6 +2071,14 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
                 <span>{room.name}</span>
               </button>
             ))}
+        </div>
+      )}
+
+      {/* Walk View Boundary Warning Alert */}
+      {walkWarning && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-amber-500 text-slate-950 font-bold px-4 py-2 rounded-xl shadow-xl border border-amber-400 text-xs animate-bounce">
+          <AlertTriangle className="w-4 h-4 text-slate-950 shrink-0" />
+          <span>{walkWarning}</span>
         </div>
       )}
 
