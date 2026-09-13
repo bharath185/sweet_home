@@ -44,6 +44,7 @@ import {
 import { HomePlan, FurnitureItem, Wall, CatalogItem } from '../types/plan';
 import { isTabletopItem, findSupportingHost, findNearestSupportingSurface } from '../services/tabletopAttachment';
 import { fallbackCatalog } from '../services/api';
+import { Catalog3DPreviewModal } from './Catalog3DPreviewModal';
 
 interface InspectorSidebarProps {
   plan: HomePlan;
@@ -190,6 +191,7 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
   const [activeMatCategory, setActiveMatCategory] = useState<string>('wood');
   const [catalogSearch, setCatalogSearch] = useState<string>('');
   const [selectedCatalogCategory, setSelectedCatalogCategory] = useState<string>('All');
+  const [previewCatalogItem, setPreviewCatalogItem] = useState<CatalogItem | null>(null);
 
   // If in Walk mode, force collapse properties and finish panels
   useEffect(() => {
@@ -453,16 +455,20 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                           : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-indigo-300 shadow-2xs'
                       }`}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div 
+                        onClick={() => setPreviewCatalogItem(item)}
+                        className="flex items-center gap-2 min-w-0 cursor-pointer flex-1"
+                        title="Click to view full 360° 3D Preview & materials"
+                      >
                         <div
-                          className={`w-8 h-8 rounded-sm flex items-center justify-center shrink-0 ${
-                            isDark ? 'bg-slate-800 text-indigo-400' : 'bg-indigo-50 text-indigo-600'
+                          className={`w-8 h-8 rounded-sm flex items-center justify-center shrink-0 transition group-hover:scale-105 ${
+                            isDark ? 'bg-slate-800 text-indigo-400 group-hover:bg-indigo-950/60 group-hover:text-indigo-300' : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100'
                           }`}
                         >
                           <Box className="w-4 h-4" />
                         </div>
-                        <div className="min-w-0">
-                          <h4 className="text-xs font-semibold truncate leading-tight">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-xs font-semibold truncate leading-tight group-hover:text-indigo-400 transition">
                             {item.name}
                           </h4>
                           <p className="text-[10px] text-slate-400 font-mono">
@@ -472,14 +478,29 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-xs font-bold uppercase tracking-wider hidden sm:inline-block ${
-                          isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-600'
-                        }`}>
-                          {item.category}
-                        </span>
+                        {/* 3D Preview Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewCatalogItem(item);
+                          }}
+                          className={`px-1.5 py-1 rounded-sm border text-[10px] font-semibold flex items-center gap-1 transition cursor-pointer ${
+                            isDark
+                              ? 'bg-slate-800 hover:bg-indigo-900/60 text-indigo-300 border-slate-700 hover:border-indigo-500/60'
+                              : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+                          }`}
+                          title="Interactive 360° 3D Preview"
+                        >
+                          <Eye className="w-3 h-3 text-indigo-400" />
+                          <span className="text-[10px]">3D</span>
+                        </button>
+
                         {onAddItem && (
                           <button
-                            onClick={() => onAddItem(item)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAddItem(item);
+                            }}
                             className="px-2 py-1 rounded-sm bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold transition shadow-2xs cursor-pointer flex items-center gap-0.5"
                             title="Add model to floorplan"
                           >
@@ -1010,6 +1031,14 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
           </span>
         </div>
       </aside>
+
+      {/* 3D Catalog Model Interactive Preview & Spec Studio Modal */}
+      <Catalog3DPreviewModal
+        item={previewCatalogItem}
+        isOpen={Boolean(previewCatalogItem)}
+        onClose={() => setPreviewCatalogItem(null)}
+        onAddItem={onAddItem}
+      />
     </div>
   );
 };
