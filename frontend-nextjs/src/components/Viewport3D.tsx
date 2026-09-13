@@ -2006,19 +2006,21 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       </div>
       )}
 
-      {/* Room Jump Pills in Visitor Mode (CAD studio only) */}
+      {/* Room Jump Pills in Visitor Mode (Constrained to activeFloor only) */}
       {!isCustomerMode && cameraMode === 'visitor' && plan.rooms.length > 0 && (
         <div className="absolute top-12 right-2.5 z-10 flex flex-wrap gap-1 max-w-xs justify-end">
-          {plan.rooms.map((room) => (
-            <button
-              key={room.id}
-              onClick={() => handleTeleportToRoom(room)}
-              className="px-2.5 py-1 rounded-lg bg-white/95 hover:bg-emerald-600 text-slate-700 hover:text-white text-[11px] font-medium border border-slate-200 shadow-sm backdrop-blur-md transition flex items-center gap-1"
-            >
-              <MapPin className="w-3 h-3 text-emerald-600" />
-              <span>{room.name}</span>
-            </button>
-          ))}
+          {plan.rooms
+            .filter((r) => (r.floorLevel ?? 0) === activeFloor)
+            .map((room) => (
+              <button
+                key={room.id}
+                onClick={() => handleTeleportToRoom(room)}
+                className="px-2.5 py-1 rounded-lg bg-white/95 hover:bg-emerald-600 text-slate-700 hover:text-white text-[11px] font-medium border border-slate-200 shadow-sm backdrop-blur-md transition flex items-center gap-1 cursor-pointer"
+              >
+                <MapPin className="w-3 h-3 text-emerald-600" />
+                <span>{room.name}</span>
+              </button>
+            ))}
         </div>
       )}
 

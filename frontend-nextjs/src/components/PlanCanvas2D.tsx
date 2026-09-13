@@ -1051,9 +1051,9 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     });
 
     // 10.5. Real-Time Virtual Visitor Person Position & FOV Vision Cone
-    // ONLY display when Walk Mode is active!
-    if (isWalkMode && visitorCamera && (visitorCamera.floorLevel === undefined || visitorCamera.floorLevel === activeFloor || canvasFloorMode === 'stacked' || canvasFloorMode === 'sideBySide')) {
-      const vPos = planToScreen(visitorCamera.x, visitorCamera.y, visitorCamera.floorLevel ?? activeFloor);
+    // STRICTLY DISPLAY ONLY ON THE ACTIVE SELECTED FLOOR!
+    if (isWalkMode && visitorCamera && (visitorCamera.floorLevel === undefined || visitorCamera.floorLevel === activeFloor)) {
+      const vPos = planToScreen(visitorCamera.x, visitorCamera.y, activeFloor);
       const vAngle = visitorCamera.yaw || 0;
 
       ctx.save();
@@ -1275,9 +1275,9 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
     const clickPlan = screenToPlan(e.clientX, e.clientY);
 
-    // 2D Virtual Visitor Drag Interaction (Only when in Walk Mode)
-    if (isWalkMode && visitorCamera && toolMode === 'select') {
-      const vScreen = planToScreen(visitorCamera.x, visitorCamera.y, visitorCamera.floorLevel ?? activeFloor);
+    // 2D Virtual Visitor Drag Interaction (Only on the active selected floor)
+    if (isWalkMode && visitorCamera && toolMode === 'select' && (visitorCamera.floorLevel === undefined || visitorCamera.floorLevel === activeFloor)) {
+      const vScreen = planToScreen(visitorCamera.x, visitorCamera.y, activeFloor);
       const vDistScreen = Math.hypot(clickScreenX - vScreen.x, clickScreenY - vScreen.y);
       if (vDistScreen <= 24) {
         setIsDraggingVisitor(true);
@@ -1513,17 +1513,38 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     const currentPlan = screenToPlan(e.clientX, e.clientY);
     setMouseCanvasPos(currentPlan);
 
-    // 2D Virtual Visitor Dragging across any floor
+    // 2D Virtual Visitor Dragging (Strictly constrained to the active selected floor)
     if (isDraggingVisitor && onUpdateVisitorCamera) {
-      const targetFloor = getFloorAtScreen(e.clientX, e.clientY);
-      if (targetFloor !== activeFloor && onFloorChange) {
-        onFloorChange(targetFloor);
+      const curFloorPlan = screenToPlan(e.clientX, e.clientY, activeFloor, true);
+      
+      // Calculate active floor boundary to strictly clamp movement within the active floor
+      let minX = -360, maxX = 360, minY = -260, maxY = 260;
+      if (floorRooms.length > 0 || floorWalls.length > 0) {
+        minX = Infinity; maxX = -Infinity; minY = Infinity; maxY = -Infinity;
+        floorRooms.forEach((r) => {
+          r.points.forEach((p) => {
+            minX = Math.min(minX, p.x);
+            maxX = Math.max(maxX, p.x);
+            minY = Math.min(minY, p.y);
+            maxY = Math.max(maxY, p.y);
+          });
+        });
+        floorWalls.forEach((w) => {
+          minX = Math.min(minX, w.xStart, w.xEnd);
+          maxX = Math.max(maxX, w.xStart, w.xEnd);
+          minY = Math.min(minY, w.yStart, w.yEnd);
+          maxY = Math.max(maxY, w.yStart, w.yEnd);
+        });
+        minX -= 20; maxX += 20; minY -= 20; maxY += 20;
       }
-      const curFloorPlan = screenToPlan(e.clientX, e.clientY, targetFloor, true);
+
+      const clampedX = Math.max(minX, Math.min(maxX, curFloorPlan.x));
+      const clampedY = Math.max(minY, Math.min(maxY, curFloorPlan.y));
+
       onUpdateVisitorCamera({
-        x: Math.round(curFloorPlan.x),
-        y: Math.round(curFloorPlan.y),
-        floorLevel: targetFloor,
+        x: Math.round(clampedX),
+        y: Math.round(clampedY),
+        floorLevel: activeFloor,
       });
       return;
     }
