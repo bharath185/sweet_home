@@ -821,6 +821,7 @@ export default function HomeStudioPage() {
                         onRedo={handleRedo}
                         visitorCamera={visitorCamera}
                         onUpdateVisitorCamera={handleUpdateVisitorCamera}
+                        isWalkMode={cameraMode3D === 'visitor'}
                       />
                     </div>
                     <div className="w-1/2 h-full relative">
@@ -865,6 +866,7 @@ export default function HomeStudioPage() {
                       onRedo={handleRedo}
                       visitorCamera={visitorCamera}
                       onUpdateVisitorCamera={handleUpdateVisitorCamera}
+                      isWalkMode={cameraMode3D === 'visitor'}
                     />
                   </div>
                 )}

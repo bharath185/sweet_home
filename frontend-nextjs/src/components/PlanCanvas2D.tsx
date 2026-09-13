@@ -55,6 +55,7 @@ interface PlanCanvas2DProps {
   onFloorModeChange?: (mode: 'single' | 'sideBySide' | 'stacked') => void;
   visitorCamera?: VisitorCameraState;
   onUpdateVisitorCamera?: (state: Partial<VisitorCameraState>) => void;
+  isWalkMode?: boolean;
 }
 
 type ToolMode = 'select' | 'drawWall' | 'dimension' | 'text' | 'pan';
@@ -99,6 +100,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   onFloorModeChange,
   visitorCamera,
   onUpdateVisitorCamera,
+  isWalkMode = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const blueprintImgRef = useRef<HTMLImageElement | null>(null);
@@ -960,7 +962,8 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     });
 
     // 10.5. Real-Time Virtual Visitor Person Position & FOV Vision Cone
-    if (visitorCamera && (visitorCamera.floorLevel === undefined || visitorCamera.floorLevel === activeFloor || canvasFloorMode === 'stacked')) {
+    // ONLY display when Walk Mode is active!
+    if (isWalkMode && visitorCamera && (visitorCamera.floorLevel === undefined || visitorCamera.floorLevel === activeFloor || canvasFloorMode === 'stacked')) {
       const vPos = planToScreen(visitorCamera.x, visitorCamera.y);
       const vAngle = visitorCamera.yaw || 0;
 
@@ -1162,8 +1165,8 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
     const clickPlan = screenToPlan(e.clientX, e.clientY);
 
-    // 2D Virtual Visitor Drag Interaction
-    if (visitorCamera && toolMode === 'select') {
+    // 2D Virtual Visitor Drag Interaction (Only when in Walk Mode)
+    if (isWalkMode && visitorCamera && toolMode === 'select') {
       const vDist = Math.hypot(clickPlan.x - visitorCamera.x, clickPlan.y - visitorCamera.y);
       if (vDist < 25) {
         setIsDraggingVisitor(true);
