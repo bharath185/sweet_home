@@ -31,6 +31,8 @@ interface NavbarProps {
   onOpenAddUserModal?: () => void;
   onOpenCreateItemModal?: () => void;
   isSaving: boolean;
+  cloudSyncStatus?: 'synced' | 'saving' | 'offline';
+  lastSyncedAt?: string | null;
   userRole: UserRole;
   setUserRole: (role: UserRole) => void;
   collidingCount: number;
@@ -56,6 +58,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenShare,
   onOpenPreferences,
   isSaving,
+  cloudSyncStatus = 'synced',
+  lastSyncedAt,
   userRole,
   collidingCount,
   canUndo = false,
@@ -239,6 +243,39 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>${collidingCount} Overlap</span>
           </div>
         )}
+
+        {/* Real-time PostgreSQL Cloud Sync Status Badge */}
+        <div
+          className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all ${
+            cloudSyncStatus === 'saving'
+              ? 'bg-amber-50 text-amber-700 border-amber-300 animate-pulse'
+              : cloudSyncStatus === 'offline'
+              ? 'bg-slate-100 text-slate-600 border-slate-300'
+              : 'bg-emerald-50 text-emerald-700 border-emerald-300'
+          }`}
+          title={
+            cloudSyncStatus === 'saving'
+              ? 'Saving changes to PostgreSQL database...'
+              : cloudSyncStatus === 'offline'
+              ? 'Database offline - saving to local cache'
+              : `Live PostgreSQL connection active${lastSyncedAt ? ' (Synced at ' + lastSyncedAt + ')' : ''}`
+          }
+        >
+          <span className={`w-2 h-2 rounded-full ${
+            cloudSyncStatus === 'saving'
+              ? 'bg-amber-500 animate-ping'
+              : cloudSyncStatus === 'offline'
+              ? 'bg-slate-400'
+              : 'bg-emerald-500'
+          }`} />
+          <span>
+            {cloudSyncStatus === 'saving'
+              ? '💾 Auto-saving to PostgreSQL...'
+              : cloudSyncStatus === 'offline'
+              ? '⚠️ Local Cache'
+              : '☁️ PostgreSQL Synced'}
+          </span>
+        </div>
 
         {/* Save Plan Button */}
         {userRole !== 'CLIENT' && (

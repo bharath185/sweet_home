@@ -1,11 +1,54 @@
+version: '3.8'
+
 services:
-  sweethome3d-web:
-    build: .
-    image: sweethome3d-web:latest
-    container_name: sweethome3d-web
+  postgres:
+    image: postgres:17-alpine
+    container_name: sweethome-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sweethome_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "5800:5800" # Browser Web Access (noVNC)
-      - "5900:5900" # Direct VNC (Optional)
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - ./projects:/root/.eteks/sweethome3d:rw
-    restart: unless-stopped
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sweethome_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./sweethome3d-springboot
+      dockerfile: Dockerfile
+    container_name: sweethome-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-sweethome_db}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    ports:
+      - "8090:8090"
+
+  frontend:
+    build:
+      context: ./frontend-nextjs
+      dockerfile: Dockerfile
+    container_name: sweethome-frontend
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8090/api
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+    driver: local

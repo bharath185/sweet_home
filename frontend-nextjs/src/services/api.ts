@@ -1,7 +1,7 @@
 import { CatalogItem, HomePlan, User, FloorTemplate } from '../types/plan';
 import LZString from 'lz-string';
 
-const API_BASE = '/api';
+const API_BASE = typeof window !== 'undefined' ? (window.location.port === '3000' ? 'http://localhost:8090/api' : '/api') : 'http://localhost:8090/api';
 
 // 1. Sarah Jenkins: Modern 2-Bedroom Suite (Distinct Ground Floor & 1st Floor)
 export const sarahPlan: HomePlan = {
@@ -788,24 +788,37 @@ export async function fetchPlanById(planId: string): Promise<HomePlan> {
   return sarahPlan;
 }
 
-export async function savePlanToBackend(plan: HomePlan): Promise<{ success: boolean; id: string; message?: string }> {
+export async function savePlanToBackend(
+  plan: HomePlan,
+  authorName: string = 'User',
+  changeDesc: string = 'Auto-saved plan state'
+): Promise<{ success: boolean; id: string; version?: number; message?: string }> {
   if (typeof window !== 'undefined') {
     localStorage.setItem(`sweethome_plan_${plan.id}`, JSON.stringify(plan));
   }
   try {
-    const res = await fetch(`${API_BASE}/plan/save`, {
+    const url = new URL(`${API_BASE}/plan/save`);
+    url.searchParams.set('author', authorName);
+    url.searchParams.set('description', changeDesc);
+
+    const res = await fetch(url.toString(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(plan),
     });
     if (res.ok) {
       const data = await res.json();
-      return { success: true, id: data.id || plan.id, message: `Saved "${plan.name}" successfully to Spring Boot backend!` };
+      return {
+        success: true,
+        id: data.planId || plan.id,
+        version: data.version,
+        message: `Saved "${plan.name}" to PostgreSQL database!`
+      };
     }
   } catch (err) {
-    console.warn('Backend plan save failed, saved locally.', err);
+    console.warn('PostgreSQL save failed, saved locally.', err);
   }
-  return { success: true, id: plan.id, message: `Saved "${plan.name}" locally in browser storage.` };
+  return { success: true, id: plan.id, message: `Saved "${plan.name}" in local storage cache.` };
 }
 
 export async function checkBackendHealth(): Promise<boolean> {

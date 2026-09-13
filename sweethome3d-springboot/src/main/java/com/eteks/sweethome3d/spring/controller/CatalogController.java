@@ -1,83 +1,81 @@
 package com.eteks.sweethome3d.spring.controller;
 
+import com.eteks.sweethome3d.spring.entity.CatalogItemEntity;
+import com.eteks.sweethome3d.spring.repository.CatalogItemRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 @RestController
 @RequestMapping("/api/catalog")
 @CrossOrigin(origins = "*")
 public class CatalogController {
 
-    private final List<Map<String, Object>> catalog = new CopyOnWriteArrayList<>();
-
-    public CatalogController() {
-        catalog.add(createItem("sofa", "Corner Sofa", "Living", "/models/sofa.obj", "/models/sofa.png", 220, 90, 85));
-        catalog.add(createItem("armchair", "Armchair", "Living", "/models/armchair.obj", "/models/armchair.png", 85, 85, 80));
-        catalog.add(createItem("roundTable", "Round Table", "Living", "/models/roundTable.obj", "/models/roundTable.png", 100, 100, 75));
-        catalog.add(createItem("chair", "Dining Chair", "Living", "/models/chair.obj", "/models/chair.png", 45, 45, 90));
-        catalog.add(createItem("bed140x190", "Double Bed", "Bedroom", "/models/bed140x190.obj", "/models/bed140x190.png", 150, 200, 90));
-        catalog.add(createItem("wardrobe", "Wardrobe", "Bedroom", "/models/wardrobe.obj", "/models/wardrobe.png", 120, 60, 200));
-        catalog.add(createItem("kitchenCabinet", "Kitchen Cabinet", "Kitchen", "/models/kitchenCabinet.obj", "/models/kitchenCabinet.png", 60, 60, 85));
-        catalog.add(createItem("cooker", "Stove / Cooker", "Kitchen", "/models/cooker.obj", "/models/cooker.png", 60, 60, 85));
-        catalog.add(createItem("bath", "Bathtub", "Bathroom", "/models/bath.obj", "/models/bath.png", 170, 75, 55));
-        catalog.add(createItem("door", "Standard Door", "Doors & Windows", "/models/door.obj", "/models/door.png", 85, 10, 205));
-        catalog.add(createItem("window85x123", "Window", "Doors & Windows", "/models/window85x123.obj", "/models/window85x123.png", 85, 15, 123));
-        catalog.add(createItem("pendantLamp", "Ceiling Lamp", "Lighting", "/models/pendantLamp.obj", "/models/pendantLamp.png", 40, 40, 60));
-        catalog.add(createItem("floorUplight", "Floor Lamp", "Lighting", "/models/floorUplight.obj", "/models/floorUplight.png", 35, 35, 175));
-        catalog.add(createItem("staircase", "Straight Staircase", "Stairs & Structural", "/models/staircase.obj", "/models/staircase.png", 90, 260, 250));
-    }
+    @Autowired
+    private CatalogItemRepository catalogItemRepository;
 
     @GetMapping("/categories")
     public ResponseEntity<List<String>> getCategories() {
+        List<CatalogItemEntity> all = catalogItemRepository.findAll();
         Set<String> categories = new LinkedHashSet<>();
         categories.add("All");
-        for (Map<String, Object> item : catalog) {
-            Object cat = item.get("category");
-            if (cat != null) {
-                categories.add(cat.toString());
+        for (CatalogItemEntity item : all) {
+            if (item.getCategory() != null) {
+                categories.add(item.getCategory());
             }
         }
         return ResponseEntity.ok(new ArrayList<>(categories));
     }
 
     @GetMapping("/furniture")
-    public ResponseEntity<List<Map<String, Object>>> getFurnitureCatalog() {
-        return ResponseEntity.ok(catalog);
+    public ResponseEntity<List<CatalogItemEntity>> getFurnitureCatalog() {
+        return ResponseEntity.ok(catalogItemRepository.findAllByOrderByCreatedAtDesc());
     }
 
     @PostMapping("/furniture")
-    public ResponseEntity<Map<String, Object>> addFurnitureItem(@RequestBody Map<String, Object> newItem) {
-        String id = newItem.getOrDefault("id", "item_" + UUID.randomUUID().toString().substring(0, 8)).toString();
-        newItem.put("id", id);
+    public ResponseEntity<CatalogItemEntity> addFurnitureItem(@RequestBody Map<String, Object> payload) {
+        String id = (String) payload.getOrDefault("id", "custom_" + UUID.randomUUID().toString().substring(0, 8));
+        String name = (String) payload.getOrDefault("name", "Custom Item");
+        String category = (String) payload.getOrDefault("category", "Living");
         
-        // Remove existing item with same id if updating
-        catalog.removeIf(item -> id.equals(item.get("id")));
-        catalog.add(0, newItem); // add at beginning
+        float w = payload.get("width") != null ? Float.parseFloat(payload.get("width").toString()) : 50f;
+        float d = payload.get("depth") != null ? Float.parseFloat(payload.get("depth").toString()) : 50f;
+        float h = payload.get("height") != null ? Float.parseFloat(payload.get("height").toString()) : 50f;
 
-        return ResponseEntity.ok(newItem);
+        CatalogItemEntity item = new CatalogItemEntity();
+        item.setId(id);
+        item.setName(name);
+        item.setCategory(category);
+        item.setWidth(w);
+        item.setDepth(d);
+        item.setHeight(h);
+        item.setModel((String) payload.get("model"));
+        item.setIcon((String) payload.get("icon"));
+        item.setPlacementType((String) payload.getOrDefault("placementType", "floor"));
+        item.setDefaultColor((String) payload.get("defaultColor"));
+        item.setMaterialCategory((String) payload.get("materialCategory"));
+        item.setMaterialFinish((String) payload.get("materialFinish"));
+        if (payload.get("roughness") != null) item.setRoughness(Float.parseFloat(payload.get("roughness").toString()));
+        if (payload.get("metalness") != null) item.setMetalness(Float.parseFloat(payload.get("metalness").toString()));
+        if (payload.get("opacity") != null) item.setOpacity(Float.parseFloat(payload.get("opacity").toString()));
+        item.setIsCustom(true);
+        item.setCreatedAt(LocalDateTime.now());
+
+        CatalogItemEntity saved = catalogItemRepository.save(item);
+        return ResponseEntity.ok(saved);
     }
 
     @DeleteMapping("/furniture/{id}")
     public ResponseEntity<Map<String, Object>> deleteFurnitureItem(@PathVariable String id) {
-        boolean removed = catalog.removeIf(item -> id.equals(item.get("id")));
+        boolean exists = catalogItemRepository.existsById(id);
+        if (exists) {
+            catalogItemRepository.deleteById(id);
+        }
         Map<String, Object> res = new HashMap<>();
-        res.put("status", removed ? "success" : "not_found");
+        res.put("status", exists ? "success" : "not_found");
         return ResponseEntity.ok(res);
-    }
-
-    private Map<String, Object> createItem(String id, String name, String category, String model, String icon, float w, float d, float h) {
-        Map<String, Object> item = new HashMap<>();
-        item.put("id", id);
-        item.put("name", name);
-        item.put("category", category);
-        item.put("model", model);
-        item.put("icon", icon);
-        item.put("width", w);
-        item.put("depth", d);
-        item.put("height", h);
-        return item;
     }
 }

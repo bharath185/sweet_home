@@ -57,6 +57,9 @@ export default function HomeStudioPage() {
   const [isFurnitureListOpen, setIsFurnitureListOpen] = useState<boolean>(true);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'saving' | 'offline'>('synced');
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Modals
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
@@ -133,6 +136,23 @@ export default function HomeStudioPage() {
             commitSnapshot(nextPlan);
           }, 300);
         }
+
+        // Debounced Real-time Auto-Save to PostgreSQL database
+        setCloudSyncStatus('saving');
+        if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = setTimeout(async () => {
+          try {
+            const res = await savePlanToBackend(nextPlan, userRole, 'Real-time state auto-save');
+            if (res.success) {
+              setCloudSyncStatus('synced');
+              setLastSyncedAt(new Date().toLocaleTimeString());
+            } else {
+              setCloudSyncStatus('offline');
+            }
+          } catch {
+            setCloudSyncStatus('offline');
+          }
+        }, 900);
 
         return nextPlan;
       });
@@ -805,7 +825,9 @@ export default function HomeStudioPage() {
         onOpenAddUserModal={() => setIsAddUserModalOpen(true)}
         onOpenCreateItemModal={() => setIsAddItemModalOpen(true)}
         isSaving={isSaving}
-        userRole={userRole}
+              cloudSyncStatus={cloudSyncStatus}
+              lastSyncedAt={lastSyncedAt}
+              userRole={userRole}
         setUserRole={setUserRole}
         collidingCount={collisionReport.totalCollisions}
         activeFloor={activeFloor}
