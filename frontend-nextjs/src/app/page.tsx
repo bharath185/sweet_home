@@ -50,6 +50,7 @@ export default function HomeStudioPage() {
   const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'catalog' | 'floors'>('overview');
   const [userRole, setUserRole] = useState<UserRole>('ADMIN');
   const [activeFloor, setActiveFloor] = useState<number>(0);
+  const [floorMode, setFloorMode] = useState<'single' | 'sideBySide' | 'stacked'>('single');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [isAdminSidebarOpen, setIsAdminSidebarOpen] = useState<boolean>(false);
@@ -839,6 +840,8 @@ export default function HomeStudioPage() {
               collidingItemIds={collisionReport.collidingItemIds}
               activeFloor={activeFloor}
               onFloorChange={setActiveFloor}
+              floorMode={floorMode}
+              onFloorModeChange={setFloorMode}
             />
           </main>
         )}
@@ -867,6 +870,8 @@ export default function HomeStudioPage() {
                         onSelectId={setSelectedId}
                         activeFloor={activeFloor}
                         onFloorChange={setActiveFloor}
+                        floorMode={floorMode}
+                        onFloorModeChange={setFloorMode}
                         collidingItemIds={collisionReport.collidingItemIds}
                         collisionReasons={collisionReport.reasons}
                         onOpenBlueprintModal={() => setIsBlueprintModalOpen(true)}
@@ -883,6 +888,9 @@ export default function HomeStudioPage() {
                         onSelectId={setSelectedId}
                         onUpdatePlan={handleUpdatePlan}
                         activeFloor={activeFloor}
+                        onFloorChange={setActiveFloor}
+                        floorMode={floorMode}
+                        onFloorModeChange={setFloorMode}
                         collidingItemIds={collisionReport.collidingItemIds}
                       />
                     </div>
@@ -899,6 +907,8 @@ export default function HomeStudioPage() {
                       onSelectId={setSelectedId}
                       activeFloor={activeFloor}
                       onFloorChange={setActiveFloor}
+                      floorMode={floorMode}
+                      onFloorModeChange={setFloorMode}
                       collidingItemIds={collisionReport.collidingItemIds}
                       collisionReasons={collisionReport.reasons}
                       onOpenBlueprintModal={() => setIsBlueprintModalOpen(true)}
@@ -919,6 +929,9 @@ export default function HomeStudioPage() {
                       onSelectId={setSelectedId}
                       onUpdatePlan={handleUpdatePlan}
                       activeFloor={activeFloor}
+                      onFloorChange={setActiveFloor}
+                      floorMode={floorMode}
+                      onFloorModeChange={setFloorMode}
                       collidingItemIds={collisionReport.collidingItemIds}
                     />
                   </div>

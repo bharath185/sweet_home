@@ -46,6 +46,9 @@ interface Viewport3DProps {
   isCustomerMode?: boolean;
   collidingItemIds?: Set<string>;
   activeFloor?: number;
+  floorMode?: 'single' | 'sideBySide' | 'stacked';
+  onFloorModeChange?: (mode: 'single' | 'sideBySide' | 'stacked') => void;
+  onFloorChange?: (floor: number) => void;
 }
 
 export const Viewport3D: React.FC<Viewport3DProps> = ({
@@ -56,6 +59,9 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   isCustomerMode = false,
   collidingItemIds = new Set(),
   activeFloor = 0,
+  floorMode,
+  onFloorModeChange,
+  onFloorChange,
 }) => {
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -81,7 +87,15 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const [isDragOverCatalog, setIsDragOverCatalog] = useState(false);
 
   // 3D Floor Isolation & Multi-Floor Mode: 'isolated' (Focus Active Floor) | 'stacked' (All Floors) | 'sideBySide' (All Floors Side-by-Side)
-  const [floor3DMode, setFloor3DMode] = useState<'isolated' | 'stacked' | 'sideBySide'>('sideBySide');
+  const [localFloor3DMode, setLocalFloor3DMode] = useState<'isolated' | 'stacked' | 'sideBySide'>('isolated');
+  const floor3DMode: 'isolated' | 'stacked' | 'sideBySide' =
+    floorMode === 'single' ? 'isolated' : (floorMode === 'sideBySide' ? 'sideBySide' : (floorMode === 'stacked' ? 'stacked' : localFloor3DMode));
+  const setFloor3DMode = (newMode: 'isolated' | 'stacked' | 'sideBySide') => {
+    setLocalFloor3DMode(newMode);
+    if (onFloorModeChange) {
+      onFloorModeChange(newMode === 'isolated' ? 'single' : newMode);
+    }
+  };
 
   // Camera Mode: 'aerial' (orbit) or 'visitor' (human eye level walkthrough at 160cm)
   const [cameraMode, setCameraMode] = useState<'aerial' | 'visitor'>('aerial');
@@ -1431,6 +1445,27 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-sm text-xs font-semibold">
         {/* Floor Mode Selector */}
         <div className="flex items-center gap-0.5">
+          {(plan.floors || [
+            { level: 0, name: 'Ground Floor' },
+            { level: 1, name: '1st Floor' },
+          ]).map((fl) => (
+            <button
+              key={fl.level}
+              onClick={() => {
+                if (onFloorChange) onFloorChange(fl.level);
+                setFloor3DMode('isolated');
+              }}
+              className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
+                floor3DMode === 'isolated' && activeFloor === fl.level
+                  ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+              title={`Switch to ${fl.name}`}
+            >
+              <span>{fl.name}</span>
+            </button>
+          ))}
+
           <button
             onClick={() => setFloor3DMode('sideBySide')}
             className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
@@ -1443,17 +1478,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             <Layers className="w-3 h-3" />
             <span>🔲 Side-by-Side</span>
           </button>
-          <button
-            onClick={() => setFloor3DMode('isolated')}
-            className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
-              floor3DMode === 'isolated'
-                ? 'bg-sky-600 text-white font-bold shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-            title={`Floor ${activeFloor} Only`}
-          >
-            <span>F{activeFloor} Only</span>
-          </button>
+
           <button
             onClick={() => setFloor3DMode('stacked')}
             className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${

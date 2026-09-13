@@ -50,6 +50,8 @@ interface PlanCanvas2DProps {
   canRedo?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
+  floorMode?: 'single' | 'sideBySide' | 'stacked';
+  onFloorModeChange?: (mode: 'single' | 'sideBySide' | 'stacked') => void;
 }
 
 type ToolMode = 'select' | 'drawWall' | 'dimension' | 'text' | 'pan';
@@ -90,6 +92,8 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   canRedo = false,
   onUndo,
   onRedo,
+  floorMode,
+  onFloorModeChange,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const blueprintImgRef = useRef<HTMLImageElement | null>(null);
@@ -132,7 +136,13 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   }, [plan.blueprint?.url, plan.blueprint?.isVisible]);
 
   // Multi-Floor Canvas Mode: 'single' (Focus on active floor) | 'sideBySide' (Show Floor 1 & Floor 2 side-by-side)
-  const [canvasFloorMode, setCanvasFloorMode] = useState<'single' | 'sideBySide'>('single');
+  const [localFloorMode, setLocalFloorMode] = useState<'single' | 'sideBySide' | 'stacked'>('single');
+  const canvasFloorMode: 'single' | 'sideBySide' | 'stacked' = floorMode || localFloorMode;
+  const setCanvasFloorMode = (newMode: 'single' | 'sideBySide' | 'stacked' | ((prev: 'single' | 'sideBySide' | 'stacked') => 'single' | 'sideBySide' | 'stacked')) => {
+    const resolved = typeof newMode === 'function' ? newMode(canvasFloorMode) : newMode;
+    setLocalFloorMode(resolved);
+    if (onFloorModeChange) onFloorModeChange(resolved);
+  };
   const allFloors = plan.floors && plan.floors.length > 0 ? plan.floors : [
     { level: 0, name: 'Ground Floor', height: 250, elevation: 0 },
     { level: 1, name: '1st Floor', height: 250, elevation: 250 },
@@ -1360,7 +1370,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
           ]).map((fl) => (
             <button
               key={fl.level}
-              onClick={() => onFloorChange && onFloorChange(fl.level)}
+              onClick={() => { if (onFloorChange) onFloorChange(fl.level); setCanvasFloorMode('single'); }}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition flex items-center gap-1 ${
                 activeFloor === fl.level
                   ? 'bg-sky-600 text-white shadow-2xs'

@@ -42,6 +42,8 @@ interface CustomerPresentationViewProps {
   collidingItemIds: Set<string>;
   activeFloor: number;
   onFloorChange: (floor: number) => void;
+  floorMode?: 'single' | 'sideBySide' | 'stacked';
+  onFloorModeChange?: (mode: 'single' | 'sideBySide' | 'stacked') => void;
 }
 
 const CLIENT_PRESET_COLORS = [
