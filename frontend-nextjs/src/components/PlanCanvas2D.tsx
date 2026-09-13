@@ -15,7 +15,6 @@ import {
   RotateCw,
   Eye,
   EyeOff,
-  Columns,
   DoorOpen,
   Split,
   Layers,
@@ -57,7 +56,6 @@ export type ToolMode =
   | 'drawRoom'
   | 'door'
   | 'window'
-  | 'column'
   | 'staircase'
   | 'dimension'
   | 'text'
@@ -511,34 +509,6 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     });
     setToolMode('select');
     onSelectId(newWindow.id);
-  };
-
-  // Insert Structural Column / Pillar
-  const handleInsertColumn = (clickPt: { x: number; y: number }) => {
-    const newCol: FurnitureItem = {
-      id: 'col_' + Date.now(),
-      catalogId: 'column',
-      name: 'RC Structural Column (35x35)',
-      category: 'Structural',
-      x: Math.round(clickPt.x),
-      y: Math.round(clickPt.y),
-      elevation: 0,
-      angle: 0,
-      width: 35,
-      depth: 35,
-      height: 250,
-      model: '/models/column.obj',
-      color: '#475569',
-      floorLevel: activeFloor,
-    };
-
-    onUpdatePlan({
-      ...plan,
-      furniture: [...plan.furniture, newCol],
-      updatedAt: new Date().toISOString(),
-    });
-    setToolMode('select');
-    onSelectId(newCol.id);
   };
 
   // Insert Architectural Staircase
@@ -1513,12 +1483,6 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       return;
     }
 
-    // CAD Tool: Column
-    if (toolMode === 'column') {
-      handleInsertColumn(clickPlan);
-      return;
-    }
-
     // CAD Tool: Staircase
     if (toolMode === 'staircase') {
       handleInsertStaircase(clickPlan);
@@ -1742,16 +1706,6 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
           >
             <Split className="w-3.5 h-3.5" />
             <span className="hidden md:inline text-[11px]">Window</span>
-          </button>
-
-          {/* Column Inserter */}
-          <button
-            onClick={() => setToolMode('column')}
-            className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'column' ? 'bg-slate-800 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
-            title="Insert Structural RC Column (35x35)"
-          >
-            <Columns className="w-3.5 h-3.5" />
-            <span className="hidden md:inline text-[11px]">Column</span>
           </button>
 
           {/* Staircase Inserter */}
