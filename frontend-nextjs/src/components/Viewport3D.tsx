@@ -423,6 +423,14 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     let animationId: number;
     let clock = new THREE.Clock();
 
+    // Initial visitor position setup from room center
+    const initialTargetRoom = planRef.current.rooms.find((r) => (r.floorLevel ?? 0) === (activeFloor ?? 0)) || planRef.current.rooms[0];
+    if (initialTargetRoom && initialTargetRoom.points.length > 0) {
+      const avgX = (initialTargetRoom.points.reduce((acc, p) => acc + p.x, 0) / initialTargetRoom.points.length) * 0.01;
+      const avgZ = (initialTargetRoom.points.reduce((acc, p) => acc + p.y, 0) / initialTargetRoom.points.length) * 0.01;
+      visitorPosRef.current.set(avgX, 1.6, avgZ);
+    }
+
     const animate = () => {
       animationId = requestAnimationFrame(animate);
       const delta = Math.min(clock.getDelta(), 0.1);
@@ -1538,17 +1546,29 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     };
 
     const targetRoom = plan.rooms.find((r) => (r.floorLevel ?? 0) === (activeFloor ?? 0)) || plan.rooms[0];
+    let initX = 3.5;
+    let initZ = 2.5;
     if (targetRoom && targetRoom.points.length > 0) {
       const offset = getFloor3DOffset(targetRoom.floorLevel ?? 0);
-      const avgX = (targetRoom.points.reduce((acc, p) => acc + p.x, 0) / targetRoom.points.length) * 0.01 + offset.x;
-      const avgZ = (targetRoom.points.reduce((acc, p) => acc + p.y, 0) / targetRoom.points.length) * 0.01 + offset.z;
-      visitorPosRef.current.set(avgX, offset.y + 1.6, avgZ);
+      initX = (targetRoom.points.reduce((acc, p) => acc + p.x, 0) / targetRoom.points.length) * 0.01 + offset.x;
+      initZ = (targetRoom.points.reduce((acc, p) => acc + p.y, 0) / targetRoom.points.length) * 0.01 + offset.z;
+      visitorPosRef.current.set(initX, offset.y + 1.6, initZ);
     } else {
       const offset = getFloor3DOffset(activeFloor || 0);
       visitorPosRef.current.set(offset.x, offset.y + 1.6, offset.z);
     }
     visitorYawRef.current = 0;
     visitorPitchRef.current = 0;
+
+    if (onVisitorCameraChange) {
+      onVisitorCameraChange({
+        x: Math.round(visitorPosRef.current.x * 100),
+        y: Math.round(visitorPosRef.current.z * 100),
+        yaw: 0,
+        elevation: 160,
+        floorLevel: activeFloor,
+      });
+    }
   };
 
   // Teleport visitor to a specific room

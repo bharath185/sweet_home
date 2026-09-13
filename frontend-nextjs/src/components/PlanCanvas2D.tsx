@@ -878,9 +878,10 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       const fovRad = (65 * Math.PI) / 180; // 65 deg FOV
       const coneDistPx = 180 * scale; // 180cm distance in screen pixels
 
-      // In 3D: visitor yaw = 0 points towards -Z (up on 2D screen, y negative)
-      // forward = (sin(yaw), 0, -cos(yaw)) => 2D screen angle = -yaw - Math.PI / 2
-      const screenLookAngle = -vAngle - Math.PI / 2;
+      // In 3D: forward vector = (sin(yaw), 0, -cos(yaw))
+      // In 2D: dirX = sin(yaw), dirY = -cos(yaw)
+      // Exact 2D screen look angle matching 3D view direction:
+      const screenLookAngle = Math.atan2(-Math.cos(vAngle), Math.sin(vAngle));
 
       const gradient = ctx.createRadialGradient(0, 0, 8, 0, 0, Math.max(25, coneDistPx));
       gradient.addColorStop(0, 'rgba(16, 185, 129, 0.45)');
