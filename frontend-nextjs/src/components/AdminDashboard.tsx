@@ -286,60 +286,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full bg-[#080f1e] text-slate-100 overflow-hidden font-sans select-none">
       {/* ========================================================= */}
-      {/* FULL-WIDTH DASHBOARD CONTENT (NO SIDEBAR) */}
+      {/* FULL-WIDTH DASHBOARD CONTENT (EDGE TO EDGE, NO SUB-HEADER) */}
       {/* ========================================================= */}
       <main className="flex-1 flex flex-col overflow-y-auto bg-[#080f1e] custom-scrollbar select-none">
-        {/* Top Header / Sub-Bar */}
-        <header className="h-14 border-b border-slate-800/80 bg-[#0a1224]/90 backdrop-blur-xl px-6 lg:px-8 flex items-center justify-between sticky top-0 z-10">
-          <div className="flex items-center gap-3">
-            <h1 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-              {currentTab === 'dashboard' && 'Enterprise Architectural Dashboard'}
-              {currentTab === 'projects' && 'Architectural Projects Directory'}
-              {currentTab === 'users' && 'Team & Client Access Management'}
-              {currentTab === 'catalog' && '3D CAD Inventory & Element Catalog'}
-              {currentTab === 'floors' && 'Multi-Floor Structural Hierarchy'}
-            </h1>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-sky-400 border border-slate-700">
-              v2.5 Full View
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Quick Action Buttons */}
-            <button
-              onClick={onOpenAddUserModal}
-              className="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 text-xs font-semibold border border-slate-700/80 transition flex items-center gap-1.5 active:scale-95"
-            >
-              <UserPlus className="w-3.5 h-3.5 text-sky-400" />
-              <span>+ User</span>
-            </button>
-
-            <button
-              onClick={onOpenAddItemModal}
-              className="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 text-xs font-semibold border border-slate-700/80 transition flex items-center gap-1.5 active:scale-95"
-            >
-              <Box className="w-3.5 h-3.5 text-amber-400" />
-              <span>+ 3D Model</span>
-            </button>
-
-            <button
-              onClick={() => {
-                if (onOpenClientSelectModal) {
-                  onOpenClientSelectModal();
-                } else if (onSwitchToStudio) {
-                  onSwitchToStudio();
-                }
-              }}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-sky-500/20 border border-sky-400/30 transition flex items-center gap-1.5 active:scale-95"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Open 3D Studio</span>
-            </button>
-          </div>
-        </header>
-
-        {/* Dynamic Tab Body (Full Width Container) */}
-        <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+        {/* Dynamic Tab Body (Fit Screen Full Width) */}
+        <div className="p-4 sm:p-5 lg:p-6 space-y-6 w-full">
           {/* ========================================================= */}
           {/* TAB 1: INITIAL DASHBOARD HOME (GRAPHS, CHARTS, CARDS) */}
           {/* ========================================================= */}
