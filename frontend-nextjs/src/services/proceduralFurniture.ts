@@ -681,7 +681,6 @@ export function buildShelfMeshGroup(params: ShelfParams, mat: THREE.Material): T
 
 // ----------------------------------------------------
 // DOOR MESH BUILDER
-// ----------------------------------------------------
 export function buildDoorMeshGroup(params: DoorParams, mat: THREE.Material): THREE.Group {
   const group = new THREE.Group();
   const w = Math.max(50, params.width) * CM;
@@ -691,11 +690,14 @@ export function buildDoorMeshGroup(params: DoorParams, mat: THREE.Material): THR
   const brassMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.85, roughness: 0.2 });
   const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, roughness: 0.05, transmission: 0.9 });
 
+  // Architectural Bottom Undercut Gap (1.2cm - 1.5cm clearance from floor for carpet/tiles)
+  const bottomGap = 0.015; // 1.5cm bottom gap
+
   if (params.type === 'barn_sliding') {
     // Top Steel Track
     const railGeom = new THREE.BoxGeometry(w * 1.8, 0.04, 0.02);
     const rail = new THREE.Mesh(railGeom, ironMat);
-    rail.position.set(0, h + 0.08, d * 0.6);
+    rail.position.set(0, h + bottomGap + 0.08, d * 0.6);
     group.add(rail);
 
     // Rollers & Hangers
@@ -703,84 +705,101 @@ export function buildDoorMeshGroup(params: DoorParams, mat: THREE.Material): THR
       const wheelGeom = new THREE.CylinderGeometry(0.03, 0.03, 0.015, 16);
       wheelGeom.rotateZ(Math.PI / 2);
       const wheel = new THREE.Mesh(wheelGeom, ironMat);
-      wheel.position.set(hx, h + 0.08, d * 0.6 + 0.02);
+      wheel.position.set(hx, h + bottomGap + 0.08, d * 0.6 + 0.02);
       const strapGeom = new THREE.BoxGeometry(0.03, 0.18, 0.01);
       const strap = new THREE.Mesh(strapGeom, ironMat);
-      strap.position.set(hx, h + 0.01, d * 0.6 + 0.02);
+      strap.position.set(hx, h + bottomGap + 0.01, d * 0.6 + 0.02);
       group.add(wheel, strap);
     });
 
-    // Main Barn Door Leaf with Z-brace
-    const leafGeom = new THREE.BoxGeometry(w, h, 0.035);
+    // Main Barn Door Leaf with Realistic Bottom Gap
+    const leafH = h;
+    const leafGeom = new THREE.BoxGeometry(w, leafH, 0.035);
     const leaf = new THREE.Mesh(leafGeom, mat);
-    leaf.position.set(0, h / 2, 0);
+    leaf.position.set(0, bottomGap + leafH / 2, 0);
     leaf.castShadow = true;
     group.add(leaf);
 
     // Z-Brace Trim
     const braceThick = 0.008;
     const topBar = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 0.08, braceThick), mat);
-    topBar.position.set(0, h * 0.85, 0.02);
+    topBar.position.set(0, bottomGap + leafH * 0.85, 0.02);
     const botBar = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 0.08, braceThick), mat);
-    botBar.position.set(0, h * 0.15, 0.02);
+    botBar.position.set(0, bottomGap + leafH * 0.15, 0.02);
     group.add(topBar, botBar);
 
     // Handle Bar
     const handleGeom = new THREE.BoxGeometry(0.03, 0.3, 0.025);
     const handle = new THREE.Mesh(handleGeom, ironMat);
-    handle.position.set(w * 0.35, h * 0.5, 0.03);
+    handle.position.set(w * 0.35, bottomGap + leafH * 0.5, 0.03);
     group.add(handle);
   } else if (params.type === 'glass_french') {
     // 2-Leaf French Doors
-    const leafW = w / 2 - 0.01;
-    [-w / 4, w / 4].forEach((lx) => {
-      // Outer Wood Frame
-      const frameGeom = new THREE.BoxGeometry(leafW, h, 0.04);
-      const frame = new THREE.Mesh(frameGeom, mat);
-      frame.position.set(lx, h / 2, 0);
-      group.add(frame);
+    // Outer Frame touches floor
+    const frameThick = 0.04;
+    const leftFrame = new THREE.Mesh(new THREE.BoxGeometry(frameThick, h, d), mat);
+    leftFrame.position.set(-w / 2 + frameThick / 2, h / 2, 0);
+    const rightFrame = new THREE.Mesh(new THREE.BoxGeometry(frameThick, h, d), mat);
+    rightFrame.position.set(w / 2 - frameThick / 2, h / 2, 0);
+    const topFrame = new THREE.Mesh(new THREE.BoxGeometry(w, frameThick, d), mat);
+    topFrame.position.set(0, h - frameThick / 2, 0);
+    group.add(leftFrame, rightFrame, topFrame);
+
+    // Floor Threshold Strip
+    const thresholdGeom = new THREE.BoxGeometry(w, 0.006, d * 1.1);
+    const threshold = new THREE.Mesh(thresholdGeom, brassMat);
+    threshold.position.set(0, 0.003, 0);
+    group.add(threshold);
+
+    const leafW = (w - frameThick * 2) / 2 - 0.005;
+    const leafH = h - frameThick - bottomGap;
+
+    [-leafW / 2 - 0.002, leafW / 2 + 0.002].forEach((lx) => {
+      // Wood Frame Leaf
+      const frameLeaf = new THREE.Mesh(new THREE.BoxGeometry(leafW, leafH, 0.035), mat);
+      frameLeaf.position.set(lx, bottomGap + leafH / 2, 0);
+      group.add(frameLeaf);
 
       // Glass Inset
-      const glassGeom = new THREE.BoxGeometry(leafW * 0.75, h * 0.8, 0.01);
+      const glassGeom = new THREE.BoxGeometry(leafW * 0.75, leafH * 0.8, 0.01);
       const glass = new THREE.Mesh(glassGeom, glassMat);
-      glass.position.set(lx, h / 2, 0);
+      glass.position.set(lx, bottomGap + leafH / 2, 0);
       group.add(glass);
 
       // Mullion Grids
       const horizMullion = new THREE.Mesh(new THREE.BoxGeometry(leafW * 0.75, 0.02, 0.015), mat);
-      horizMullion.position.set(lx, h / 2, 0);
+      horizMullion.position.set(lx, bottomGap + leafH / 2, 0);
       group.add(horizMullion);
     });
 
     // Center Brass Handles
     [-0.03, 0.03].forEach((hx) => {
       const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.12, 12), brassMat);
-      handle.position.set(hx, h * 0.5, 0.03);
+      handle.position.set(hx, bottomGap + leafH * 0.5, 0.03);
       group.add(handle);
     });
   } else if (params.type === 'arched_wood') {
     // Mediterranean Arched Door
-    const rectH = h * 0.75;
     const archR = w / 2;
+    const rectH = h * 0.75 - bottomGap;
     const rectGeom = new THREE.BoxGeometry(w, rectH, 0.04);
     const rectMesh = new THREE.Mesh(rectGeom, mat);
-    rectMesh.position.set(0, rectH / 2, 0);
+    rectMesh.position.set(0, bottomGap + rectH / 2, 0);
     group.add(rectMesh);
 
     const archGeom = new THREE.CylinderGeometry(archR, archR, 0.04, 32, 1, false, 0, Math.PI);
     archGeom.rotateX(Math.PI / 2);
     archGeom.rotateZ(Math.PI / 2);
     const archMesh = new THREE.Mesh(archGeom, mat);
-    archMesh.position.set(0, rectH, 0);
+    archMesh.position.set(0, bottomGap + rectH, 0);
     group.add(archMesh);
 
     // Antique Brass Knob
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.025, 16, 16), brassMat);
-    knob.position.set(w * 0.35, h * 0.45, 0.03);
+    knob.position.set(w * 0.35, bottomGap + rectH * 0.6, 0.03);
     group.add(knob);
   } else {
-    // Modern Flush Door with Frame & Handle
-    // Outer Frame
+    // Modern Flush Door with Frame, Threshold, Bottom Clearance Gap & Lever Handle
     const frameThick = 0.04;
     const leftPost = new THREE.Mesh(new THREE.BoxGeometry(frameThick, h, d), mat);
     leftPost.position.set(-w / 2 + frameThick / 2, h / 2, 0);
@@ -790,19 +809,25 @@ export function buildDoorMeshGroup(params: DoorParams, mat: THREE.Material): THR
     topPost.position.set(0, h - frameThick / 2, 0);
     group.add(leftPost, rightPost, topPost);
 
-    // Door Slab
+    // Bottom Threshold Transition Plate
+    const threshGeom = new THREE.BoxGeometry(w, 0.005, d * 1.05);
+    const thresh = new THREE.Mesh(threshGeom, ironMat);
+    thresh.position.set(0, 0.0025, 0);
+    group.add(thresh);
+
+    // Door Slab with 1.2cm Undercut Gap above floor
     const slabW = w - frameThick * 2;
-    const slabH = h - frameThick;
+    const slabH = h - frameThick - bottomGap;
     const slabGeom = new THREE.BoxGeometry(slabW, slabH, 0.038);
     const slab = new THREE.Mesh(slabGeom, mat);
-    slab.position.set(0, slabH / 2, 0);
+    slab.position.set(0, bottomGap + slabH / 2, 0);
     slab.castShadow = true;
     group.add(slab);
 
     // Stainless Lever Handle
     const leverGeom = new THREE.BoxGeometry(0.12, 0.02, 0.04);
     const lever = new THREE.Mesh(leverGeom, ironMat);
-    lever.position.set(slabW * 0.35, h * 0.48, 0.03);
+    lever.position.set(slabW * 0.35, bottomGap + slabH * 0.48, 0.03);
     group.add(lever);
   }
 
