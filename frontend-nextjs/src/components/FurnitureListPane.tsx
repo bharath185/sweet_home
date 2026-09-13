@@ -100,7 +100,7 @@ export const FurnitureListPane: React.FC<FurnitureListPaneProps> = ({
                 placeholder="Filter placed items..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className={`pl-7 pr-2 py-1 text-[11px] rounded-lg border focus:outline-none ${
+                className={`pl-7 pr-2 py-1 text-[11px] rounded-sm border focus:outline-none ${
                   isDark
                     ? 'bg-slate-900 border-slate-700 text-white placeholder-slate-500'
                     : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400'
@@ -108,7 +108,7 @@ export const FurnitureListPane: React.FC<FurnitureListPaneProps> = ({
               />
             </div>
           )}
-          <button className={`p-1 rounded transition ${isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'}`}>
+          <button className={`p-1 rounded-sm transition ${isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'}`}>
             {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
           </button>
         </div>
@@ -122,7 +122,7 @@ export const FurnitureListPane: React.FC<FurnitureListPaneProps> = ({
               No placed items on this floor.
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
               {filteredItems.map((item) => {
                 const isSelected = selectedId === item.id;
                 const isColliding = collidingItemIds.has(item.id);
@@ -131,7 +131,7 @@ export const FurnitureListPane: React.FC<FurnitureListPaneProps> = ({
                   <div
                     key={item.id}
                     onClick={() => onSelectId(item.id)}
-                    className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                    className={`p-2 rounded-md border transition-all cursor-pointer flex items-center justify-between gap-2 ${
                       isSelected
                         ? isDark
                           ? 'bg-indigo-950/40 border-indigo-500/60 shadow-xs'
@@ -144,7 +144,7 @@ export const FurnitureListPane: React.FC<FurnitureListPaneProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                      <div className={`w-7 h-7 rounded-sm flex items-center justify-center shrink-0 ${
                         isSelected
                           ? 'bg-indigo-600 text-white'
                           : isDark

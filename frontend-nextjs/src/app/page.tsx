@@ -104,7 +104,7 @@ export default function HomeStudioPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(true);
 
-  const [isFurnitureListOpen, setIsFurnitureListOpen] = useState<boolean>(true);
+  const [isFurnitureListOpen, setIsFurnitureListOpen] = useState<boolean>(false);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'saving' | 'offline'>('synced');
