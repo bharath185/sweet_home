@@ -98,6 +98,15 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // When in Walk tour mode, close all property panels and disable item selection
+  useEffect(() => {
+    if (tourCameraMode === 'visitor') {
+      setSelectedId(null);
+      setShowAddCatalogDrawer(false);
+      setShowSpecDrawer(false);
+    }
+  }, [tourCameraMode]);
   const [catalogCategory, setCatalogCategory] = useState<string>('ALL');
 
   // Draggable & Collapsible Customizer Panel State

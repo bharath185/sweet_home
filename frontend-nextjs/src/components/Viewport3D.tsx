@@ -971,8 +971,17 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       return;
     }
 
-    // Check if user clicked a 3D furniture item in Aerial or Visitor mode with Left Mouse Button (0)
-    if (e.button === 0 && cameraRef.current && meshesGroupRef.current && canvasMountRef.current) {
+    // Check if user clicked a 3D furniture item (Active in Aerial / Orbit mode ONLY)
+    // In Walk / Visitor mode, item dragging is disabled so the user can look around & walk without interference
+    if (
+      cameraModeRef.current === 'aerial' &&
+      toolModeRef.current === 'select' &&
+      !isSpacePressedRef.current &&
+      e.button === 0 &&
+      cameraRef.current &&
+      meshesGroupRef.current &&
+      canvasMountRef.current
+    ) {
       const rect = canvasMountRef.current.getBoundingClientRect();
       const mouse = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -995,7 +1004,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       }
 
       if (foundFurnitureId) {
-        // User clicked directly on a 3D furniture piece
+        // User clicked directly on a 3D furniture piece in Orbit view
         const item = planRef.current.furniture.find((f) => f.id === foundFurnitureId);
         onSelectId(foundFurnitureId);
 
@@ -1004,7 +1013,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           return;
         }
 
-        // Start 3D Dragging
+        // Start 3D Dragging in Orbit mode
         draggedItemIdRef.current = foundFurnitureId;
         isDraggingObjectRef.current = true;
         setIsDraggingObjectState(true);
@@ -1412,6 +1421,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   // Switch to Virtual Visitor mode and place in center of primary room
   const handleSwitchToVisitor = () => {
     setCameraMode('visitor');
+    onSelectId(null); // Close all properties and inspector panels in walk view!
     const allFloors = plan.floors && plan.floors.length > 0 ? plan.floors : [
       { level: 0, name: 'Ground Floor' },
       { level: 1, name: '1st Floor' },
