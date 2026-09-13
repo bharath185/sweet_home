@@ -94,17 +94,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="h-14 bg-white/95 backdrop-blur-xl border-b border-slate-200/90 px-4 flex items-center justify-between select-none z-30 shadow-sm shadow-slate-900/5 relative">
-      {/* Brand, Admin Menu Toggle & Plan Title / Client Project Switcher */}
+      {/* Brand & Plan Title / Client Project Switcher */}
       <div className="flex items-center gap-3">
-        {userRole !== 'CLIENT' && (
-          <button
-            onClick={onToggleAdminSidebar}
-            className="p-1.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition border border-transparent hover:border-slate-200"
-            title="Toggle Navigation Menu"
-          >
-            <Menu className="w-5 h-5 text-sky-600" />
-          </button>
-        )}
 
         <div className={`flex items-center justify-center w-8 h-8 rounded-xl text-white font-bold shadow-md ${
           userRole === 'ADMIN'
