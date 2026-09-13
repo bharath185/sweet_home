@@ -10,6 +10,7 @@ import { PlanCanvas2D } from '../components/PlanCanvas2D';
 import { Viewport3D } from '../components/Viewport3D';
 import { InspectorSidebar } from '../components/InspectorSidebar';
 import { CustomerPresentationView } from '../components/CustomerPresentationView';
+import { LoginPage } from '../components/LoginPage';
 import { ShareModal } from '../components/ShareModal';
 import { AddUserModal } from '../components/AddUserModal';
 import { AddItemModal } from '../components/AddItemModal';
@@ -39,6 +40,10 @@ export default function HomeStudioPage() {
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [templates, setTemplates] = useState<FloorTemplate[]>([]);
+
+  // Authentication State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthLoaded, setIsAuthLoaded] = useState<boolean>(false);
 
   const [activeView, setActiveView] = useState<'split' | '2d' | '3d' | 'customer' | 'dashboard'>('split');
   const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'catalog' | 'floors'>('overview');
@@ -235,6 +240,56 @@ export default function HomeStudioPage() {
     setCanRedo(false);
     setSelectedId(null);
     setActiveFloor(0);
+  };
+
+  // Session hydration on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedAuth = localStorage.getItem('sweethome_auth_user');
+      if (savedAuth) {
+        try {
+          const parsed: User = JSON.parse(savedAuth);
+          setCurrentUser(parsed);
+          setUserRole(parsed.role);
+          if (parsed.role === 'CLIENT') {
+            setActiveView('customer');
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      }
+      setIsAuthLoaded(true);
+    }
+  }, []);
+
+  // Handle Login
+  const handleLogin = async (user: User) => {
+    setCurrentUser(user);
+    setUserRole(user.role);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sweethome_auth_user', JSON.stringify(user));
+    }
+    if (user.role === 'CLIENT') {
+      const planToLoad = user.assignedPlan || 'plan-sarah-suite';
+      await handleSelectClientProject(planToLoad);
+      setActiveView('customer');
+    } else if (user.role === 'DESIGNER') {
+      const planToLoad = user.assignedPlan || 'plan-david-villa';
+      await handleSelectClientProject(planToLoad);
+      setActiveView('split');
+    } else {
+      setActiveView('dashboard');
+    }
+  };
+
+  // Handle Logout
+  const handleLogout = () => {
+    setCurrentUser(null);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('sweethome_auth_user');
+    }
+    setSelectedId(null);
+    setActiveView('split');
   };
 
   // Decode URL parameters on mount
@@ -600,6 +655,21 @@ export default function HomeStudioPage() {
 
   const onlineUsersCount = users.filter((u) => u.isOnline).length;
 
+  // Strict Authentication Guard: without logging in, users CANNOT access anything
+  if (!currentUser) {
+    if (!isAuthLoaded) {
+      return (
+        <div className="w-screen h-screen flex items-center justify-center bg-slate-900 text-white">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-3 border-sky-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm font-medium text-slate-400">Loading SweetHome 3D Studio...</p>
+          </div>
+        </div>
+      );
+    }
+    return <LoginPage onLogin={handleLogin} availableUsers={users} />;
+  }
+
   return (
     <div className="w-screen h-screen flex flex-col bg-slate-50 text-slate-900 overflow-hidden">
       {/* Top Navbar */}
@@ -629,6 +699,8 @@ export default function HomeStudioPage() {
         canRedo={canRedo}
         onUndo={handleUndo}
         onRedo={handleRedo}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
 
       {/* Main Workspace Body */}

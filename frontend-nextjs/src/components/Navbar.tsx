@@ -18,9 +18,11 @@ import {
   ImageIcon,
   Ruler,
   Undo2,
-  Redo2
+  Redo2,
+  LogOut,
+  User as UserIcon
 } from 'lucide-react';
-import { HomePlan, UserRole } from '../types/plan';
+import { HomePlan, UserRole, User } from '../types/plan';
 
 interface ClientProjectOption {
   id: string;
@@ -55,6 +57,8 @@ interface NavbarProps {
   canRedo?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
+  currentUser?: import('../types/plan').User | null;
+  onLogout?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -83,6 +87,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   canRedo = false,
   onUndo,
   onRedo,
+  currentUser,
+  onLogout,
 }) => {
   const unit = plan.preferences?.unitSystem?.toUpperCase() || 'CM';
 
@@ -329,12 +335,53 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         <button
           onClick={onOpenShare}
-          className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-sky-600/25 transition active:scale-95"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-sky-600/25 transition active:scale-95"
           title="Generate Shareable Client Link"
         >
           <Share2 className="w-4 h-4" />
           <span>Share 3D</span>
         </button>
+
+        {/* User Profile & Logout Gate */}
+        {currentUser && (
+          <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-200">
+              <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-white text-[10px] font-bold ${
+                currentUser.role === 'ADMIN'
+                  ? 'bg-gradient-to-tr from-sky-600 to-indigo-600'
+                  : currentUser.role === 'DESIGNER'
+                  ? 'bg-gradient-to-tr from-indigo-600 to-purple-600'
+                  : 'bg-gradient-to-tr from-emerald-600 to-teal-600'
+              }`}>
+                {currentUser.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[11px] font-bold text-slate-800 leading-none truncate max-w-[110px]">
+                  {currentUser.name}
+                </span>
+                <span className={`text-[9px] font-bold uppercase tracking-wider ${
+                  currentUser.role === 'ADMIN'
+                    ? 'text-sky-600'
+                    : currentUser.role === 'DESIGNER'
+                    ? 'text-indigo-600'
+                    : 'text-emerald-600'
+                }`}>
+                  {currentUser.role}
+                </span>
+              </div>
+            </div>
+
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 bg-white shadow-2xs transition"
+                title="Log out of session"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );
