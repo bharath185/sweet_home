@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
+  ChevronLeft,
+  Check,
   Sparkles,
   Layers,
   PhoneCall,
@@ -73,6 +75,20 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
 
   // Catalog search & category filter in Client View
   const [catalogSearch, setCatalogSearch] = useState<string>('');
+  const [justAddedItemName, setJustAddedItemName] = useState<string | null>(null);
+
+  // Close drawers on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowAddCatalogDrawer(false);
+        setShowSpecDrawer(false);
+        setSelectedId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
   const [catalogCategory, setCatalogCategory] = useState<string>('ALL');
 
   // Draggable & Collapsible Customizer Panel State
@@ -199,15 +215,13 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
     let targetElevation = 0;
     let hostId: string | undefined = undefined;
 
-    // Place near selected room center or canvas origin
-    if (selectedRoom && selectedRoom.points && selectedRoom.points.length > 0) {
-      const sumX = selectedRoom.points.reduce((acc, p) => acc + p.x, 0);
-      const sumY = selectedRoom.points.reduce((acc, p) => acc + p.y, 0);
-      targetX = Math.round(sumX / selectedRoom.points.length);
-      targetY = Math.round(sumY / selectedRoom.points.length);
+    if (selectedRoom && selectedRoom.points.length > 0) {
+      const xs = selectedRoom.points.map((p) => p.x);
+      const ys = selectedRoom.points.map((p) => p.y);
+      targetX = Math.round((Math.min(...xs) + Math.max(...xs)) / 2);
+      targetY = Math.round((Math.min(...ys) + Math.max(...ys)) / 2);
     }
 
-    // Tabletop auto-attachment
     if (item.placementType === 'tabletop' || item.placeOnTable || isTabletopItem(item)) {
       const nearestTable = findNearestSupportingSurface(
         { x: targetX, y: targetY, floorLevel: activeFloor, id: 'temp' } as any,
@@ -258,6 +272,12 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
 
     setSelectedId(newPiece.id);
     setIsMinimized(false);
+    // Auto-close catalog drawer so the user immediately sees their placed 3D item in the design!
+    setShowAddCatalogDrawer(false);
+    setJustAddedItemName(item.name);
+    setTimeout(() => {
+      setJustAddedItemName(null);
+    }, 5000);
   };
 
   // Filter Catalog
@@ -410,108 +430,135 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
 
       {/* SLIDE-OUT 1: ADD 3D ITEMS CATALOG DRAWER FOR CLIENT */}
       {showAddCatalogDrawer && (
-        <div className="absolute top-18 right-4 bottom-16 w-88 bg-white/95 border border-slate-200 rounded-3xl shadow-2xl z-30 flex flex-col overflow-hidden animate-in slide-in-from-right duration-200 backdrop-blur-xl">
-          {/* Drawer Header */}
-          <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/90">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center font-bold">
-                <Box className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">
-                  Add 3D Furniture & Items
+        <>
+          {/* Backdrop Click-To-Close overlay so design is easy to return to */}
+          <div
+            onClick={() => setShowAddCatalogDrawer(false)}
+            className="absolute inset-0 bg-black/20 backdrop-blur-xs z-25 transition-opacity"
+            title="Click to go back to 3D View"
+          />
+
+          <div className="absolute top-16 right-4 bottom-14 w-96 max-w-[calc(100vw-2rem)] bg-white/98 border border-slate-200/90 rounded-3xl shadow-2xl z-30 flex flex-col overflow-hidden animate-in slide-in-from-right duration-200 backdrop-blur-2xl">
+            {/* Drawer Header with Prominent Back to Design button */}
+            <div className="p-3.5 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/90">
+              <button
+                onClick={() => setShowAddCatalogDrawer(false)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200 text-xs font-bold transition shadow-2xs group"
+                title="Go back to 3D Design (Esc)"
+              >
+                <ChevronLeft className="w-4 h-4 text-sky-600 group-hover:-translate-x-0.5 transition-transform" />
+                <span>← Back to 3D View</span>
+              </button>
+
+              <div className="text-right">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                  Add 3D Items
                 </h3>
-                <span className="text-[10px] text-slate-400">
+                <span className="text-[10px] text-slate-400 font-medium">
                   Floor {activeFloor} • {selectedRoom ? selectedRoom.name : 'Main Room'}
                 </span>
               </div>
             </div>
 
-            <button
-              onClick={() => setShowAddCatalogDrawer(false)}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+            {/* Search & Category Filter */}
+            <div className="p-3 border-b border-slate-100 bg-white space-y-2">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Search sofas, lamps, dining, tables..."
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white transition"
+                />
+              </div>
 
-          {/* Search & Category Filter */}
-          <div className="p-3 border-b border-slate-100 bg-white space-y-2">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Search sofas, lamps, tables..."
-                value={catalogSearch}
-                onChange={(e) => setCatalogSearch(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white transition"
-              />
+              {/* Category Filter Chips */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 custom-scrollbar">
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setCatalogCategory(cat)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider shrink-0 transition ${
+                      catalogCategory === cat
+                        ? 'bg-sky-600 text-white shadow-2xs'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Category Filter Chips */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 custom-scrollbar">
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setCatalogCategory(cat)}
-                  className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider shrink-0 transition ${
-                    catalogCategory === cat
-                      ? 'bg-sky-600 text-white shadow-2xs'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-                  }`}
+            {/* Catalog Items Grid */}
+            <div className="flex-1 overflow-y-auto p-3 grid grid-cols-2 gap-2.5 custom-scrollbar bg-slate-50/50">
+              {filteredCatalog.map((item) => (
+                <div
+                  key={item.id}
+                  className="bg-white hover:border-sky-300 border border-slate-200/90 rounded-2xl p-2.5 flex flex-col justify-between transition hover:shadow-md group"
                 >
-                  {cat}
-                </button>
+                  <div>
+                    <div className="w-full h-16 bg-slate-50/80 rounded-xl border border-slate-100 flex items-center justify-center p-1.5 mb-1.5 group-hover:scale-105 transition-transform">
+                      {item.icon ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.icon} alt={item.name} className="max-w-full max-h-full object-contain" />
+                      ) : (
+                        <Box className="w-6 h-6 text-sky-600" />
+                      )}
+                    </div>
+                    <h4 className="text-xs font-bold text-slate-900 truncate leading-tight">
+                      {item.name}
+                    </h4>
+                    <div className="flex items-center justify-between text-[9px] text-slate-400 uppercase mt-0.5">
+                      <span>{item.category}</span>
+                      <span className="font-mono text-slate-500 font-semibold">
+                        {item.width}×{item.depth}cm
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleAddCatalogItem(item)}
+                    className="w-full mt-2 py-1.5 px-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold transition flex items-center justify-center gap-1 shadow-2xs active:scale-95"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Place in Room</span>
+                  </button>
+                </div>
               ))}
             </div>
-          </div>
 
-          {/* Catalog Items Grid */}
-          <div className="flex-1 overflow-y-auto p-3 grid grid-cols-2 gap-2.5 custom-scrollbar">
-            {filteredCatalog.map((item) => (
-              <div
-                key={item.id}
-                className="bg-slate-50/80 hover:bg-white border border-slate-200/90 rounded-2xl p-2.5 flex flex-col justify-between transition hover:shadow-md group"
+            {/* Bottom Footer Bar with Done & Close Button */}
+            <div className="p-2.5 border-t border-slate-200/80 bg-white flex items-center justify-between gap-2">
+              <span className="text-[10px] text-slate-400 font-medium">
+                Tip: Press <kbd className="font-mono bg-slate-100 px-1 py-0.5 rounded border border-slate-300 text-slate-600 text-[9px]">ESC</kbd> to close
+              </span>
+              <button
+                onClick={() => setShowAddCatalogDrawer(false)}
+                className="py-1.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center gap-1 shadow-xs"
               >
-                <div>
-                  <div className="w-full h-16 bg-white rounded-xl border border-slate-100 flex items-center justify-center p-1.5 mb-1.5 group-hover:scale-105 transition-transform">
-                    {item.icon ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.icon} alt={item.name} className="max-w-full max-h-full object-contain" />
-                    ) : (
-                      <Box className="w-6 h-6 text-sky-600" />
-                    )}
-                  </div>
-                  <h4 className="text-xs font-bold text-slate-900 truncate leading-tight">
-                    {item.name}
-                  </h4>
-                  <div className="flex items-center justify-between text-[9px] text-slate-400 uppercase mt-0.5">
-                    <span>{item.category}</span>
-                    <span className="font-mono text-slate-500 font-semibold">
-                      {item.width}×{item.depth}cm
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handleAddCatalogItem(item)}
-                  className="w-full mt-2 py-1 px-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold transition flex items-center justify-center gap-1 shadow-2xs active:scale-95"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>+ Place in Room</span>
-                </button>
-              </div>
-            ))}
+                <span>Done & View Design</span>
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* SLIDE-OUT 2: FURNITURE & SPECIFICATIONS DRAWER */}
       {showSpecDrawer && (
         <div className="absolute top-18 right-4 bottom-16 w-84 bg-white/95 border border-slate-200 rounded-3xl shadow-2xl z-30 flex flex-col overflow-hidden animate-in slide-in-from-right duration-200 backdrop-blur-xl">
-          <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
+          <div className="p-3.5 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/90">
+            <button
+              onClick={() => setShowSpecDrawer(false)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200 text-xs font-bold transition shadow-2xs group"
+              title="Go back to 3D Design (Esc)"
+            >
+              <ChevronLeft className="w-4 h-4 text-emerald-600 group-hover:-translate-x-0.5 transition-transform" />
+              <span>← Back to 3D View</span>
+            </button>
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-              Furniture Specifications
+              Furniture Specs
             </h3>
             <span className="text-xs text-sky-600 font-mono font-bold">
               {plan.furniture.length} Pieces
@@ -893,6 +940,30 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
               <span>Delete Item</span>
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Floating Notification when item is added to room */}
+      {justAddedItemName && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2 bg-slate-900/95 text-white rounded-2xl shadow-xl border border-slate-700/50 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-slate-950 font-bold shrink-0">
+            <Check className="w-3.5 h-3.5" />
+          </div>
+          <div className="text-xs font-medium">
+            Placed <span className="font-bold text-sky-300">"{justAddedItemName}"</span> in your 3D design!
+          </div>
+          <button
+            onClick={() => setShowAddCatalogDrawer(true)}
+            className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold transition ml-1"
+          >
+            + Add Another
+          </button>
+          <button
+            onClick={() => setJustAddedItemName(null)}
+            className="p-1 rounded-md text-slate-400 hover:text-white"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
