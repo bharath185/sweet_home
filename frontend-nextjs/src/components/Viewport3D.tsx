@@ -80,8 +80,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const [isDraggingObjectState, setIsDraggingObjectState] = useState(false);
   const [isDragOverCatalog, setIsDragOverCatalog] = useState(false);
 
-  // 3D Floor Isolation & Multi-Floor Mode: 'isolated' (Focus Active Floor) | 'stacked' (All Floors) | 'exploded' (Separated Floors)
-  const [floor3DMode, setFloor3DMode] = useState<'isolated' | 'stacked' | 'exploded'>('isolated');
+  // 3D Floor Isolation & Multi-Floor Mode: 'isolated' (Focus Active Floor) | 'stacked' (All Floors) | 'sideBySide' (All Floors Side-by-Side)
+  const [floor3DMode, setFloor3DMode] = useState<'isolated' | 'stacked' | 'sideBySide'>('sideBySide');
 
   // Camera Mode: 'aerial' (orbit) or 'visitor' (human eye level walkthrough at 160cm)
   const [cameraMode, setCameraMode] = useState<'aerial' | 'visitor'>('aerial');
@@ -441,14 +441,25 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const CM = 0.01;
     const targetFloor = activeFloor ?? 0;
 
-    // Helper for floor elevation calculation
-    const getFloorElevation = (level: number = 0) => {
+    const allFloors = plan.floors && plan.floors.length > 0 ? plan.floors : [
+      { level: 0, name: 'Ground Floor', height: 250, elevation: 0 },
+      { level: 1, name: '1st Floor', height: 250, elevation: 250 },
+    ];
+
+    // Helper for 3D floor placement: side-by-side horizontal positioning or stacked
+    const getFloor3DOffset = (level: number = 0) => {
       if (floor3DMode === 'isolated') {
-        return 0; // Isolated on ground level
-      } else if (floor3DMode === 'exploded') {
-        return level * 4.5; // 4.5m wide visual separation
+        return { x: 0, y: 0, z: 0 };
+      } else if (floor3DMode === 'sideBySide') {
+        const floorIdx = allFloors.findIndex((fl) => fl.level === level);
+        const validIdx = floorIdx >= 0 ? floorIdx : 0;
+        const mid = (allFloors.length - 1) / 2;
+        // 13.0 meters horizontal spacing side-by-side on ground level
+        return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
+      } else {
+        // Stacked vertically
+        return { x: 0, y: level * 2.5, z: 0 };
       }
-      return level * 2.5; // 2.5m stacked height
     };
 
     const isFloorVisible = (level: number = 0) => {
@@ -458,9 +469,112 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       return true;
     };
 
+    // 0. Build Foundation Plates & Clear Floor Title Placards in 3D
+    allFloors.forEach((fl) => {
+      if (!isFloorVisible(fl.level)) return;
+      const offset = getFloor3DOffset(fl.level);
+      const floorRooms = plan.rooms.filter((r) => (r.floorLevel ?? 0) === fl.level);
+      const floorWalls = plan.walls.filter((w) => (w.floorLevel ?? 0) === fl.level);
+
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      floorRooms.forEach((r) => {
+        r.points.forEach((p) => {
+          minX = Math.min(minX, p.x * CM);
+          maxX = Math.max(maxX, p.x * CM);
+          minZ = Math.min(minZ, p.y * CM);
+          maxZ = Math.max(maxZ, p.y * CM);
+        });
+      });
+      floorWalls.forEach((w) => {
+        minX = Math.min(minX, w.xStart * CM, w.xEnd * CM);
+        maxX = Math.max(maxX, w.xStart * CM, w.xEnd * CM);
+        minZ = Math.min(minZ, w.yStart * CM, w.yEnd * CM);
+        maxZ = Math.max(maxZ, w.yStart * CM, w.yEnd * CM);
+      });
+
+      if (minX === Infinity) {
+        minX = -3.5; maxX = 3.5; minZ = -3.5; maxZ = 3.5;
+      }
+
+      const padW = Math.max(7, (maxX - minX) + 2.0);
+      const padD = Math.max(7, (maxZ - minZ) + 2.0);
+      const centerX = (minX + maxX) / 2 + offset.x;
+      const centerZ = (minZ + maxZ) / 2 + offset.z;
+
+      // Base Ground Foundation Slab
+      const padGeom = new THREE.BoxGeometry(padW, 0.06, padD);
+      const padMat = new THREE.MeshStandardMaterial({
+        color: fl.level === 0 ? 0xf1f5f9 : 0xe2e8f0,
+        roughness: 0.9,
+        metalness: 0.05,
+      });
+      const padMesh = new THREE.Mesh(padGeom, padMat);
+      padMesh.position.set(centerX, offset.y - 0.03, centerZ);
+      padMesh.receiveShadow = true;
+      group.add(padMesh);
+
+      // High-Definition 3D Floor Placard Signboard
+      const roomNames = floorRooms.map((r) => r.name);
+      const labelCanvas = document.createElement('canvas');
+      labelCanvas.width = 1024;
+      labelCanvas.height = 256;
+      const lctx = labelCanvas.getContext('2d');
+      if (lctx) {
+        const grad = lctx.createLinearGradient(0, 0, 1024, 256);
+        if (fl.level === 0) {
+          grad.addColorStop(0, '#0284c7');
+          grad.addColorStop(1, '#0369a1');
+        } else {
+          grad.addColorStop(0, '#059669');
+          grad.addColorStop(1, '#047857');
+        }
+        lctx.fillStyle = grad;
+        lctx.beginPath();
+        lctx.roundRect(16, 16, 992, 224, 28);
+        lctx.fill();
+
+        lctx.strokeStyle = '#ffffff';
+        lctx.lineWidth = 6;
+        lctx.stroke();
+
+        // Floor Name Title
+        lctx.fillStyle = '#ffffff';
+        lctx.font = 'bold 52px system-ui, -apple-system, sans-serif';
+        lctx.textAlign = 'center';
+        lctx.textBaseline = 'middle';
+        const floorTitle = fl.level === 0 ? `🏢 ${fl.name.toUpperCase()}` : `🏡 ${fl.name.toUpperCase()}`;
+        lctx.fillText(floorTitle, 512, 78);
+
+        // Subtitle (Room names & Elevation)
+        lctx.fillStyle = '#f0fdf4';
+        lctx.font = 'bold 30px system-ui, -apple-system, sans-serif';
+        const subText =
+          roomNames.length > 0
+            ? roomNames.join('   •   ')
+            : `Floor Level ${fl.level} (Elevation: ${fl.elevation || fl.level * 250}cm)`;
+        lctx.fillText(subText, 512, 165);
+
+        const labelTex = new THREE.CanvasTexture(labelCanvas);
+        labelTex.minFilter = THREE.LinearFilter;
+        const placardW = Math.min(6.5, padW * 0.75);
+        const placardH = placardW * (256 / 1024);
+        const labelGeom = new THREE.PlaneGeometry(placardW, placardH);
+        const labelMat = new THREE.MeshBasicMaterial({
+          map: labelTex,
+          transparent: true,
+          side: THREE.DoubleSide,
+        });
+        const labelMesh = new THREE.Mesh(labelGeom, labelMat);
+        labelMesh.position.set(centerX, offset.y + 0.35, maxZ + offset.z + 1.2);
+        labelMesh.rotation.x = -Math.PI / 4; // Angled 45 deg upward toward camera
+        group.add(labelMesh);
+      }
+    });
+
     // 1. Build Rooms (Floors)
     plan.rooms.filter((r) => isFloorVisible(r.floorLevel ?? 0)).forEach((room) => {
       if (room.points.length < 3) return;
+      const offset = getFloor3DOffset(room.floorLevel ?? 0);
 
       const shape = new THREE.Shape();
       shape.moveTo(room.points[0].x * CM, -room.points[0].y * CM);
@@ -478,13 +592,14 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       const floorMesh = new THREE.Mesh(geom, mat);
       floorMesh.rotation.x = -Math.PI / 2;
-      floorMesh.position.y = getFloorElevation(room.floorLevel || 0) + 0.005;
+      floorMesh.position.set(offset.x, offset.y + 0.005, offset.z);
       floorMesh.receiveShadow = true;
       group.add(floorMesh);
     });
 
     // 2. Build Walls
     plan.walls.filter((w) => isFloorVisible(w.floorLevel ?? 0)).forEach((wall) => {
+      const offset = getFloor3DOffset(wall.floorLevel ?? 0);
       const x1 = wall.xStart * CM;
       const z1 = wall.yStart * CM;
       const x2 = wall.xEnd * CM;
@@ -497,7 +612,6 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       const height = (wall.height || 250) * CM;
       const thickness = (wall.thickness || 15) * CM;
-      const floorElevation = getFloorElevation(wall.floorLevel || 0);
 
       const geom = new THREE.BoxGeometry(length, height, thickness);
       const isSelected = selectedId === wall.id;
@@ -509,7 +623,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       });
 
       const wallMesh = new THREE.Mesh(geom, mat);
-      wallMesh.position.set((x1 + x2) / 2, floorElevation + height / 2, (z1 + z2) / 2);
+      wallMesh.position.set(
+        (x1 + x2) / 2 + offset.x,
+        offset.y + height / 2,
+        (z1 + z2) / 2 + offset.z
+      );
       wallMesh.rotation.y = -angle;
       wallMesh.castShadow = true;
       wallMesh.receiveShadow = true;
@@ -524,13 +642,13 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       const isSelected = selectedId === item.id;
       const isColliding = collidingItemIds.has(item.id);
-      const floorElevation = getFloorElevation(item.floorLevel || 0);
+      const offset = getFloor3DOffset(item.floorLevel ?? 0);
 
       const itemGroup = new THREE.Group();
       itemGroup.position.set(
-        item.x * CM,
-        floorElevation + (item.elevation || 0) * CM,
-        item.y * CM
+        item.x * CM + offset.x,
+        offset.y + (item.elevation || 0) * CM,
+        item.y * CM + offset.z
       );
       itemGroup.rotation.y = -(item.angle || 0);
       itemGroup.userData = { id: item.id, type: 'furniture', isColliding };
@@ -719,20 +837,31 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         isDraggingObjectRef.current = true;
         setIsDraggingObjectState(true);
 
-        // Compute intersection with floor plane
-        const floorElevation =
-          floor3DMode === 'isolated'
-            ? 0
-            : floor3DMode === 'exploded'
-            ? (activeFloor || 0) * 4.5
-            : (activeFloor || 0) * 2.5;
-        const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -floorElevation);
+        const allFloors = planRef.current.floors && planRef.current.floors.length > 0 ? planRef.current.floors : [
+          { level: 0, name: 'Ground Floor' },
+          { level: 1, name: '1st Floor' },
+        ];
+        const getFloor3DOffset = (level: number = 0) => {
+          if (floor3DMode === 'isolated') {
+            return { x: 0, y: 0, z: 0 };
+          } else if (floor3DMode === 'sideBySide') {
+            const floorIdx = allFloors.findIndex((fl) => fl.level === level);
+            const validIdx = floorIdx >= 0 ? floorIdx : 0;
+            const mid = (allFloors.length - 1) / 2;
+            return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
+          } else {
+            return { x: 0, y: level * 2.5, z: 0 };
+          }
+        };
+
+        const offset = getFloor3DOffset(item?.floorLevel || 0);
+        const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -offset.y);
         const hitPoint = new THREE.Vector3();
         if (raycaster.ray.intersectPlane(floorPlane, hitPoint)) {
           if (item) {
             dragOffsetRef.current = {
-              x: hitPoint.x - item.x * 0.01,
-              z: hitPoint.z - item.y * 0.01,
+              x: hitPoint.x - (item.x * 0.01 + offset.x),
+              z: hitPoint.z - (item.y * 0.01 + offset.z),
             };
           }
         }
@@ -769,18 +898,33 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(mouse, cameraRef.current);
 
-      const floorElevation =
-        floor3DMode === 'isolated'
-          ? 0
-          : floor3DMode === 'exploded'
-          ? (activeFloor || 0) * 4.5
-          : (activeFloor || 0) * 2.5;
-      const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -floorElevation);
+      const currentItem = planRef.current.furniture.find(
+        (f) => f.id === draggedItemIdRef.current
+      );
+      const allFloors = planRef.current.floors && planRef.current.floors.length > 0 ? planRef.current.floors : [
+        { level: 0, name: 'Ground Floor' },
+        { level: 1, name: '1st Floor' },
+      ];
+      const getFloor3DOffset = (level: number = 0) => {
+        if (floor3DMode === 'isolated') {
+          return { x: 0, y: 0, z: 0 };
+        } else if (floor3DMode === 'sideBySide') {
+          const floorIdx = allFloors.findIndex((fl) => fl.level === level);
+          const validIdx = floorIdx >= 0 ? floorIdx : 0;
+          const mid = (allFloors.length - 1) / 2;
+          return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
+        } else {
+          return { x: 0, y: level * 2.5, z: 0 };
+        }
+      };
+
+      const offset = getFloor3DOffset(currentItem?.floorLevel || 0);
+      const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -offset.y);
       const hitPoint = new THREE.Vector3();
 
       if (raycaster.ray.intersectPlane(floorPlane, hitPoint)) {
-        const targetWorldX = hitPoint.x - dragOffsetRef.current.x;
-        const targetWorldZ = hitPoint.z - dragOffsetRef.current.z;
+        const targetWorldX = hitPoint.x - dragOffsetRef.current.x - offset.x;
+        const targetWorldZ = hitPoint.z - dragOffsetRef.current.z - offset.z;
 
         // Convert world meters to plan cm with 5cm magnetic grid snapping
         const rawPlanX = targetWorldX * 100;
@@ -960,18 +1104,32 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, cameraRef.current);
 
-    const floorElevation =
-      floor3DMode === 'isolated'
-        ? 0
-        : floor3DMode === 'exploded'
-        ? (activeFloor || 0) * 4.5
-        : (activeFloor || 0) * 2.5;
-    const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -floorElevation);
+    const allFloors = planRef.current.floors && planRef.current.floors.length > 0 ? planRef.current.floors : [
+      { level: 0, name: 'Ground Floor' },
+      { level: 1, name: '1st Floor' },
+    ];
+    const getFloor3DOffset = (level: number = 0) => {
+      if (floor3DMode === 'isolated') {
+        return { x: 0, y: 0, z: 0 };
+      } else if (floor3DMode === 'sideBySide') {
+        const floorIdx = allFloors.findIndex((fl) => fl.level === level);
+        const validIdx = floorIdx >= 0 ? floorIdx : 0;
+        const mid = (allFloors.length - 1) / 2;
+        return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
+      } else {
+        return { x: 0, y: level * 2.5, z: 0 };
+      }
+    };
+
+    const offset = getFloor3DOffset(activeFloor || 0);
+    const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -offset.y);
     const hitPoint = new THREE.Vector3();
 
     if (raycaster.ray.intersectPlane(floorPlane, hitPoint)) {
-      const snappedX = Math.round((hitPoint.x * 100) / 5) * 5;
-      const snappedY = Math.round((hitPoint.z * 100) / 5) * 5;
+      const targetWorldX = hitPoint.x - offset.x;
+      const targetWorldZ = hitPoint.z - offset.z;
+      const snappedX = Math.round((targetWorldX * 100) / 5) * 5;
+      const snappedY = Math.round((targetWorldZ * 100) / 5) * 5;
 
       const currentPlan = planRef.current;
       let newItem: FurnitureItem = {
@@ -1043,13 +1201,32 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   // Switch to Virtual Visitor mode and place in center of primary room
   const handleSwitchToVisitor = () => {
     setCameraMode('visitor');
-    if (plan.rooms.length > 0) {
-      const r = plan.rooms[0];
-      const avgX = (r.points.reduce((acc, p) => acc + p.x, 0) / r.points.length) * 0.01;
-      const avgZ = (r.points.reduce((acc, p) => acc + p.y, 0) / r.points.length) * 0.01;
-      visitorPosRef.current.set(avgX, 1.6, avgZ);
+    const allFloors = plan.floors && plan.floors.length > 0 ? plan.floors : [
+      { level: 0, name: 'Ground Floor' },
+      { level: 1, name: '1st Floor' },
+    ];
+    const getFloor3DOffset = (level: number = 0) => {
+      if (floor3DMode === 'isolated') {
+        return { x: 0, y: 0, z: 0 };
+      } else if (floor3DMode === 'sideBySide') {
+        const floorIdx = allFloors.findIndex((fl) => fl.level === level);
+        const validIdx = floorIdx >= 0 ? floorIdx : 0;
+        const mid = (allFloors.length - 1) / 2;
+        return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
+      } else {
+        return { x: 0, y: level * 2.5, z: 0 };
+      }
+    };
+
+    const targetRoom = plan.rooms.find((r) => (r.floorLevel ?? 0) === (activeFloor ?? 0)) || plan.rooms[0];
+    if (targetRoom && targetRoom.points.length > 0) {
+      const offset = getFloor3DOffset(targetRoom.floorLevel ?? 0);
+      const avgX = (targetRoom.points.reduce((acc, p) => acc + p.x, 0) / targetRoom.points.length) * 0.01 + offset.x;
+      const avgZ = (targetRoom.points.reduce((acc, p) => acc + p.y, 0) / targetRoom.points.length) * 0.01 + offset.z;
+      visitorPosRef.current.set(avgX, offset.y + 1.6, avgZ);
     } else {
-      visitorPosRef.current.set(0, 1.6, 0);
+      const offset = getFloor3DOffset(activeFloor || 0);
+      visitorPosRef.current.set(offset.x, offset.y + 1.6, offset.z);
     }
     visitorYawRef.current = 0;
     visitorPitchRef.current = 0;
@@ -1058,9 +1235,26 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   // Teleport visitor to a specific room
   const handleTeleportToRoom = (room: Room) => {
     setCameraMode('visitor');
-    const avgX = (room.points.reduce((acc, p) => acc + p.x, 0) / room.points.length) * 0.01;
-    const avgZ = (room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length) * 0.01;
-    visitorPosRef.current.set(avgX, 1.6, avgZ);
+    const allFloors = plan.floors && plan.floors.length > 0 ? plan.floors : [
+      { level: 0, name: 'Ground Floor' },
+      { level: 1, name: '1st Floor' },
+    ];
+    const getFloor3DOffset = (level: number = 0) => {
+      if (floor3DMode === 'isolated') {
+        return { x: 0, y: 0, z: 0 };
+      } else if (floor3DMode === 'sideBySide') {
+        const floorIdx = allFloors.findIndex((fl) => fl.level === level);
+        const validIdx = floorIdx >= 0 ? floorIdx : 0;
+        const mid = (allFloors.length - 1) / 2;
+        return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
+      } else {
+        return { x: 0, y: level * 2.5, z: 0 };
+      }
+    };
+    const offset = getFloor3DOffset(room.floorLevel ?? 0);
+    const avgX = (room.points.reduce((acc, p) => acc + p.x, 0) / room.points.length) * 0.01 + offset.x;
+    const avgZ = (room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length) * 0.01 + offset.z;
+    visitorPosRef.current.set(avgX, offset.y + 1.6, avgZ);
     visitorYawRef.current = 0;
     visitorPitchRef.current = 0;
   };
@@ -1235,8 +1429,20 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       {/* Top 3D Viewport Controls */}
       <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-        {/* 3D Floor Mode: Isolated vs Stacked vs Exploded */}
+        {/* 3D Floor Mode: Side-by-Side vs Stacked vs Isolated */}
         <div className="flex items-center bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-md text-xs font-semibold">
+          <button
+            onClick={() => setFloor3DMode('sideBySide')}
+            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+              floor3DMode === 'sideBySide'
+                ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+            title="Side-by-Side Multi-Floor View (Show Floor 1 & Floor 2 side-by-side horizontally with floor placards)"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>🔲 Side-by-Side (All Floors)</span>
+          </button>
           <button
             onClick={() => setFloor3DMode('isolated')}
             className={`px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 ${
@@ -1246,7 +1452,6 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             }`}
             title="Focus on Active Floor Only (Isolate & Hide Other Floors)"
           >
-            <Layers className="w-3.5 h-3.5 text-sky-600" />
             <span>Floor {activeFloor} Only</span>
           </button>
           <button
@@ -1259,18 +1464,6 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             title="Stack All Floors at Standard Building Height (2.5m per floor)"
           >
             <span>Stacked</span>
-          </button>
-          <button
-            onClick={() => setFloor3DMode('exploded')}
-            className={`px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 ${
-              floor3DMode === 'exploded'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-            title="Exploded Multi-Floor View (Separated Floating Floors with Clean Clearance)"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Exploded</span>
           </button>
         </div>
 
