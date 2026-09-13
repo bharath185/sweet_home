@@ -887,6 +887,8 @@ export default function HomeStudioPage() {
                       isSplitMode={false}
                       cameraModeProp={cameraMode3D}
                       onCameraModeChangeProp={setCameraMode3D}
+                      visitorCameraProp={visitorCamera}
+                      onVisitorCameraChange={setVisitorCamera}
                     />
                   </div>
                 )}

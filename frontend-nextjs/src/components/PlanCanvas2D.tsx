@@ -1026,8 +1026,8 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
     // 10.5. Real-Time Virtual Visitor Person Position & FOV Vision Cone
     // ONLY display when Walk Mode is active!
-    if (isWalkMode && visitorCamera && (visitorCamera.floorLevel === undefined || visitorCamera.floorLevel === activeFloor || canvasFloorMode === 'stacked')) {
-      const vPos = planToScreen(visitorCamera.x, visitorCamera.y);
+    if (isWalkMode && visitorCamera && (visitorCamera.floorLevel === undefined || visitorCamera.floorLevel === activeFloor || canvasFloorMode === 'stacked' || canvasFloorMode === 'sideBySide')) {
+      const vPos = planToScreen(visitorCamera.x, visitorCamera.y, visitorCamera.floorLevel ?? activeFloor);
       const vAngle = visitorCamera.yaw || 0;
 
       ctx.save();
@@ -1251,8 +1251,9 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
     // 2D Virtual Visitor Drag Interaction (Only when in Walk Mode)
     if (isWalkMode && visitorCamera && toolMode === 'select') {
-      const vDist = Math.hypot(clickPlan.x - visitorCamera.x, clickPlan.y - visitorCamera.y);
-      if (vDist < 25) {
+      const vScreen = planToScreen(visitorCamera.x, visitorCamera.y, visitorCamera.floorLevel ?? activeFloor);
+      const vDistScreen = Math.hypot(clickScreenX - vScreen.x, clickScreenY - vScreen.y);
+      if (vDistScreen <= 24) {
         setIsDraggingVisitor(true);
         return;
       }
@@ -1485,6 +1486,16 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const currentPlan = screenToPlan(e.clientX, e.clientY);
     setMouseCanvasPos(currentPlan);
+
+    // 2D Virtual Visitor Dragging
+    if (isDraggingVisitor && onUpdateVisitorCamera) {
+      onUpdateVisitorCamera({
+        x: Math.round(currentPlan.x),
+        y: Math.round(currentPlan.y),
+        floorLevel: activeFloor,
+      });
+      return;
+    }
 
     // Dynamic magnetic snap preview during wall drawing or dragging
     if (toolMode === 'drawWall' || (activeWallHandle && ['start', 'end'].includes(activeWallHandle))) {

@@ -1657,6 +1657,9 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const handleTeleportToRoom = (room: Room) => {
     setCameraMode('visitor');
     onSelectId(null);
+    if (room.floorLevel !== undefined && onFloorChange && room.floorLevel !== activeFloor) {
+      onFloorChange(room.floorLevel);
+    }
     let avgX = 0;
     let avgZ = 0;
     if (room && room.points && room.points.length > 0) {
