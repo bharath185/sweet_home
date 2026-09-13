@@ -112,7 +112,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const hoveredIdRef = useRef<string | null>(null);
   hoveredIdRef.current = hoveredId;
 
-  const pendingClickedItemRef = useRef<{ id: string; type: 'furniture' | 'wall' } | null>(null);
+  const pendingClickedItemRef = useRef<{
+    id: string;
+    type: 'furniture' | 'wall' | 'floorSign' | 'floorPad' | 'roomFloor';
+    floorLevel?: number;
+  } | null>(null);
   const canDragSelectedItemRef = useRef(false);
   const hasMovedPastThresholdRef = useRef(false);
   const [isDraggingObjectState, setIsDraggingObjectState] = useState(false);
@@ -748,9 +752,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const padMesh = new THREE.Mesh(padGeom, padMat);
       padMesh.position.set(centerX, offset.y - 0.03, centerZ);
       padMesh.receiveShadow = true;
+      padMesh.userData = { id: `floor_pad_${fl.level}`, type: 'floorPad', floorLevel: fl.level };
       group.add(padMesh);
 
-      // High-Definition 3D Floor Placard Signboard (Clean Ground Floor / 1st Floor Badge)
+      // High-Definition 3D Floor Placard Signboard with ACTIVE indicator and floor click metadata
+      const isCurActive = (targetFloor === fl.level);
       const labelCanvas = document.createElement('canvas');
       labelCanvas.width = 2048;
       labelCanvas.height = 512;
@@ -760,34 +766,35 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         lctx.imageSmoothingQuality = 'high';
 
         // Outer ambient drop shadow
-        lctx.shadowColor = 'rgba(15, 23, 42, 0.35)';
-        lctx.shadowBlur = 28;
+        lctx.shadowColor = isCurActive ? 'rgba(2, 132, 199, 0.6)' : 'rgba(15, 23, 42, 0.35)';
+        lctx.shadowBlur = isCurActive ? 36 : 24;
         lctx.shadowOffsetY = 10;
 
-        const grad = lctx.createLinearGradient(0, 0, 2048, 512);
-        if (fl.level === 0) {
-          grad.addColorStop(0, '#0284c7');
-          grad.addColorStop(1, '#0369a1');
-        } else if (fl.level === 1) {
-          grad.addColorStop(0, '#059669');
-          grad.addColorStop(1, '#047857');
+        if (isCurActive) {
+          const grad = lctx.createLinearGradient(0, 0, 2048, 512);
+          if (fl.level === 0) {
+            grad.addColorStop(0, '#0284c7');
+            grad.addColorStop(1, '#0369a1');
+          } else if (fl.level === 1) {
+            grad.addColorStop(0, '#059669');
+            grad.addColorStop(1, '#047857');
+          } else {
+            grad.addColorStop(0, '#6366f1');
+            grad.addColorStop(1, '#4f46e5');
+          }
+          lctx.fillStyle = grad;
         } else {
-          grad.addColorStop(0, '#6366f1');
-          grad.addColorStop(1, '#4f46e5');
+          lctx.fillStyle = '#334155';
         }
-        lctx.fillStyle = grad;
+
         lctx.beginPath();
         lctx.roundRect(32, 32, 1984, 448, 64);
         lctx.fill();
 
-        // Reset Shadow for crisp borders & typography
+        // Crisp Border
         lctx.shadowColor = 'transparent';
-        lctx.shadowBlur = 0;
-        lctx.shadowOffsetY = 0;
-
-        // White Border Stroke
-        lctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-        lctx.lineWidth = 14;
+        lctx.strokeStyle = isCurActive ? '#38bdf8' : 'rgba(255, 255, 255, 0.7)';
+        lctx.lineWidth = isCurActive ? 22 : 12;
         lctx.beginPath();
         lctx.roundRect(32, 32, 1984, 448, 64);
         lctx.stroke();
@@ -798,7 +805,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         lctx.textAlign = 'center';
         lctx.textBaseline = 'middle';
         const rawName = (fl.name || '').split('(')[0].trim().toUpperCase();
-        const floorTitle = fl.level === 0 ? '🏢 GROUND FLOOR' : fl.level === 1 ? '🏡 1ST FLOOR' : `🏡 ${rawName || `FLOOR ${fl.level}`}`;
+        const baseTitle = fl.level === 0 ? '🏢 GROUND FLOOR' : fl.level === 1 ? '🏡 1ST FLOOR' : `🏡 ${rawName || `FLOOR ${fl.level}`}`;
+        const floorTitle = isCurActive ? `● ${baseTitle} (ACTIVE)` : baseTitle;
         lctx.fillText(floorTitle, 1024, 256);
 
         const labelTex = new THREE.CanvasTexture(labelCanvas);
@@ -819,6 +827,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         const labelMesh = new THREE.Mesh(labelGeom, labelMat);
         labelMesh.position.set(centerX, offset.y + 0.35, maxZ + offset.z + 1.2);
         labelMesh.rotation.x = -Math.PI / 4; // Angled 45 deg upward toward camera
+        labelMesh.userData = { id: `floor_sign_${fl.level}`, type: 'floorSign', floorLevel: fl.level };
         group.add(labelMesh);
       }
     });
@@ -846,6 +855,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       floorMesh.rotation.x = -Math.PI / 2;
       floorMesh.position.set(offset.x, offset.y + 0.005, offset.z);
       floorMesh.receiveShadow = true;
+      floorMesh.userData = { id: room.id, type: 'roomFloor', floorLevel: room.floorLevel ?? 0 };
       group.add(floorMesh);
     });
 
@@ -883,7 +893,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       wallMesh.rotation.y = -angle;
       wallMesh.castShadow = true;
       wallMesh.receiveShadow = true;
-      wallMesh.userData = { id: wall.id, type: 'wall' };
+      wallMesh.userData = { id: wall.id, type: 'wall', floorLevel: wall.floorLevel ?? 0 };
 
       group.add(wallMesh);
     });
@@ -939,7 +949,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         }
       }
       itemGroup.rotation.y = -(item.angle || 0);
-      itemGroup.userData = { id: item.id, type: 'furniture', isColliding };
+      itemGroup.userData = { id: item.id, type: 'furniture', floorLevel: item.floorLevel ?? 0, isColliding };
 
       let itemMat: THREE.MeshStandardMaterial;
       const baseColor = item.color || (item.category === 'Doors & Windows' ? '#fef08a' : '#94a3b8');
@@ -1150,9 +1160,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
   // 3D Pick-and-Drag / Orbit / Pan / Visitor Look
   // Accurate helper to find the front-most interactive 3D furniture or wall mesh under pointer
-  const findItemAtPointer = (clientX: number, clientY: number): { id: string | null; type: 'furniture' | 'wall' | null } => {
+  const findItemAtPointer = (
+    clientX: number,
+    clientY: number
+  ): { id: string | null; type: 'furniture' | 'wall' | 'floorSign' | 'floorPad' | 'roomFloor' | null; floorLevel?: number } => {
     if (!cameraRef.current || !meshesGroupRef.current || !canvasMountRef.current) {
-      return { id: null, type: null };
+      return { id: null, type: null, floorLevel: undefined };
     }
     const rect = canvasMountRef.current.getBoundingClientRect();
     const mouse = new THREE.Vector2(
@@ -1169,18 +1182,17 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       let current: THREE.Object3D | null = hit.object;
       while (current && current !== meshesGroupRef.current) {
         if (current.userData && current.userData.id) {
-          if (current.userData.type === 'furniture') {
-            return { id: current.userData.id, type: 'furniture' };
-          }
-          if (current.userData.type === 'wall') {
-            return { id: current.userData.id, type: 'wall' };
+          const type = current.userData.type;
+          const floorLvl = current.userData.floorLevel;
+          if (type === 'furniture' || type === 'wall' || type === 'floorSign' || type === 'floorPad' || type === 'roomFloor') {
+            return { id: current.userData.id, type, floorLevel: floorLvl };
           }
         }
         current = current.parent;
       }
     }
 
-    return { id: null, type: null };
+    return { id: null, type: null, floorLevel: undefined };
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -1411,13 +1423,17 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       return;
     }
 
-    // Clean Click Selection (User clicked without dragging): Instant, 100% Accurate Selection
+    // Clean Click Selection & Synchronized Floor Focus in 3D
     if (cameraModeRef.current === 'aerial' && !hasMovedPastThresholdRef.current) {
       const hit = findItemAtPointer(e.clientX, e.clientY);
-      if (hit.id) {
+      if (hit.floorLevel !== undefined && onFloorChange && hit.floorLevel !== activeFloorRef.current) {
+        onFloorChange(hit.floorLevel);
+      }
+
+      if (hit.id && (hit.type === 'furniture' || hit.type === 'wall')) {
         onSelectId(hit.id);
       } else {
-        onSelectId(null); // Clicked on empty floor or sky -> deselect cleanly
+        onSelectId(null); // Clicked on floor pad/sign/sky -> clear item selection cleanly
       }
     }
   };

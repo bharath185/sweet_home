@@ -427,7 +427,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
           ? allFloors.filter((fl) => fl.level === activeFloor) 
           : [{ level: activeFloor, name: activeFloor === 0 ? 'Ground Floor' : '1st Floor', height: 250, elevation: activeFloor * 250 }]);
 
-    // If Side-by-Side mode, draw architectural floor boundary plates
+    // If Side-by-Side mode, draw architectural floor boundary plates with interactive header placards
     if (canvasFloorMode === 'sideBySide') {
       allFloors.forEach((fl) => {
         const isCurActive = activeFloor === fl.level;
@@ -437,32 +437,57 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
         ctx.save();
         // Floor plate boundary
-        ctx.fillStyle = isCurActive ? 'rgba(2, 132, 199, 0.02)' : 'rgba(241, 245, 249, 0.4)';
+        ctx.fillStyle = isCurActive ? 'rgba(2, 132, 199, 0.03)' : 'rgba(241, 245, 249, 0.4)';
         ctx.fillRect(centerScreen.x - boxW / 2, centerScreen.y - boxH / 2, boxW, boxH);
 
         ctx.strokeStyle = isCurActive ? '#0284c7' : '#cbd5e1';
-        ctx.lineWidth = isCurActive ? 2 : 1;
+        ctx.lineWidth = isCurActive ? 2.5 : 1;
         ctx.setLineDash(isCurActive ? [] : [6, 4]);
         ctx.strokeRect(centerScreen.x - boxW / 2, centerScreen.y - boxH / 2, boxW, boxH);
 
-        // Floor Header Tag (Clean compact pill badge with zero overlap)
+        // Floor Header Placard (High-Visibility Interactive Badge)
         ctx.setLineDash([]);
-        const tagTitle = fl.level === 0 ? 'LEVEL 0 • GROUND' : fl.level === 1 ? 'LEVEL 1 • 1ST FLOOR' : `LEVEL ${fl.level}`;
-        const pillW = 150;
-        const pillH = 24;
-        ctx.fillStyle = isCurActive ? '#0284c7' : 'rgba(241, 245, 249, 0.95)';
+        const rawName = (fl.name || '').split('(')[0].trim().toUpperCase();
+        const floorTitle = fl.level === 0 ? '🏢 GROUND FLOOR' : fl.level === 1 ? '🏡 1ST FLOOR' : `🏡 ${rawName || `FLOOR ${fl.level}`}`;
+        const pillW = isCurActive ? 230 : 200;
+        const pillH = 34;
+        const pillY = centerScreen.y - boxH / 2;
+
+        // Shadow
+        ctx.shadowColor = isCurActive ? 'rgba(2, 132, 199, 0.35)' : 'rgba(15, 23, 42, 0.12)';
+        ctx.shadowBlur = isCurActive ? 12 : 6;
+        ctx.shadowOffsetY = 2;
+
+        if (isCurActive) {
+          const grad = ctx.createLinearGradient(centerScreen.x - pillW / 2, 0, centerScreen.x + pillW / 2, 0);
+          if (fl.level === 0) {
+            grad.addColorStop(0, '#0284c7');
+            grad.addColorStop(1, '#0369a1');
+          } else {
+            grad.addColorStop(0, '#059669');
+            grad.addColorStop(1, '#047857');
+          }
+          ctx.fillStyle = grad;
+        } else {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        }
+
         ctx.beginPath();
-        ctx.roundRect(centerScreen.x - pillW / 2, centerScreen.y - boxH / 2 - pillH / 2, pillW, pillH, 6);
+        ctx.roundRect(centerScreen.x - pillW / 2, pillY - pillH / 2, pillW, pillH, 8);
         ctx.fill();
-        ctx.strokeStyle = isCurActive ? '#0284c7' : '#cbd5e1';
-        ctx.lineWidth = 1;
+
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = isCurActive ? '#ffffff' : '#cbd5e1';
+        ctx.lineWidth = isCurActive ? 2 : 1;
         ctx.stroke();
 
-        ctx.fillStyle = isCurActive ? '#ffffff' : '#64748b';
-        ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
+        ctx.fillStyle = isCurActive ? '#ffffff' : '#475569';
+        ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(isCurActive ? `● ${tagTitle}` : tagTitle, centerScreen.x, centerScreen.y - boxH / 2);
+        const displayLabel = isCurActive ? `● ${floorTitle} (ACTIVE)` : `${floorTitle}`;
+        ctx.fillText(displayLabel, centerScreen.x, pillY);
         ctx.restore();
       });
     }
@@ -916,7 +941,8 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         ctx.restore();
       });
 
-      // 10. Architectural Floor Placard Signboard in 2D (Clean Ground Floor / 1st Floor Badge)
+      // 10. Architectural Floor Placard Signboard in 2D (Rendered in single floor view)
+      if (canvasFloorMode !== 'sideBySide') {
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
       curRooms.forEach((r) => {
         r.points.forEach((p) => {
@@ -995,6 +1021,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       ctx.fillText(floorTitle, 0, 0);
 
       ctx.restore();
+      } // end if canvasFloorMode !== 'sideBySide'
     });
 
     // 10.5. Real-Time Virtual Visitor Person Position & FOV Vision Cone
@@ -1199,6 +1226,27 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       return;
     }
 
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const clickScreenX = e.clientX - rect.left;
+    const clickScreenY = e.clientY - rect.top;
+
+    // Side-by-Side Floor Plate / Header Hit-Testing & Selection
+    if (canvasFloorMode === 'sideBySide') {
+      for (const fl of allFloors) {
+        const centerScreen = planToScreen(0, 0, fl.level);
+        const boxW = 820 * scale;
+        const boxH = 680 * scale;
+        const inBox = Math.abs(clickScreenX - centerScreen.x) <= boxW / 2 &&
+                      Math.abs(clickScreenY - centerScreen.y) <= boxH / 2;
+        if (inBox) {
+          if (activeFloor !== fl.level && onFloorChange) {
+            onFloorChange(fl.level);
+          }
+          break;
+        }
+      }
+    }
+
     const clickPlan = screenToPlan(e.clientX, e.clientY);
 
     // 2D Virtual Visitor Drag Interaction (Only when in Walk Mode)
@@ -1358,14 +1406,27 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         }
       }
 
-      // 3. Hit Test Furniture Items
+      // 3. Hit Test Furniture Items across all visible floors
       let foundFurniture: FurnitureItem | null = null;
-      for (let i = floorFurniture.length - 1; i >= 0; i--) {
-        const f = floorFurniture[i];
+      const targetFurnitureList = canvasFloorMode === 'sideBySide' 
+        ? plan.furniture.filter((f) => f.isVisible !== false) 
+        : floorFurniture;
+
+      for (let i = targetFurnitureList.length - 1; i >= 0; i--) {
+        const f = targetFurnitureList[i];
+        const flLvl = f.floorLevel ?? 0;
+        const pPt = screenToPlan(e.clientX, e.clientY);
+        const flOffset = canvasFloorMode === 'sideBySide' ? getFloorOffset(flLvl) : { x: 0, y: 0 };
+        const activeOffset = canvasFloorMode === 'sideBySide' ? getFloorOffset(activeFloor) : { x: 0, y: 0 };
+        
+        // Compute item position relative to current click
+        const itemPlanX = f.x + flOffset.x - activeOffset.x;
+        const itemPlanY = f.y + flOffset.y - activeOffset.y;
+
         const halfW = f.width / 2;
         const halfD = f.depth / 2;
-        const dx = clickPlan.x - f.x;
-        const dy = clickPlan.y - f.y;
+        const dx = pPt.x - itemPlanX;
+        const dy = pPt.y - itemPlanY;
         const cos = Math.cos(-(f.angle || 0));
         const sin = Math.sin(-(f.angle || 0));
         const localX = dx * cos - dy * sin;
@@ -1373,6 +1434,9 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
         if (Math.abs(localX) <= halfW && Math.abs(localY) <= halfD) {
           foundFurniture = f;
+          if (canvasFloorMode === 'sideBySide' && f.floorLevel !== undefined && f.floorLevel !== activeFloor && onFloorChange) {
+            onFloorChange(f.floorLevel);
+          }
           break;
         }
       }
