@@ -7,10 +7,12 @@ import { loadObjGeometry } from '../services/objParser';
 export const LoginSimulator3D: React.FC = () => {
   const mountRef = useRef<HTMLDivElement | null>(null);
 
-  // Mouse orbit state
+  // User interactive camera state: orbit angle, distance, and pan target
   const isDraggingRef = useRef(false);
+  const dragModeRef = useRef<'rotate' | 'pan'>('rotate');
   const prevMouseRef = useRef({ x: 0, y: 0 });
   const cameraAngleRef = useRef({ theta: Math.PI / 4.2, phi: Math.PI / 3.0, radius: 12.0 });
+  const cameraTargetRef = useRef(new THREE.Vector3(0, 0.45, 0));
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -19,7 +21,7 @@ export const LoginSimulator3D: React.FC = () => {
     const width = mount.clientWidth || 700;
     const height = mount.clientHeight || 640;
 
-    // 1. Three.js Scene Setup (Transparent background)
+    // 1. Three.js Scene Setup (Transparent canvas)
     const scene = new THREE.Scene();
 
     const camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 100);
@@ -287,7 +289,7 @@ export const LoginSimulator3D: React.FC = () => {
     });
 
     // ==========================================
-    // 9. STAGE 4 & 5: INVENTORY FURNITURE SUITE (NEAT PROPER ALIGNMENT & FACING)
+    // 9. STAGE 4 & 5: INVENTORY FURNITURE SUITE
     // ==========================================
     const furnitureGroup = new THREE.Group();
     roomRoot.add(furnitureGroup);
@@ -340,7 +342,7 @@ export const LoginSimulator3D: React.FC = () => {
     furnitureGroup.add(rugMesh);
 
     // ==========================================
-    // 10. 60 FPS PROGRESSIVE ANIMATION CYCLE
+    // 10. 60 FPS PROGRESSIVE ANIMATION CYCLE (NO AUTO-SPIN)
     // ==========================================
     let animationId: number;
     let clock = new THREE.Clock();
@@ -400,27 +402,33 @@ export const LoginSimulator3D: React.FC = () => {
         furnitureGroup.visible = false;
       }
 
-      // Camera Orbit with Safe In-Bounds Rotation (Zero Edge Cropping)
+      // Camera position based on user's manual adjustments (No automatic camera spinning)
+      const target = cameraTargetRef.current;
       const s = cameraAngleRef.current;
-      if (!isDraggingRef.current) {
-        s.theta += delta * 0.12;
-      }
 
-      const camX = s.radius * Math.sin(s.phi) * Math.sin(s.theta);
-      const camY = s.radius * Math.cos(s.phi);
-      const camZ = s.radius * Math.sin(s.phi) * Math.cos(s.theta);
+      const camX = target.x + s.radius * Math.sin(s.phi) * Math.sin(s.theta);
+      const camY = target.y + s.radius * Math.cos(s.phi);
+      const camZ = target.z + s.radius * Math.sin(s.phi) * Math.cos(s.theta);
       camera.position.set(camX, camY, camZ);
-      camera.lookAt(0, 0.45, 0);
+      camera.lookAt(target.x, target.y, target.z);
 
       renderer.render(scene, camera);
     };
 
     animate();
 
-    // Mouse Interaction with Safe Polar Angle Clamping & Zoom
+    // ==========================================
+    // 11. USER ADJUSTMENTS: ROTATION + PANNING + ZOOM
+    // ==========================================
     const handleMouseDown = (e: MouseEvent) => {
       isDraggingRef.current = true;
       prevMouseRef.current = { x: e.clientX, y: e.clientY };
+      // Right click, Middle click, or Shift+Left click enables Panning / Position adjustment
+      if (e.button === 2 || e.button === 1 || e.shiftKey) {
+        dragModeRef.current = 'pan';
+      } else {
+        dragModeRef.current = 'rotate';
+      }
     };
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -429,9 +437,26 @@ export const LoginSimulator3D: React.FC = () => {
       const dy = e.clientY - prevMouseRef.current.y;
       prevMouseRef.current = { x: e.clientX, y: e.clientY };
 
-      const s = cameraAngleRef.current;
-      s.theta -= dx * 0.007;
-      s.phi = Math.max(0.45, Math.min(1.35, s.phi - dy * 0.007));
+      if (dragModeRef.current === 'pan') {
+        // Adjust camera target position
+        const target = cameraTargetRef.current;
+        const s = cameraAngleRef.current;
+        const rightX = Math.cos(s.theta);
+        const rightZ = -Math.sin(s.theta);
+
+        target.x -= rightX * dx * 0.006;
+        target.z -= rightZ * dx * 0.006;
+        target.y += dy * 0.006;
+
+        target.x = Math.max(-2.5, Math.min(2.5, target.x));
+        target.y = Math.max(-1.5, Math.min(2.5, target.y));
+        target.z = Math.max(-2.5, Math.min(2.5, target.z));
+      } else {
+        // Adjust camera rotation angle
+        const s = cameraAngleRef.current;
+        s.theta -= dx * 0.008;
+        s.phi = Math.max(0.35, Math.min(1.4, s.phi - dy * 0.008));
+      }
     };
 
     const handleMouseUp = () => {
@@ -441,7 +466,11 @@ export const LoginSimulator3D: React.FC = () => {
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       const s = cameraAngleRef.current;
-      s.radius = Math.max(10.0, Math.min(15.0, s.radius + e.deltaY * 0.005));
+      s.radius = Math.max(9.0, Math.min(16.0, s.radius + e.deltaY * 0.005));
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
     };
 
     const dom = renderer.domElement;
@@ -449,6 +478,7 @@ export const LoginSimulator3D: React.FC = () => {
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
     dom.addEventListener('wheel', handleWheel, { passive: false });
+    dom.addEventListener('contextmenu', handleContextMenu);
 
     const handleResize = () => {
       if (!mount || !renderer || !camera) return;
@@ -466,6 +496,7 @@ export const LoginSimulator3D: React.FC = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
       dom.removeEventListener('wheel', handleWheel);
+      dom.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('resize', handleResize);
       if (mount.contains(renderer.domElement)) {
         mount.removeChild(renderer.domElement);
@@ -475,8 +506,8 @@ export const LoginSimulator3D: React.FC = () => {
   }, []);
 
   return (
-    <div className="relative w-full h-[520px] sm:h-[580px] lg:h-[660px] flex items-center justify-center select-none overflow-visible touch-none">
-      <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+    <div className="relative w-full h-[520px] sm:h-[580px] lg:h-[660px] flex items-center justify-center select-none overflow-visible touch-none cursor-grab active:cursor-grabbing">
+      <div ref={mountRef} className="w-full h-full" />
     </div>
   );
 };
