@@ -292,9 +292,9 @@ export const LoginSimulator3D: React.FC = () => {
     const furnitureGroup = new THREE.Group();
     roomRoot.add(furnitureGroup);
 
-    // A. Luxury Sofa from inventory (/models/sofa.obj) - Facing directly forward (-Z) towards coffee table and TV
+    // A. Luxury Sofa from inventory (/models/sofa.obj) - Rotated Math.PI (180 deg) so cushions face directly toward coffee table and TV
     loadInventoryItem('/models/sofa.obj', 2.1, 0.85, 0.82, sofaMat).then((sofaMesh) => {
-      sofaMesh.rotation.y = 0;
+      sofaMesh.rotation.y = Math.PI;
       sofaMesh.position.set(-0.1, 0, 0.82);
       furnitureGroup.add(sofaMesh);
     });
@@ -305,9 +305,9 @@ export const LoginSimulator3D: React.FC = () => {
       furnitureGroup.add(tableMesh);
     });
 
-    // C. Armchair from inventory (/models/armchair.obj) - Angled 45 degrees towards the coffee table center
+    // C. Armchair from inventory (/models/armchair.obj) - Angled to face northwest directly toward the coffee table
     loadInventoryItem('/models/armchair.obj', 0.8, 0.8, 0.8, armchairMat).then((chairMesh) => {
-      chairMesh.rotation.y = -Math.PI * 0.65;
+      chairMesh.rotation.y = Math.PI * 0.75;
       chairMesh.position.set(1.25, 0, 0.15);
       furnitureGroup.add(chairMesh);
     });
