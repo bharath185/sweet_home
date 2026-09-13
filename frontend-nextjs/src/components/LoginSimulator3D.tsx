@@ -372,14 +372,14 @@ export const LoginSimulator3D: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full h-full min-h-[440px] lg:min-h-[560px] bg-slate-900/90 rounded-3xl border border-slate-800/90 overflow-hidden shadow-2xl flex flex-col justify-between select-none">
+    <div className="relative w-full h-[460px] lg:h-[580px] bg-[#0f172a] rounded-3xl border border-slate-800 overflow-hidden shadow-2xl flex flex-col justify-between select-none">
       
       {/* 3D WebGL Canvas Viewport */}
       <div ref={mountRef} className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing" />
 
       {/* Top Floating Stage Indicator Badge */}
       <div className="relative z-10 p-4 sm:p-5 flex items-start justify-between pointer-events-none">
-        <div className="bg-slate-950/80 backdrop-blur-xl border border-slate-800 p-3 rounded-2xl shadow-xl max-w-sm pointer-events-auto animate-in fade-in duration-300">
+        <div className="bg-[#0b1120] border border-slate-800 p-3 rounded-2xl shadow-xl max-w-sm pointer-events-auto animate-in fade-in duration-300">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 font-mono">
               {activeStageObj.badge}
@@ -394,14 +394,14 @@ export const LoginSimulator3D: React.FC = () => {
         </div>
 
         {/* Orbit Hint Badge */}
-        <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800 text-[10px] text-slate-400 backdrop-blur-md">
+        <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0b1120] border border-slate-800 text-[10px] text-slate-400">
           <Compass className="w-3.5 h-3.5 text-sky-400 animate-spin" style={{ animationDuration: '8s' }} />
           <span>Click & Drag 360° Orbit</span>
         </div>
       </div>
 
       {/* Bottom Interactive Step Scrubber & Playback Controls */}
-      <div className="relative z-10 p-4 sm:p-5 bg-gradient-to-t from-slate-950/95 via-slate-950/70 to-transparent flex flex-col gap-2.5">
+      <div className="relative z-10 p-4 sm:p-5 bg-[#0b1120] border-t border-slate-800 flex flex-col gap-2.5">
         
         {/* Step Progression Chips */}
         <div className="grid grid-cols-6 gap-1 sm:gap-1.5">
