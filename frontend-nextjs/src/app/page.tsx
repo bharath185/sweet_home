@@ -855,6 +855,14 @@ export default function HomeStudioPage() {
             <CustomerPresentationView
               plan={plan}
               catalog={catalog}
+              clientName={
+                currentUser?.role === 'CLIENT'
+                  ? currentUser.name
+                  : (users.find((u) => u.assignedPlan === plan.id || u.id === plan.assignedToUserId)?.name ||
+                     users.find((u) => u.role === 'CLIENT')?.name ||
+                     'Sarah Jenkins')
+              }
+              userRole={userRole}
               onUpdatePlan={handleUpdatePlan}
               onSwitchToStudio={() => setActiveView('split')}
               onOpenShare={() => setIsShareModalOpen(true)}

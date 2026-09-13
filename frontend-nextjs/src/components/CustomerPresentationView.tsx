@@ -32,13 +32,15 @@ import {
   Box,
   Search
 } from 'lucide-react';
-import { HomePlan, Room, CatalogItem, FurnitureItem } from '../types/plan';
+import { HomePlan, Room, CatalogItem, FurnitureItem, UserRole } from '../types/plan';
 import { isTabletopItem, findNearestSupportingSurface } from '../services/tabletopAttachment';
 import { Viewport3D } from './Viewport3D';
 
 interface CustomerPresentationViewProps {
   plan: HomePlan;
   catalog: CatalogItem[];
+  clientName?: string;
+  userRole?: UserRole;
   onUpdatePlan: (plan: HomePlan) => void;
   onSwitchToStudio: () => void;
   onOpenShare: () => void;
@@ -58,6 +60,8 @@ const CLIENT_PRESET_COLORS = [
 export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> = ({
   plan,
   catalog,
+  clientName,
+  userRole,
   onUpdatePlan,
   onSwitchToStudio,
   onOpenShare,
@@ -343,12 +347,15 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xs font-extrabold text-slate-900 tracking-tight truncate max-w-[170px]">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-600 text-white font-mono shadow-2xs">
+                👤 Client: {clientName || 'Sarah Jenkins'}
+              </span>
+              <h1 className="text-xs font-black text-slate-900 tracking-tight truncate max-w-[170px]">
                 {plan.name}
               </h1>
-              <span className="text-[9px] font-bold uppercase px-2 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                🚶 Human Eye-Level (1.6m)
+              <span className="text-[9px] font-bold uppercase px-2 py-0.2 rounded-full bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                🚶 3D Tour
               </span>
             </div>
             <p className="text-[10px] text-slate-500">
@@ -399,13 +406,16 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
             <span>Share</span>
           </button>
 
-          <button
-            onClick={onSwitchToStudio}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-sm border border-sky-700/20 transition active:scale-95"
-          >
-            <Layers className="w-4 h-4" />
-            <span>CAD Studio</span>
-          </button>
+          {/* Only show CAD Studio switch if not client */}
+          {userRole !== 'CLIENT' && (
+            <button
+              onClick={onSwitchToStudio}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-sm border border-sky-700/20 transition active:scale-95"
+            >
+              <Layers className="w-4 h-4" />
+              <span>CAD Studio</span>
+            </button>
+          )}
         </div>
       </header>
 
