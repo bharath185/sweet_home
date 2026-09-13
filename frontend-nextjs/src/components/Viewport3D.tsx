@@ -750,8 +750,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       padMesh.receiveShadow = true;
       group.add(padMesh);
 
-      // High-Definition 3D Floor Placard Signboard (Matching 2D Vector Style)
-      const roomNames = floorRooms.map((r) => r.name);
+      // High-Definition 3D Floor Placard Signboard (Clean Ground Floor / 1st Floor Badge)
       const labelCanvas = document.createElement('canvas');
       labelCanvas.width = 2048;
       labelCanvas.height = 512;
@@ -795,20 +794,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
         // Floor Name Title
         lctx.fillStyle = '#ffffff';
-        lctx.font = 'bold 96px system-ui, -apple-system, sans-serif';
+        lctx.font = 'bold 110px system-ui, -apple-system, sans-serif';
         lctx.textAlign = 'center';
         lctx.textBaseline = 'middle';
-        const floorTitle = fl.level === 0 ? `🏢 ${fl.name.toUpperCase()}` : `🏡 ${fl.name.toUpperCase()}`;
-        lctx.fillText(floorTitle, 1024, 180);
-
-        // Subtitle (Room names & Elevation)
-        lctx.fillStyle = '#f0fdf4';
-        lctx.font = '500 68px system-ui, -apple-system, sans-serif';
-        const subText =
-          roomNames.length > 0
-            ? roomNames.join('   •   ')
-            : `Floor Level ${fl.level} (Elevation: ${fl.elevation || fl.level * 250}cm)`;
-        lctx.fillText(subText, 1024, 330);
+        const rawName = (fl.name || '').split('(')[0].trim().toUpperCase();
+        const floorTitle = fl.level === 0 ? '🏢 GROUND FLOOR' : fl.level === 1 ? '🏡 1ST FLOOR' : `🏡 ${rawName || `FLOOR ${fl.level}`}`;
+        lctx.fillText(floorTitle, 1024, 256);
 
         const labelTex = new THREE.CanvasTexture(labelCanvas);
         labelTex.generateMipmaps = true;
@@ -817,7 +808,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         labelTex.anisotropy = 16;
         labelTex.needsUpdate = true;
 
-        const placardW = Math.min(6.2, Math.max(3.8, padW * 0.7));
+        const placardW = 4.2;
         const placardH = placardW * (512 / 2048);
         const labelGeom = new THREE.PlaneGeometry(placardW, placardH);
         const labelMat = new THREE.MeshBasicMaterial({

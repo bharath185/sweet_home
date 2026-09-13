@@ -424,7 +424,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       ? allFloors 
       : (allFloors.filter((fl) => fl.level === activeFloor).length > 0 
           ? allFloors.filter((fl) => fl.level === activeFloor) 
-          : [{ level: activeFloor, name: activeFloor === 0 ? 'Ground Floor (Living & Dining)' : '1st Floor (Master Suite & Terrace)', height: 250, elevation: activeFloor * 250 }]);
+          : [{ level: activeFloor, name: activeFloor === 0 ? 'Ground Floor' : '1st Floor', height: 250, elevation: activeFloor * 250 }]);
 
     // If Side-by-Side mode, draw architectural floor boundary plates
     if (canvasFloorMode === 'sideBySide') {
@@ -871,7 +871,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         ctx.restore();
       });
 
-      // 10. Architectural Floor Placard Signboard in 2D
+      // 10. Architectural Floor Placard Signboard in 2D (Clean Ground Floor / 1st Floor Badge)
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
       curRooms.forEach((r) => {
         r.points.forEach((p) => {
@@ -893,28 +893,24 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       }
 
       const centerX = (minX + maxX) / 2;
-      const placardPlanY = maxY + 70; // Positioned 70cm south of the floorplan boundary
+      const placardPlanY = maxY + 65; // Positioned 65cm south of the floorplan boundary
       const centerScreen = planToScreen(centerX, placardPlanY, flLevel);
 
-      const roomNames = curRooms.map((r) => r.name);
-      const floorTitle = flLevel === 0 ? `🏢 ${currentFloorObj.name.toUpperCase()}` : `🏡 ${currentFloorObj.name.toUpperCase()}`;
-      const subText =
-        roomNames.length > 0
-          ? roomNames.join('   •   ')
-          : `Floor Level ${flLevel} (Elevation: ${currentFloorObj.elevation || flLevel * 250}cm)`;
+      const rawName = (currentFloorObj.name || '').split('(')[0].trim().toUpperCase();
+      const floorTitle = flLevel === 0 ? '🏢 GROUND FLOOR' : flLevel === 1 ? '🏡 1ST FLOOR' : `🏡 ${rawName || `FLOOR ${flLevel}`}`;
 
       ctx.save();
       ctx.translate(centerScreen.x, centerScreen.y);
 
       // Placard Dimensions
-      const badgeW = Math.max(300, Math.min(460, floorTitle.length * 8.5 + 40));
-      const badgeH = 56;
-      const radius = 14;
+      const badgeW = Math.max(200, Math.min(320, floorTitle.length * 10 + 36));
+      const badgeH = 40;
+      const radius = 12;
 
       // Drop Shadow
       ctx.shadowColor = 'rgba(15, 23, 42, 0.22)';
-      ctx.shadowBlur = 12;
-      ctx.shadowOffsetY = 4;
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetY = 3;
 
       // Gradient Fill
       const grad = ctx.createLinearGradient(-badgeW / 2, -badgeH / 2, badgeW / 2, badgeH / 2);
@@ -940,23 +936,18 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       ctx.shadowOffsetY = 0;
 
       // White Border Outline
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.roundRect(-badgeW / 2, -badgeH / 2, badgeW, badgeH, radius);
       ctx.stroke();
 
-      // Main Floor Title Text
+      // Floor Title Text
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(floorTitle, 0, -10);
-
-      // Subtitle (Room names & Details)
-      ctx.fillStyle = '#f0fdf4';
-      ctx.font = '500 10.5px system-ui, -apple-system, sans-serif';
-      ctx.fillText(subText, 0, 11);
+      ctx.fillText(floorTitle, 0, 0);
 
       ctx.restore();
     });

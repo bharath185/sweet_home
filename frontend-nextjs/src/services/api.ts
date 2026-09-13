@@ -12,8 +12,8 @@ export const sarahPlan: HomePlan = {
   updatedAt: new Date().toISOString(),
   currentFloor: 0,
   floors: [
-    { level: 0, name: 'Ground Floor (Living & Dining)', elevation: 0, height: 250 },
-    { level: 1, name: '1st Floor (Master Suite & Terrace)', elevation: 250, height: 250 },
+    { level: 0, name: 'Ground Floor', elevation: 0, height: 250 },
+    { level: 1, name: '1st Floor', elevation: 250, height: 250 },
   ],
   walls: [
     // Ground Floor Outer Perimeter
@@ -78,8 +78,8 @@ export const davidPlan: HomePlan = {
   updatedAt: new Date().toISOString(),
   currentFloor: 0,
   floors: [
-    { level: 0, name: 'Ground Floor (Grand Foyer & Dining)', elevation: 0, height: 280 },
-    { level: 1, name: '1st Floor (Private Suites & Balcony)', elevation: 280, height: 280 },
+    { level: 0, name: 'Ground Floor', elevation: 0, height: 280 },
+    { level: 1, name: '1st Floor', elevation: 280, height: 280 },
   ],
   walls: [
     // Ground Floor
