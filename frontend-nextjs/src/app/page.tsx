@@ -102,7 +102,7 @@ export default function HomeStudioPage() {
   const [activeFloor, setActiveFloor] = useState<number>(0);
   const [floorMode, setFloorMode] = useState<'single' | 'sideBySide' | 'stacked'>('single');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(true);
+  const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false);
 
   const [isFurnitureListOpen, setIsFurnitureListOpen] = useState<boolean>(false);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
@@ -110,6 +110,13 @@ export default function HomeStudioPage() {
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'saving' | 'offline'>('synced');
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-open Inspector & Properties panel when any item or wall is selected
+  useEffect(() => {
+    if (selectedId) {
+      setIsInspectorOpen(true);
+    }
+  }, [selectedId]);
 
   // Modals
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);

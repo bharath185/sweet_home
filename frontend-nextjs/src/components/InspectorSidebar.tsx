@@ -291,20 +291,105 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
 
   if (!isOpen) {
     return (
-      <button
-        onClick={onToggleOpen}
-        className={`w-8 border-l flex flex-col items-center justify-start gap-4 py-4 cursor-pointer transition select-none shrink-0 ${
+      <aside
+        className={`w-10 border-l flex flex-col items-center py-2 shrink-0 select-none z-10 transition-all font-sans ${
           isDark
-            ? 'bg-[#0a1120] hover:bg-[#0d1527] border-slate-800 text-slate-400 hover:text-indigo-400'
-            : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-600 hover:text-indigo-600'
+            ? 'bg-[#0a1120] border-slate-800 text-slate-300'
+            : 'bg-white border-slate-200 text-slate-700 shadow-2xs'
         }`}
-        title="Expand 3D Inspector & Catalog Panel"
       >
-        <ChevronLeft className="w-4 h-4 shrink-0" />
-        <span className="text-[10px] font-bold tracking-wider uppercase [writing-mode:vertical-rl] rotate-180 flex items-center gap-1.5 whitespace-nowrap">
-          📦 3D Catalog & Inspector
-        </span>
-      </button>
+        {/* Expand / Open Toggle Button */}
+        <button
+          onClick={onToggleOpen}
+          className={`w-7 h-7 rounded-sm flex items-center justify-center transition cursor-pointer mb-2 ${
+            isDark
+              ? 'hover:bg-slate-800 text-slate-400 hover:text-white'
+              : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
+          }`}
+          title="Expand 3D Inspector & Catalog"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        <div className={`w-5 h-[1px] mb-2 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+
+        {/* Action Icon 1: 3D Catalog */}
+        <button
+          onClick={() => {
+            setActiveTab('catalog');
+            if (onToggleOpen) onToggleOpen();
+          }}
+          className={`w-7 h-7 rounded-sm flex items-center justify-center transition cursor-pointer mb-2 relative ${
+            activeTab === 'catalog'
+              ? isDark
+                ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
+                : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+              : isDark
+              ? 'hover:bg-slate-800 text-slate-400 hover:text-slate-200'
+              : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
+          }`}
+          title="3D Catalog (Browse & Add Models)"
+        >
+          <Box className="w-3.5 h-3.5" />
+        </button>
+
+        {/* Action Icon 2: 3D Finish / Materials */}
+        <button
+          onClick={() => {
+            if (selectedFurniture) {
+              setActiveTab('design');
+            }
+            if (onToggleOpen) onToggleOpen();
+          }}
+          className={`w-7 h-7 rounded-sm flex items-center justify-center transition cursor-pointer mb-2 relative ${
+            activeTab === 'design'
+              ? isDark
+                ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
+                : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+              : isDark
+              ? 'hover:bg-slate-800 text-slate-400 hover:text-slate-200'
+              : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
+          }`}
+          title={selectedFurniture ? `3D Finish: ${selectedFurniture.name}` : '3D Finish (Select an item to edit materials)'}
+        >
+          <Palette className="w-3.5 h-3.5" />
+          {selectedFurniture && (
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 absolute top-0.5 right-0.5" />
+          )}
+        </button>
+
+        {/* Action Icon 3: Properties / Transform */}
+        <button
+          onClick={() => {
+            if (selectedFurniture || selectedWall) {
+              setActiveTab('transform');
+            }
+            if (onToggleOpen) onToggleOpen();
+          }}
+          className={`w-7 h-7 rounded-sm flex items-center justify-center transition cursor-pointer mb-2 relative ${
+            activeTab === 'transform'
+              ? isDark
+                ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
+                : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+              : isDark
+              ? 'hover:bg-slate-800 text-slate-400 hover:text-slate-200'
+              : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
+          }`}
+          title={selectedFurniture || selectedWall ? 'Properties & Transform' : 'Properties (Select an item or wall)'}
+        >
+          <Maximize className="w-3.5 h-3.5" />
+          {(selectedFurniture || selectedWall) && (
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 absolute top-0.5 right-0.5" />
+          )}
+        </button>
+
+        {/* Vertical Text Label */}
+        <div className="flex-1 flex items-center justify-center py-4 cursor-pointer" onClick={onToggleOpen}>
+          <span className="text-[10px] font-bold tracking-wider uppercase [writing-mode:vertical-rl] rotate-180 text-slate-400 hover:text-indigo-400 transition">
+            📦 3D Catalog & Properties
+          </span>
+        </div>
+      </aside>
     );
   }
 
