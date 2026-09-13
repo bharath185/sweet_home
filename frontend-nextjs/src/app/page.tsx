@@ -103,6 +103,7 @@ export default function HomeStudioPage() {
   const [floorMode, setFloorMode] = useState<'single' | 'sideBySide' | 'stacked'>('single');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false);
+  const [cameraMode3D, setCameraMode3D] = useState<'aerial' | 'visitor'>('aerial');
 
   const [isFurnitureListOpen, setIsFurnitureListOpen] = useState<boolean>(false);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
@@ -111,12 +112,20 @@ export default function HomeStudioPage() {
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-open Inspector & Properties panel when any item or wall is selected
+  // Auto-open Inspector & Properties panel when any item or wall is selected (in Orbit / 2D mode)
   useEffect(() => {
-    if (selectedId) {
+    if (selectedId && cameraMode3D !== 'visitor') {
       setIsInspectorOpen(true);
     }
-  }, [selectedId]);
+  }, [selectedId, cameraMode3D]);
+
+  // When switching to Walk view (Visitor mode), immediately close properties & deselect items
+  useEffect(() => {
+    if (cameraMode3D === 'visitor') {
+      setSelectedId(null);
+      setIsInspectorOpen(false);
+    }
+  }, [cameraMode3D]);
 
   // Modals
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
@@ -813,6 +822,8 @@ export default function HomeStudioPage() {
                         onFloorModeChange={setFloorMode}
                         collidingItemIds={collisionReport.collidingItemIds}
                         isSplitMode={true}
+                        cameraModeProp={cameraMode3D}
+                        onCameraModeChangeProp={setCameraMode3D}
                       />
                     </div>
                   </>
@@ -855,6 +866,8 @@ export default function HomeStudioPage() {
                       onFloorModeChange={setFloorMode}
                       collidingItemIds={collisionReport.collidingItemIds}
                       isSplitMode={false}
+                      cameraModeProp={cameraMode3D}
+                      onCameraModeChangeProp={setCameraMode3D}
                     />
                   </div>
                 )}
@@ -873,6 +886,7 @@ export default function HomeStudioPage() {
                 theme={theme}
                 isOpen={isInspectorOpen}
                 onToggleOpen={() => setIsInspectorOpen(!isInspectorOpen)}
+                isWalkMode={cameraMode3D === 'visitor'}
               />
             </div>
 

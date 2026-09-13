@@ -57,6 +57,7 @@ interface InspectorSidebarProps {
   theme?: 'dark' | 'light';
   isOpen?: boolean;
   onToggleOpen?: () => void;
+  isWalkMode?: boolean;
 }
 
 interface MaterialSwatch {
@@ -174,6 +175,7 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
   theme = 'dark',
   isOpen,
   onToggleOpen,
+  isWalkMode = false,
 }) => {
   const selectedFurniture = plan.furniture.find((f) => f.id === selectedId);
   const selectedWall = plan.walls.find((w) => w.id === selectedId);
@@ -186,15 +188,26 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
   const [catalogSearch, setCatalogSearch] = useState<string>('');
   const [selectedCatalogCategory, setSelectedCatalogCategory] = useState<string>('All');
 
-  // Automatically open Properties panel when any item or wall is selected,
+  // If in Walk mode, force collapse properties and finish panels
+  useEffect(() => {
+    if (isWalkMode) {
+      setActiveTab(null);
+    }
+  }, [isWalkMode]);
+
+  // Automatically open Properties panel when any item or wall is selected (in Orbit / 2D mode),
   // and collapse the properties/finish panel when deselected (e.g. in Walk mode or clicking background)
   useEffect(() => {
+    if (isWalkMode) {
+      setActiveTab(null);
+      return;
+    }
     if (selectedFurniture || selectedWall) {
       setActiveTab('transform');
     } else if (!selectedId) {
       setActiveTab((prev) => (prev === 'transform' || prev === 'design' ? null : prev));
     }
-  }, [selectedId, selectedFurniture, selectedWall]);
+  }, [selectedId, selectedFurniture, selectedWall, isWalkMode]);
 
   const isDark = theme === 'dark';
 

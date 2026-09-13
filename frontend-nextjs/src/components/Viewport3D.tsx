@@ -1252,7 +1252,15 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       e.clientY - mouseDownPosRef.current.y
     );
 
-    if (dragDist < 6 && cameraRef.current && meshesGroupRef.current && canvasMountRef.current) {
+    // ONLY perform click selection in Aerial / Orbit mode!
+    // In Walk / Visitor mode, item selection is completely disabled so clicking looks around and walks.
+    if (
+      cameraModeRef.current === 'aerial' &&
+      dragDist < 6 &&
+      cameraRef.current &&
+      meshesGroupRef.current &&
+      canvasMountRef.current
+    ) {
       const rect = canvasMountRef.current.getBoundingClientRect();
       const mouse = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
