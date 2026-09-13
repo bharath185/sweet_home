@@ -762,8 +762,8 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     }
 
     // 11. North Compass Rose (Architectural CAD Style)
-    const compassX = width - 40;
-    const compassY = 40;
+    const compassX = 35;
+    const compassY = height - 55;
     ctx.save();
     ctx.translate(compassX, compassY);
     ctx.fillStyle = '#ffffff';

@@ -1566,7 +1566,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       {/* Room Jump Pills in Visitor Mode */}
       {cameraMode === 'visitor' && plan.rooms.length > 0 && (
-        <div className="absolute top-14 right-3 z-10 flex flex-wrap gap-1 max-w-xs justify-end">
+        <div className="absolute top-12 right-2.5 z-10 flex flex-wrap gap-1 max-w-xs justify-end">
           {plan.rooms.map((room) => (
             <button
               key={room.id}
