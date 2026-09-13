@@ -24,13 +24,14 @@ import {
   Sliders,
   X,
   GripHorizontal,
-  ChevronDown,
-  ChevronUp,
   Minimize2,
   Maximize2,
-  Pin
+  Pin,
+  Box,
+  Search
 } from 'lucide-react';
 import { HomePlan, Room, CatalogItem, FurnitureItem } from '../types/plan';
+import { isTabletopItem, findNearestSupportingSurface } from '../services/tabletopAttachment';
 import { Viewport3D } from './Viewport3D';
 
 interface CustomerPresentationViewProps {
@@ -61,11 +62,18 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
   collidingItemIds,
   activeFloor,
   onFloorChange,
+  floorMode,
+  onFloorModeChange,
 }) => {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(plan.rooms[0] || null);
   const [showSpecDrawer, setShowSpecDrawer] = useState<boolean>(false);
+  const [showAddCatalogDrawer, setShowAddCatalogDrawer] = useState<boolean>(false);
   const [consultationBooked, setConsultationBooked] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Catalog search & category filter in Client View
+  const [catalogSearch, setCatalogSearch] = useState<string>('');
+  const [catalogCategory, setCatalogCategory] = useState<string>('ALL');
 
   // Draggable & Collapsible Customizer Panel State
   const [panelPos, setPanelPos] = useState<{ x: number; y: number }>({ x: 24, y: 140 });
@@ -121,73 +129,52 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
   };
 
   const selectedFurniture = plan.furniture.find((f) => f.id === selectedId);
-  const isSelectedColliding = selectedFurniture ? collidingItemIds.has(selectedFurniture.id) : false;
+  const isSelectedColliding = selectedId ? collidingItemIds.has(selectedId) : false;
 
-  // Delete Item (if client wants to remove an unwanted item)
-  const handleDeleteFurniture = (id: string) => {
-    const item = plan.furniture.find((f) => f.id === id);
-    if (item?.isLocked) {
-      alert(`⚠️ Cannot delete "${item.name}": This item is LOCKED.\nPlease unlock it first before deleting.`);
-      return;
-    }
+  const updateSelected = (changes: Partial<FurnitureItem>) => {
+    if (!selectedId) return;
     onUpdatePlan({
       ...plan,
-      furniture: plan.furniture.filter((f) => f.id !== id),
-      updatedAt: new Date().toISOString(),
-    });
-    if (selectedId === id) {
-      setSelectedId(null);
-    }
-  };
-
-  // Update Selected Furniture Properties
-  const updateSelected = (patch: Partial<FurnitureItem>) => {
-    if (!selectedFurniture) return;
-    const updated = plan.furniture.map((f) =>
-      f.id === selectedFurniture.id ? { ...f, ...patch } : f
-    );
-    onUpdatePlan({
-      ...plan,
-      furniture: updated,
+      furniture: plan.furniture.map((f) => (f.id === selectedId ? { ...f, ...changes } : f)),
       updatedAt: new Date().toISOString(),
     });
   };
 
-  // Move / Nudge Selected Item
+  // Nudge selected item in 2D / 3D space
   const nudgeItem = (dx: number, dy: number) => {
     if (!selectedFurniture) return;
     updateSelected({
-      x: Math.round(selectedFurniture.x + dx),
-      y: Math.round(selectedFurniture.y + dy),
+      x: selectedFurniture.x + dx,
+      y: selectedFurniture.y + dy,
     });
   };
 
-  // Rotate Selected Item
+  // Rotate selected item
   const rotateItem = (deltaAngle: number) => {
     if (!selectedFurniture) return;
     const newAngle = ((selectedFurniture.angle || 0) + deltaAngle + Math.PI * 2) % (Math.PI * 2);
     updateSelected({ angle: newAngle });
   };
 
-  // Scale Item Up / Down by percentage
-  const scaleItem = (multiplier: number) => {
+  // Adjust dimension
+  const adjustDimension = (prop: 'width' | 'depth' | 'height', delta: number) => {
     if (!selectedFurniture) return;
-    updateSelected({
-      width: Math.max(10, Math.round(selectedFurniture.width * multiplier)),
-      depth: Math.max(10, Math.round(selectedFurniture.depth * multiplier)),
-      height: Math.max(10, Math.round(selectedFurniture.height * multiplier)),
-    });
+    const current = selectedFurniture[prop];
+    const updated = Math.max(10, Math.round(current + delta));
+    updateSelected({ [prop]: updated });
   };
 
-  // Adjust individual dimension
-  const adjustDimension = (dim: 'width' | 'depth' | 'height', delta: number) => {
-    if (!selectedFurniture) return;
-    updateSelected({
-      [dim]: Math.max(10, Math.round(selectedFurniture[dim] + delta)),
+  // Delete furniture
+  const handleDeleteFurniture = (id: string) => {
+    onUpdatePlan({
+      ...plan,
+      furniture: plan.furniture.filter((f) => f.id !== id),
+      updatedAt: new Date().toISOString(),
     });
+    if (selectedId === id) setSelectedId(null);
   };
 
-  // Duplicate Selected Item
+  // Duplicate furniture
   const duplicateSelected = () => {
     if (!selectedFurniture) return;
     const duplicated: FurnitureItem = {
@@ -205,6 +192,84 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
     setSelectedId(duplicated.id);
   };
 
+  // Client Adds Item from 3D Catalog to Active Room
+  const handleAddCatalogItem = (item: CatalogItem) => {
+    let targetX = 0;
+    let targetY = 0;
+    let targetElevation = 0;
+    let hostId: string | undefined = undefined;
+
+    // Place near selected room center or canvas origin
+    if (selectedRoom && selectedRoom.points && selectedRoom.points.length > 0) {
+      const sumX = selectedRoom.points.reduce((acc, p) => acc + p.x, 0);
+      const sumY = selectedRoom.points.reduce((acc, p) => acc + p.y, 0);
+      targetX = Math.round(sumX / selectedRoom.points.length);
+      targetY = Math.round(sumY / selectedRoom.points.length);
+    }
+
+    // Tabletop auto-attachment
+    if (item.placementType === 'tabletop' || item.placeOnTable || isTabletopItem(item)) {
+      const nearestTable = findNearestSupportingSurface(
+        { x: targetX, y: targetY, floorLevel: activeFloor, id: 'temp' } as any,
+        plan.furniture
+      );
+      if (nearestTable) {
+        targetX = nearestTable.x;
+        targetY = nearestTable.y;
+        targetElevation = (nearestTable.elevation || 0) + nearestTable.height;
+        hostId = nearestTable.id;
+      }
+    }
+
+    const newPiece: FurnitureItem = {
+      id: 'f_' + Math.random().toString(36).substr(2, 9),
+      catalogId: item.id,
+      name: item.name,
+      category: item.category,
+      x: targetX,
+      y: targetY,
+      width: item.width,
+      depth: item.depth,
+      height: item.height,
+      elevation: targetElevation,
+      model: item.model,
+      icon: item.icon,
+      color: item.defaultColor || '#cbd5e1',
+      angle: 0,
+      floorLevel: activeFloor,
+      isVisible: true,
+      isLocked: false,
+      materialCategory: item.materialCategory,
+      materialFinish: item.materialFinish,
+      roughness: item.roughness,
+      metalness: item.metalness,
+      opacity: item.opacity,
+      placementType: item.placementType || (isTabletopItem(item) ? 'tabletop' : 'floor'),
+      placeOnTable: item.placeOnTable || isTabletopItem(item),
+      allowedOnFloor: item.allowedOnFloor,
+      hostFurnitureId: hostId,
+    };
+
+    onUpdatePlan({
+      ...plan,
+      furniture: [...plan.furniture, newPiece],
+      updatedAt: new Date().toISOString(),
+    });
+
+    setSelectedId(newPiece.id);
+    setIsMinimized(false);
+  };
+
+  // Filter Catalog
+  const categories = ['ALL', ...Array.from(new Set(catalog.map((i) => i.category)))];
+  const filteredCatalog = catalog.filter((item) => {
+    const matchesSearch =
+      item.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+      item.category.toLowerCase().includes(catalogSearch.toLowerCase());
+    const matchesCat = catalogCategory === 'ALL' || item.category === catalogCategory;
+    return matchesSearch && matchesCat;
+  });
+
   return (
     <div className="relative w-full h-full bg-slate-900 flex flex-col overflow-hidden select-none">
       {/* 3D WebGL Fullscreen Viewport in First-Person Human Visitor Mode */}
@@ -217,33 +282,58 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
           isCustomerMode={true}
           collidingItemIds={collidingItemIds}
           activeFloor={activeFloor}
+          floorMode={floorMode}
+          onFloorModeChange={onFloorModeChange}
+          onFloorChange={onFloorChange}
         />
       </div>
 
       {/* Top Virtual Tour Header Bar */}
-      <header className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
-        <div className="pointer-events-auto bg-white/95 px-4 py-2.5 rounded-2xl shadow-md flex items-center gap-3 border border-slate-200 backdrop-blur-xl">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-600/20">
+      <header className="absolute top-3.5 left-3.5 right-3.5 z-20 flex items-center justify-between pointer-events-none gap-2">
+        <div className="pointer-events-auto bg-white/95 px-3.5 py-2 rounded-2xl shadow-md flex items-center gap-2.5 border border-slate-200 backdrop-blur-xl">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-600/20 shrink-0">
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-bold text-slate-900 tracking-tight">{plan.name}</h1>
-              <span className="text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                🚶 Human Eye-Level Tour (165 cm)
+              <h1 className="text-xs font-extrabold text-slate-900 tracking-tight truncate max-w-[170px]">
+                {plan.name}
+              </h1>
+              <span className="text-[9px] font-bold uppercase px-2 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                🚶 Human Eye-Level (1.6m)
               </span>
             </div>
-            <p className="text-[11px] text-slate-500">
-              WASD / Arrow Keys to walk • Drag mouse to look around • Click pieces to customize finish
+            <p className="text-[10px] text-slate-500">
+              WASD or Arrow Keys to walk • Click items to move, recolor, or add pieces
             </p>
           </div>
         </div>
 
-        {/* Action Controls */}
+        {/* Action Controls: + Add 3D Items, Design Specs, Share, CAD Studio */}
         <div className="pointer-events-auto flex items-center gap-2">
+          {/* + ADD 3D ITEMS BUTTON FOR CLIENT */}
           <button
-            onClick={() => setShowSpecDrawer(!showSpecDrawer)}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold backdrop-blur-xl border transition shadow-xs ${
+            onClick={() => {
+              setShowAddCatalogDrawer(!showAddCatalogDrawer);
+              setShowSpecDrawer(false);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold backdrop-blur-xl border transition shadow-xs active:scale-95 ${
+              showAddCatalogDrawer
+                ? 'bg-sky-600 text-white border-sky-700 shadow-sm'
+                : 'bg-white/95 text-slate-800 border-slate-200 hover:bg-slate-50'
+            }`}
+            title="Browse & Add 3D Furniture, Lighting & Decor to this room"
+          >
+            <Plus className={`w-4 h-4 ${showAddCatalogDrawer ? 'text-white' : 'text-sky-600'}`} />
+            <span>+ Add 3D Items</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setShowSpecDrawer(!showSpecDrawer);
+              setShowAddCatalogDrawer(false);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold backdrop-blur-xl border transition shadow-xs ${
               showSpecDrawer
                 ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
                 : 'bg-white/95 text-slate-700 border-slate-200 hover:bg-slate-50'
@@ -255,34 +345,34 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
 
           <button
             onClick={onOpenShare}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/95 hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-xs border border-slate-200 transition"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/95 hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-xs border border-slate-200 transition"
           >
             <Share2 className="w-4 h-4 text-sky-600" />
-            <span>Share 3D</span>
+            <span>Share</span>
           </button>
 
           <button
             onClick={onSwitchToStudio}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-sm border border-sky-700/20 transition active:scale-95"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-sm border border-sky-700/20 transition active:scale-95"
           >
             <Layers className="w-4 h-4" />
-            <span>Open CAD Studio</span>
+            <span>CAD Studio</span>
           </button>
         </div>
       </header>
 
-      {/* Collision Alert Pill (Non-overlapping at bottom-left) */}
+      {/* Collision Alert Pill (Non-overlapping at Bottom Left) */}
       {collidingItemIds.size > 0 && (
-        <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 bg-rose-600 text-white backdrop-blur-xl px-4 py-1.5 rounded-full shadow-lg border border-rose-500 text-xs font-bold animate-pulse">
+        <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 bg-rose-600 text-white backdrop-blur-xl px-3.5 py-1.5 rounded-full shadow-lg border border-rose-500 text-xs font-bold animate-pulse">
           <AlertTriangle className="w-4 h-4" />
           <span>
-            {collidingItemIds.size} {collidingItemIds.size === 1 ? 'Item' : 'Items'} in Collision & Glowing Red
+            {collidingItemIds.size} {collidingItemIds.size === 1 ? 'Item' : 'Items'} Overlapping (Red)
           </span>
         </div>
       )}
 
-      {/* Floor & Room Selector at Top Center */}
-      <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-white/95 p-1.5 rounded-full border border-slate-200 shadow-md backdrop-blur-xl text-xs">
+      {/* Floor & Room Selector at Top Center (Non-overlapping with clear clearance) */}
+      <div className="absolute top-18 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-white/95 p-1 rounded-full border border-slate-200 shadow-md backdrop-blur-xl text-xs">
         {(plan.floors || [
           { level: 0, name: 'Ground Floor' },
           { level: 1, name: '1st Floor' }
@@ -290,9 +380,9 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
           <button
             key={fl.level}
             onClick={() => onFloorChange(fl.level)}
-            className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all ${
+            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
               activeFloor === fl.level
-                ? 'bg-sky-600 text-white shadow-xs'
+                ? 'bg-sky-600 text-white shadow-xs font-bold'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
@@ -300,21 +390,209 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
           </button>
         ))}
 
+        <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
+
         {plan.rooms.map((room) => (
           <button
             key={room.id}
             onClick={() => setSelectedRoom(room)}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition ${
+            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition ${
               selectedRoom?.id === room.id
-                ? 'bg-emerald-600 text-white shadow-xs'
+                ? 'bg-emerald-600 text-white shadow-xs font-bold'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <MapPin className="w-3 h-3" />
+            <MapPin className="w-3 h-3 text-emerald-500" />
             <span>{room.name}</span>
           </button>
         ))}
       </div>
+
+      {/* SLIDE-OUT 1: ADD 3D ITEMS CATALOG DRAWER FOR CLIENT */}
+      {showAddCatalogDrawer && (
+        <div className="absolute top-18 right-4 bottom-16 w-88 bg-white/95 border border-slate-200 rounded-3xl shadow-2xl z-30 flex flex-col overflow-hidden animate-in slide-in-from-right duration-200 backdrop-blur-xl">
+          {/* Drawer Header */}
+          <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/90">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center font-bold">
+                <Box className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">
+                  Add 3D Furniture & Items
+                </h3>
+                <span className="text-[10px] text-slate-400">
+                  Floor {activeFloor} • {selectedRoom ? selectedRoom.name : 'Main Room'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowAddCatalogDrawer(false)}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Search & Category Filter */}
+          <div className="p-3 border-b border-slate-100 bg-white space-y-2">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search sofas, lamps, tables..."
+                value={catalogSearch}
+                onChange={(e) => setCatalogSearch(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white transition"
+              />
+            </div>
+
+            {/* Category Filter Chips */}
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 custom-scrollbar">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setCatalogCategory(cat)}
+                  className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider shrink-0 transition ${
+                    catalogCategory === cat
+                      ? 'bg-sky-600 text-white shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Catalog Items Grid */}
+          <div className="flex-1 overflow-y-auto p-3 grid grid-cols-2 gap-2.5 custom-scrollbar">
+            {filteredCatalog.map((item) => (
+              <div
+                key={item.id}
+                className="bg-slate-50/80 hover:bg-white border border-slate-200/90 rounded-2xl p-2.5 flex flex-col justify-between transition hover:shadow-md group"
+              >
+                <div>
+                  <div className="w-full h-16 bg-white rounded-xl border border-slate-100 flex items-center justify-center p-1.5 mb-1.5 group-hover:scale-105 transition-transform">
+                    {item.icon ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={item.icon} alt={item.name} className="max-w-full max-h-full object-contain" />
+                    ) : (
+                      <Box className="w-6 h-6 text-sky-600" />
+                    )}
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-900 truncate leading-tight">
+                    {item.name}
+                  </h4>
+                  <div className="flex items-center justify-between text-[9px] text-slate-400 uppercase mt-0.5">
+                    <span>{item.category}</span>
+                    <span className="font-mono text-slate-500 font-semibold">
+                      {item.width}×{item.depth}cm
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => handleAddCatalogItem(item)}
+                  className="w-full mt-2 py-1 px-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold transition flex items-center justify-center gap-1 shadow-2xs active:scale-95"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>+ Place in Room</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* SLIDE-OUT 2: FURNITURE & SPECIFICATIONS DRAWER */}
+      {showSpecDrawer && (
+        <div className="absolute top-18 right-4 bottom-16 w-84 bg-white/95 border border-slate-200 rounded-3xl shadow-2xl z-30 flex flex-col overflow-hidden animate-in slide-in-from-right duration-200 backdrop-blur-xl">
+          <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+              Furniture Specifications
+            </h3>
+            <span className="text-xs text-sky-600 font-mono font-bold">
+              {plan.furniture.length} Pieces
+            </span>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3.5 space-y-2 custom-scrollbar">
+            {plan.furniture.map((f) => {
+              const isColliding = collidingItemIds.has(f.id);
+              const isSelected = selectedId === f.id;
+              return (
+                <div
+                  key={f.id}
+                  onClick={() => setSelectedId(f.id)}
+                  className={`border rounded-xl p-2.5 flex items-center justify-between transition cursor-pointer ${
+                    isSelected
+                      ? 'bg-sky-50 border-sky-300 text-slate-900 shadow-xs font-semibold'
+                      : isColliding
+                      ? 'bg-rose-50 border-rose-200 text-rose-700'
+                      : 'bg-slate-50 hover:bg-white border-slate-200 text-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center p-1 border border-slate-200">
+                      {f.icon ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={f.icon} alt={f.name} className="max-w-full max-h-full object-contain" />
+                      ) : (
+                        <Sparkles className="w-4 h-4 text-sky-600" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold flex items-center gap-1.5">
+                        <span className="truncate max-w-[130px]">{f.name}</span>
+                        {isColliding && (
+                          <span className="text-[9px] px-1 rounded bg-rose-600 text-white font-bold">
+                            Collision
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-mono">
+                        {Math.round(f.width)}×{Math.round(f.depth)}×{Math.round(f.height)} cm
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteFurniture(f.id);
+                      }}
+                      className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition"
+                      title="Delete Furniture Item"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="p-4 bg-slate-50 border-t border-slate-200">
+            {consultationBooked ? (
+              <div className="flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-xs font-semibold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Consultation request sent to design team!</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConsultationBooked(true)}
+                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm border border-emerald-700/20 transition flex items-center justify-center gap-2 active:scale-95"
+              >
+                <PhoneCall className="w-3.5 h-3.5" />
+                <span>Request Quotation / Approval</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* FLOATING DRAGGABLE & COLLAPSIBLE ITEM CUSTOMIZER */}
       {selectedFurniture && isMinimized && (
@@ -349,7 +627,7 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
             <button
               onClick={() => setSelectedId(null)}
               className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-800 transition"
-              title="Deselect item"
+              title="Close"
             >
               <X className="w-4 h-4" />
             </button>
@@ -357,17 +635,16 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
         </div>
       )}
 
+      {/* FULL DRAGGABLE ITEM CUSTOMIZER PANEL */}
       {selectedFurniture && !isMinimized && (
         <div
           style={{ left: `${panelPos.x}px`, top: `${panelPos.y}px` }}
-          className="absolute z-30 bg-white/95 border border-slate-200 p-3.5 rounded-2xl shadow-2xl w-84 max-h-[85vh] overflow-y-auto custom-scrollbar flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl"
+          className="absolute z-30 w-76 sm:w-80 bg-white/95 border border-slate-200/90 rounded-3xl shadow-2xl p-4 flex flex-col gap-3 backdrop-blur-2xl animate-in zoom-in-95 duration-150 select-none border-sky-100"
         >
           {/* Draggable Header */}
           <div
             onMouseDown={handleStartDrag}
-            className={`flex items-center justify-between border-b border-slate-200 pb-2.5 cursor-grab select-none ${
-              isDraggingPanel ? 'cursor-grabbing' : ''
-            }`}
+            className="flex items-center justify-between pb-2 border-b border-slate-100 cursor-grab active:cursor-grabbing"
             title="Click and drag anywhere on screen"
           >
             <div className="flex items-center gap-2">
@@ -389,7 +666,7 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
               <button
                 onClick={() => setIsMinimized(true)}
                 className="p-1.5 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition"
-                title="Minimize menu (leave screen unobstructed)"
+                title="Minimize menu"
               >
                 <Minimize2 className="w-3.5 h-3.5" />
               </button>
@@ -445,26 +722,8 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
               </span>
             </div>
 
-            {/* Quick Scale Buttons */}
-            <div className="flex items-center gap-1.5 mb-2">
-              <button
-                onClick={() => scaleItem(0.9)}
-                className="flex-1 py-1 px-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold transition text-center border border-slate-200 shadow-2xs"
-                title="Scale Down (-10%)"
-              >
-                -10% Size
-              </button>
-              <button
-                onClick={() => scaleItem(1.1)}
-                className="flex-1 py-1 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition text-center shadow-2xs"
-                title="Scale Up (+10%)"
-              >
-                +10% Size
-              </button>
-            </div>
-
-            {/* Dimension Steppers */}
-            <div className="grid grid-cols-3 gap-1.5 text-center">
+            {/* Quick Dimension Controls */}
+            <div className="grid grid-cols-3 gap-1.5">
               <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
                 <span className="text-[10px] text-slate-500 font-semibold block mb-0.5">W ({Math.round(selectedFurniture.width)})</span>
                 <div className="flex items-center justify-center gap-1">
@@ -637,98 +896,10 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
         </div>
       )}
 
-      {/* Slide-out Furniture & Specifications Drawer (WITH DELETE & SELECT CONTROLS) */}
-      {showSpecDrawer && (
-        <div className="absolute top-20 right-4 bottom-24 w-84 bg-white/95 border border-slate-200 rounded-2xl shadow-xl z-20 flex flex-col overflow-hidden animate-in slide-in-from-right duration-200 backdrop-blur-xl">
-          <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-              Furniture Specifications
-            </h3>
-            <span className="text-xs text-sky-600 font-mono font-bold">
-              {plan.furniture.length} Pieces
-            </span>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-3.5 space-y-2 custom-scrollbar">
-            {plan.furniture.map((f) => {
-              const isColliding = collidingItemIds.has(f.id);
-              const isSelected = selectedId === f.id;
-              return (
-                <div
-                  key={f.id}
-                  onClick={() => setSelectedId(f.id)}
-                  className={`border rounded-xl p-2.5 flex items-center justify-between transition cursor-pointer ${
-                    isSelected
-                      ? 'bg-sky-50 border-sky-300 text-slate-900 shadow-xs font-semibold'
-                      : isColliding
-                      ? 'bg-rose-50 border-rose-200 text-rose-700'
-                      : 'bg-slate-50 hover:bg-white border-slate-200 text-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center p-1 border border-slate-200">
-                      {f.icon ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={f.icon} alt={f.name} className="max-w-full max-h-full object-contain" />
-                      ) : (
-                        <Sparkles className="w-4 h-4 text-sky-600" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold flex items-center gap-1.5">
-                        <span className="truncate max-w-[130px]">{f.name}</span>
-                        {isColliding && (
-                          <span className="text-[9px] px-1 rounded bg-rose-600 text-white font-bold">
-                            Collision
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[10px] text-slate-500 font-mono">
-                        {Math.round(f.width)}×{Math.round(f.depth)}×{Math.round(f.height)} cm
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteFurniture(f.id);
-                      }}
-                      className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition"
-                      title="Delete Furniture Item"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="p-4 bg-slate-50 border-t border-slate-200">
-            {consultationBooked ? (
-              <div className="flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-xs font-semibold">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Consultation request sent to design team!</span>
-              </div>
-            ) : (
-              <button
-                onClick={() => setConsultationBooked(true)}
-                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm border border-emerald-700/20 transition flex items-center justify-center gap-2 active:scale-95"
-              >
-                <PhoneCall className="w-3.5 h-3.5" />
-                <span>Request Quotation / Approval</span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Floating Tour Guidance at Bottom */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-2 bg-white/95 rounded-full border border-slate-200 text-xs text-slate-700 shadow-md backdrop-blur-xl">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-1.5 bg-white/95 rounded-full border border-slate-200 text-xs text-slate-700 shadow-md backdrop-blur-xl">
         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-        <span>Click any 3D piece to pick, move, rotate, recolor, or delete • Overlapping items glow RED</span>
+        <span>Click 3D pieces to customize • Use "+ Add 3D Items" to furnish room</span>
       </div>
     </div>
   );
