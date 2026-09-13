@@ -104,6 +104,9 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const draggedItemIdRef = useRef<string | null>(null);
   const dragOffsetRef = useRef<{ x: number; z: number }>({ x: 0, z: 0 });
   const [isHoveringObject, setIsHoveringObject] = useState(false);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const hoveredIdRef = useRef<string | null>(null);
+  hoveredIdRef.current = hoveredId;
   const [isDraggingObjectState, setIsDraggingObjectState] = useState(false);
   const [isDragOverCatalog, setIsDragOverCatalog] = useState(false);
 
@@ -836,7 +839,17 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           metalness: itemMetalness,
           opacity: itemOpacity,
           transparent: isTransparent,
-          emissive: new THREE.Color(0x0284c7),
+          emissive: new THREE.Color(0x4f46e5),
+          emissiveIntensity: 0.35,
+        });
+      } else if (hoveredId === item.id) {
+        itemMat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(baseColor),
+          roughness: itemRoughness,
+          metalness: itemMetalness,
+          opacity: itemOpacity,
+          transparent: isTransparent,
+          emissive: new THREE.Color(0x38bdf8),
           emissiveIntensity: 0.3,
         });
       } else {
@@ -847,6 +860,25 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           opacity: itemOpacity,
           transparent: isTransparent,
         });
+      }
+
+      // Render sleek wireframe highlight bounding box for selected or hovered item
+      if (isSelected || hoveredId === item.id) {
+        const boxGeom = new THREE.BoxGeometry(
+          item.width * CM + 0.02,
+          item.height * CM + 0.02,
+          item.depth * CM + 0.02
+        );
+        const boxEdges = new THREE.EdgesGeometry(boxGeom);
+        const lineMat = new THREE.LineBasicMaterial({
+          color: isSelected ? 0x6366f1 : 0x38bdf8,
+          linewidth: isSelected ? 2 : 1,
+          transparent: true,
+          opacity: isSelected ? 0.9 : 0.6,
+        });
+        const lineBox = new THREE.LineSegments(boxEdges, lineMat);
+        lineBox.position.y = (item.height * CM) / 2;
+        itemGroup.add(lineBox);
       }
 
       if (item.model && item.model.startsWith('procedural:')) {
@@ -943,7 +975,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       group.add(itemGroup);
     });
-  }, [plan, selectedId, collidingItemIds, activeFloor, floor3DMode]);
+  }, [plan, selectedId, hoveredId, collidingItemIds, activeFloor, floor3DMode]);
 
 
   // Capture Photo Snapshot (from Section 10 & 12 of guide)
@@ -967,6 +999,43 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const mouseDownPosRef = useRef({ x: 0, y: 0 });
 
   // 3D Pick-and-Drag / Orbit / Pan / Visitor Look
+  // Robust helper to find 3D furniture or wall mesh under pointer
+  const findItemAtPointer = (clientX: number, clientY: number): { furnitureId: string | null; wallId: string | null } => {
+    if (!cameraRef.current || !meshesGroupRef.current || !canvasMountRef.current) {
+      return { furnitureId: null, wallId: null };
+    }
+    const rect = canvasMountRef.current.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, cameraRef.current);
+    const intersects = raycaster.intersectObjects(meshesGroupRef.current.children, true);
+
+    let foundFurnitureId: string | null = null;
+    let foundWallId: string | null = null;
+
+    for (const hit of intersects) {
+      let current: THREE.Object3D | null = hit.object;
+      while (current && current !== meshesGroupRef.current) {
+        if (current.userData) {
+          if (current.userData.type === 'furniture' && current.userData.id) {
+            foundFurnitureId = current.userData.id;
+            break;
+          }
+          if (current.userData.type === 'wall' && current.userData.id && !foundWallId) {
+            foundWallId = current.userData.id;
+          }
+        }
+        current = current.parent;
+      }
+      if (foundFurnitureId) break;
+    }
+
+    return { furnitureId: foundFurnitureId, wallId: foundWallId };
+  };
+
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
     prevMouseRef.current = { x: e.clientX, y: e.clientY };
@@ -980,79 +1049,64 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       return;
     }
 
-    // Check if user clicked a 3D furniture item (Active in Aerial / Orbit mode ONLY)
-    // In Walk / Visitor mode, item dragging is disabled so the user can look around & walk without interference
+    // Check if user clicked a 3D furniture or wall item (Active in Aerial / Orbit mode ONLY)
     if (
       cameraModeRef.current === 'aerial' &&
       toolModeRef.current === 'select' &&
       !isSpacePressedRef.current &&
-      e.button === 0 &&
-      cameraRef.current &&
-      meshesGroupRef.current &&
-      canvasMountRef.current
+      e.button === 0
     ) {
-      const rect = canvasMountRef.current.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, cameraRef.current);
-      const intersects = raycaster.intersectObjects(meshesGroupRef.current.children, true);
+      const { furnitureId, wallId } = findItemAtPointer(e.clientX, e.clientY);
+      const targetId = furnitureId || wallId;
 
-      let foundFurnitureId: string | null = null;
-      if (intersects.length > 0) {
-        let current: THREE.Object3D | null = intersects[0].object;
-        while (current && current !== meshesGroupRef.current) {
-          if (current.userData && current.userData.type === 'furniture' && current.userData.id) {
-            foundFurnitureId = current.userData.id;
-            break;
+      if (targetId) {
+        onSelectId(targetId);
+
+        if (furnitureId) {
+          const item = planRef.current.furniture.find((f) => f.id === furnitureId);
+          if (item?.isLocked) {
+            return;
           }
-          current = current.parent;
-        }
-      }
 
-      if (foundFurnitureId) {
-        // User clicked directly on a 3D furniture piece in Orbit view
-        const item = planRef.current.furniture.find((f) => f.id === foundFurnitureId);
-        onSelectId(foundFurnitureId);
+          // Start 3D Dragging in Orbit mode
+          draggedItemIdRef.current = furnitureId;
+          isDraggingObjectRef.current = true;
+          setIsDraggingObjectState(true);
 
-        // If locked, select but do not drag
-        if (item?.isLocked) {
-          return;
-        }
+          const allFloors = planRef.current.floors && planRef.current.floors.length > 0 ? planRef.current.floors : [
+            { level: 0, name: 'Ground Floor' },
+            { level: 1, name: '1st Floor' },
+          ];
+          const getFloor3DOffset = (level: number = 0) => {
+            if (floor3DMode === 'isolated') {
+              return { x: 0, y: 0, z: 0 };
+            } else if (floor3DMode === 'sideBySide') {
+              const floorIdx = allFloors.findIndex((fl) => fl.level === level);
+              const validIdx = floorIdx >= 0 ? floorIdx : 0;
+              const mid = (allFloors.length - 1) / 2;
+              return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
+            } else {
+              return { x: 0, y: level * 2.5, z: 0 };
+            }
+          };
 
-        // Start 3D Dragging in Orbit mode
-        draggedItemIdRef.current = foundFurnitureId;
-        isDraggingObjectRef.current = true;
-        setIsDraggingObjectState(true);
-
-        const allFloors = planRef.current.floors && planRef.current.floors.length > 0 ? planRef.current.floors : [
-          { level: 0, name: 'Ground Floor' },
-          { level: 1, name: '1st Floor' },
-        ];
-        const getFloor3DOffset = (level: number = 0) => {
-          if (floor3DMode === 'isolated') {
-            return { x: 0, y: 0, z: 0 };
-          } else if (floor3DMode === 'sideBySide') {
-            const floorIdx = allFloors.findIndex((fl) => fl.level === level);
-            const validIdx = floorIdx >= 0 ? floorIdx : 0;
-            const mid = (allFloors.length - 1) / 2;
-            return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
-          } else {
-            return { x: 0, y: level * 2.5, z: 0 };
-          }
-        };
-
-        const offset = getFloor3DOffset(item?.floorLevel || 0);
-        const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -offset.y);
-        const hitPoint = new THREE.Vector3();
-        if (raycaster.ray.intersectPlane(floorPlane, hitPoint)) {
-          if (item) {
-            dragOffsetRef.current = {
-              x: hitPoint.x - (item.x * 0.01 + offset.x),
-              z: hitPoint.z - (item.y * 0.01 + offset.z),
-            };
+          const offset = getFloor3DOffset(item?.floorLevel || 0);
+          const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -offset.y);
+          const hitPoint = new THREE.Vector3();
+          const rect = canvasMountRef.current!.getBoundingClientRect();
+          const mouse = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1
+          );
+          const raycaster = new THREE.Raycaster();
+          raycaster.setFromCamera(mouse, cameraRef.current!);
+          if (raycaster.ray.intersectPlane(floorPlane, hitPoint)) {
+            if (item) {
+              dragOffsetRef.current = {
+                x: hitPoint.x - (item.x * 0.01 + offset.x),
+                z: hitPoint.z - (item.y * 0.01 + offset.z),
+              };
+            }
           }
         }
         return; // Don't initiate camera orbit
@@ -1153,29 +1207,22 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       return;
     }
 
-    // 2. HOVER DETECTION (Check if hovering over interactive furniture)
-    if (!isDraggingRef.current && !isPanningRef.current && cameraRef.current && meshesGroupRef.current && canvasMountRef.current) {
-      const rect = canvasMountRef.current.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, cameraRef.current);
-      const intersects = raycaster.intersectObjects(meshesGroupRef.current.children, true);
-
-      let isOverFurniture = false;
-      if (intersects.length > 0) {
-        let current: THREE.Object3D | null = intersects[0].object;
-        while (current && current !== meshesGroupRef.current) {
-          if (current.userData && current.userData.type === 'furniture' && current.userData.id) {
-            isOverFurniture = true;
-            break;
-          }
-          current = current.parent;
-        }
+    // 2. HOVER DETECTION & HIGHLIGHT (Check if hovering over interactive 3D furniture or wall)
+    if (
+      cameraModeRef.current === 'aerial' &&
+      !isDraggingRef.current &&
+      !isPanningRef.current &&
+      !isDraggingObjectRef.current
+    ) {
+      const { furnitureId, wallId } = findItemAtPointer(e.clientX, e.clientY);
+      const nextHoverId = furnitureId || wallId;
+      if (nextHoverId !== hoveredIdRef.current) {
+        setHoveredId(nextHoverId);
+        setIsHoveringObject(!!nextHoverId);
       }
-      setIsHoveringObject(isOverFurniture);
+    } else if (hoveredIdRef.current !== null) {
+      setHoveredId(null);
+      setIsHoveringObject(false);
     }
 
     // 3. CAMERA ORBIT / PAN / VISITOR HEAD LOOK
@@ -1254,37 +1301,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
     // ONLY perform click selection in Aerial / Orbit mode!
     // In Walk / Visitor mode, item selection is completely disabled so clicking looks around and walks.
-    if (
-      cameraModeRef.current === 'aerial' &&
-      dragDist < 6 &&
-      cameraRef.current &&
-      meshesGroupRef.current &&
-      canvasMountRef.current
-    ) {
-      const rect = canvasMountRef.current.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, cameraRef.current);
-      const intersects = raycaster.intersectObjects(meshesGroupRef.current.children, true);
-
-      if (intersects.length > 0) {
-        let current: THREE.Object3D | null = intersects[0].object;
-        let foundId: string | null = null;
-        while (current && current !== meshesGroupRef.current) {
-          if (current.userData && current.userData.id) {
-            foundId = current.userData.id;
-            break;
-          }
-          current = current.parent;
-        }
-        if (foundId) {
-          onSelectId(foundId);
-        }
+    if (cameraModeRef.current === 'aerial' && dragDist < 10 && !isDraggingObjectRef.current) {
+      const { furnitureId, wallId } = findItemAtPointer(e.clientX, e.clientY);
+      const targetId = furnitureId || wallId;
+      if (targetId) {
+        onSelectId(targetId);
       } else {
-        // Click on empty ground deselects
         onSelectId(null);
       }
     }
@@ -1426,12 +1448,46 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       );
       visitorPosRef.current.addScaledVector(forward, e.deltaY < 0 ? 0.5 : -0.5);
     } else {
-      const zoomFactor = e.deltaY < 0 ? 0.88 : 1.14;
-      // Allow deep 3D close-up zoom: 0.3m (30cm macro detail) up to 120m (expansive landscape)
-      sphericalRef.current.radius = Math.max(
-        0.3,
-        Math.min(120, sphericalRef.current.radius * zoomFactor)
-      );
+      // 3D ORBIT VIEW: ZOOM TOWARDS MOUSE CURSOR POSITION
+      if (cameraRef.current && canvasMountRef.current) {
+        const rect = canvasMountRef.current.getBoundingClientRect();
+        const mouse = new THREE.Vector2(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          -((e.clientY - rect.top) / rect.height) * 2 + 1
+        );
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, cameraRef.current);
+
+        // Find intersection with the floor plane or 3D object under mouse
+        const floorHeight = (activeFloor || 0) * 2.5;
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -floorHeight);
+        const hitPoint = new THREE.Vector3();
+        let targetFocusPoint: THREE.Vector3 | null = null;
+
+        if (meshesGroupRef.current) {
+          const intersects = raycaster.intersectObjects(meshesGroupRef.current.children, true);
+          if (intersects.length > 0) {
+            targetFocusPoint = intersects[0].point;
+          }
+        }
+        if (!targetFocusPoint && raycaster.ray.intersectPlane(groundPlane, hitPoint)) {
+          targetFocusPoint = hitPoint;
+        }
+
+        const zoomDelta = e.deltaY < 0 ? -1 : 1;
+        const zoomFactor = zoomDelta < 0 ? 0.85 : 1.18;
+        const oldRadius = sphericalRef.current.radius;
+        const newRadius = Math.max(0.3, Math.min(120, oldRadius * zoomFactor));
+        sphericalRef.current.radius = newRadius;
+
+        // When zooming in towards cursor, gently shift orbit pivot towards cursor position
+        if (targetFocusPoint && zoomDelta < 0) {
+          const shiftFactor = 0.14;
+          targetRef.current.x += (targetFocusPoint.x - targetRef.current.x) * shiftFactor;
+          targetRef.current.y += (targetFocusPoint.y - targetRef.current.y) * shiftFactor;
+          targetRef.current.z += (targetFocusPoint.z - targetRef.current.z) * shiftFactor;
+        }
+      }
     }
   };
 
