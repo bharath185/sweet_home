@@ -287,53 +287,55 @@ export const LoginSimulator3D: React.FC = () => {
     });
 
     // ==========================================
-    // 9. STAGE 4 & 5: INVENTORY FURNITURE SUITE
+    // 9. STAGE 4 & 5: INVENTORY FURNITURE SUITE (NEAT PROPER ALIGNMENT & FACING)
     // ==========================================
     const furnitureGroup = new THREE.Group();
     roomRoot.add(furnitureGroup);
 
-    // A. Luxury Sofa from inventory (/models/sofa.obj)
+    // A. Luxury Sofa from inventory (/models/sofa.obj) - Facing directly forward (-Z) towards coffee table and TV
     loadInventoryItem('/models/sofa.obj', 2.1, 0.85, 0.82, sofaMat).then((sofaMesh) => {
-      sofaMesh.position.set(-0.1, 0, 0.78);
+      sofaMesh.rotation.y = 0;
+      sofaMesh.position.set(-0.1, 0, 0.82);
       furnitureGroup.add(sofaMesh);
     });
 
-    // B. Armchair from inventory (/models/armchair.obj)
-    loadInventoryItem('/models/armchair.obj', 0.8, 0.8, 0.8, armchairMat).then((chairMesh) => {
-      chairMesh.rotation.y = -Math.PI / 3.2;
-      chairMesh.position.set(1.28, 0, 0.18);
-      furnitureGroup.add(chairMesh);
-    });
-
-    // C. Coffee Table from inventory (/models/roundTable.obj) with zero overlap
+    // B. Coffee Table from inventory (/models/roundTable.obj) - Centered neatly between sofa and TV
     loadInventoryItem('/models/roundTable.obj', 0.75, 0.75, 0.42, tableMat).then((tableMesh) => {
-      tableMesh.position.set(-0.1, 0, -0.05);
+      tableMesh.position.set(-0.1, 0, 0.02);
       furnitureGroup.add(tableMesh);
     });
 
-    // D. TV Media Console from inventory (/models/tvUnit.obj)
+    // C. Armchair from inventory (/models/armchair.obj) - Angled 45 degrees towards the coffee table center
+    loadInventoryItem('/models/armchair.obj', 0.8, 0.8, 0.8, armchairMat).then((chairMesh) => {
+      chairMesh.rotation.y = -Math.PI * 0.65;
+      chairMesh.position.set(1.25, 0, 0.15);
+      furnitureGroup.add(chairMesh);
+    });
+
+    // D. TV Media Console from inventory (/models/tvUnit.obj) - Rotated Math.PI to face into the room (+Z) towards sofa
     loadInventoryItem('/models/tvUnit.obj', 1.6, 0.45, 0.5, tvUnitMat).then((tvMesh) => {
-      tvMesh.position.set(-0.1, 0, -1.6);
+      tvMesh.rotation.y = Math.PI;
+      tvMesh.position.set(-0.1, 0, -1.62);
       furnitureGroup.add(tvMesh);
     });
 
-    // E. Bookcase Shelf from inventory (/models/bookcase.obj)
+    // E. Bookcase Shelf from inventory (/models/bookcase.obj) - Flush against left wall, shelves facing into room (+X)
     loadInventoryItem('/models/bookcase.obj', 0.8, 0.35, 1.75, bookcaseMat).then((shelfMesh) => {
       shelfMesh.rotation.y = Math.PI / 2;
-      shelfMesh.position.set(-2.02, 0, -0.6);
+      shelfMesh.position.set(-2.0, 0, -0.6);
       furnitureGroup.add(shelfMesh);
     });
 
-    // F. Botanical Plant from inventory (/models/plant.obj)
+    // F. Botanical Plant from inventory (/models/plant.obj) - Perfectly placed in rear corner
     loadInventoryItem('/models/plant.obj', 0.55, 0.55, 1.35, plantMat).then((plantMesh) => {
-      plantMesh.position.set(-1.65, 0, -1.4);
+      plantMesh.position.set(-1.65, 0, -1.45);
       furnitureGroup.add(plantMesh);
     });
 
-    // G. Plush Woven Floor Rug
+    // G. Plush Woven Floor Rug - Centered under seating zone
     const rugMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.98 });
-    const rugMesh = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.015, 2.4), rugMat);
-    rugMesh.position.set(0.1, 0.008, -0.05);
+    const rugMesh = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.015, 2.3), rugMat);
+    rugMesh.position.set(0.0, 0.008, 0.15);
     rugMesh.receiveShadow = true;
     furnitureGroup.add(rugMesh);
 
