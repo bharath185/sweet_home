@@ -543,6 +543,7 @@ export default function HomeStudioPage() {
             onSwitchToStudio={() => setActiveView('split')}
             currentUser={currentUser}
             onLogout={handleLogout}
+            onAddItem={handleAddItem}
           />
         )}
 

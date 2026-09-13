@@ -15,10 +15,13 @@ import {
   UserPlus,
   FolderKanban,
   BarChart3,
-  ChevronRight
+  ChevronRight,
+  Eye
 } from 'lucide-react';
 import { User, CatalogItem, FloorTemplate, HomePlan } from '../types/plan';
 import { ALL_CLIENT_PLANS } from '../services/api';
+import { CatalogThumbnail3D } from './CatalogThumbnail3D';
+import { Catalog3DPreviewModal } from './Catalog3DPreviewModal';
 
 export type DashboardMenuTab = 'dashboard' | 'projects' | 'users' | 'catalog' | 'floors';
 
@@ -43,6 +46,7 @@ interface AdminDashboardProps {
   onSwitchToStudio?: () => void;
   currentUser?: User | null;
   onLogout?: () => void;
+  onAddItem?: (item: CatalogItem) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -66,6 +70,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onSwitchToStudio,
   currentUser,
   onLogout,
+  onAddItem,
 }) => {
   const currentTab: DashboardMenuTab =
     adminTab === 'overview' || adminTab === 'dashboard'
@@ -84,6 +89,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogCategory, setCatalogCategory] = useState<string>('ALL');
   const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);
+  const [previewCatalogItem, setPreviewCatalogItem] = useState<CatalogItem | null>(null);
 
   const clientUsers = useMemo(() => users.filter((u) => u.role === 'CLIENT'), [users]);
   const adminUsers = useMemo(() => users.filter((u) => u.role === 'ADMIN'), [users]);
@@ -643,26 +649,57 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {filteredCatalog.map((item) => (
                 <div
                   key={item.id}
-                  className="bg-[#0e1628] border border-slate-800 hover:border-indigo-500/40 rounded-xl p-3 transition-all duration-200 flex flex-col justify-between group shadow-sm"
+                  className="bg-[#0e1628] border border-slate-800 hover:border-indigo-500/40 rounded-xl p-2.5 transition-all duration-200 flex flex-col justify-between group shadow-sm"
                 >
                   <div>
-                    <div className="h-20 rounded-lg bg-slate-900 border border-slate-800/80 flex items-center justify-center text-slate-400 mb-2 group-hover:scale-[1.02] transition-transform">
-                      <Box className="w-8 h-8 text-indigo-400/80" />
+                    {/* 3D Thumbnail */}
+                    <div
+                      onClick={() => setPreviewCatalogItem(item)}
+                      className="h-24 rounded-lg bg-[#0b1120] border border-slate-800/80 flex items-center justify-center mb-2 group-hover:scale-[1.02] group-hover:border-indigo-500/40 transition-all cursor-pointer overflow-hidden"
+                      title="Click for interactive 360° 3D Preview"
+                    >
+                      <CatalogThumbnail3D
+                        model={item.model}
+                        width={item.width}
+                        depth={item.depth}
+                        height={item.height}
+                        color={item.defaultColor || '#94a3b8'}
+                        size={88}
+                      />
                     </div>
-                    <h4 className="text-xs font-bold text-white truncate">{item.name}</h4>
+                    <h4 className="text-xs font-bold text-white truncate group-hover:text-indigo-400 transition">{item.name}</h4>
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">{item.category}</span>
-                    <span className="text-[10px] text-slate-500 block mt-1">
-                      {item.width} x {item.depth} x {item.height} cm
+                    <span className="text-[10px] text-slate-500 block mt-0.5 font-mono">
+                      {item.width} × {item.depth} × {item.height} cm
                     </span>
                   </div>
-                  <div className="pt-2 mt-2 border-t border-slate-800/60 flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-indigo-400">
-                      Standard
-                    </span>
+                  <div className="pt-2 mt-2 border-t border-slate-800/60 flex items-center justify-between gap-1">
+                    <div className="flex items-center gap-1">
+                      {/* 3D Preview */}
+                      <button
+                        onClick={() => setPreviewCatalogItem(item)}
+                        className="px-1.5 py-1 rounded-lg bg-slate-900 hover:bg-indigo-900/50 text-indigo-300 border border-slate-700 hover:border-indigo-500/50 text-[10px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                        title="Interactive 360° 3D Preview"
+                      >
+                        <Eye className="w-3 h-3" />
+                        3D
+                      </button>
+                      {/* Add to Plan */}
+                      {onAddItem && (
+                        <button
+                          onClick={() => onAddItem(item)}
+                          className="px-1.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold flex items-center gap-0.5 transition shadow-sm cursor-pointer"
+                          title="Add to floor plan"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Add
+                        </button>
+                      )}
+                    </div>
                     <button
                       onClick={() => onDeleteCatalogItem(item.id)}
                       className="p-1 rounded hover:bg-rose-950 text-slate-500 hover:text-rose-400 transition-colors"
@@ -673,6 +710,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               ))}
             </div>
+
+            {/* 3D Catalog Preview Modal */}
+            <Catalog3DPreviewModal
+              item={previewCatalogItem}
+              isOpen={Boolean(previewCatalogItem)}
+              onClose={() => setPreviewCatalogItem(null)}
+              onAddItem={onAddItem}
+            />
           </div>
         )}
 
