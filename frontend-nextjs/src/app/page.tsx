@@ -440,15 +440,25 @@ export default function HomeStudioPage() {
     let targetElevation = item.elevation || item.defaultElevation || 0;
     let hostId: string | undefined = undefined;
 
-    const isWindow = (item.category || '').toLowerCase().includes('window') ||
-                     (item.name || '').toLowerCase().includes('window') ||
-                     (item.id || '').toLowerCase().includes('window');
+    const isDoor = (item.name || '').toLowerCase().includes('door') ||
+                   (item.id || '').toLowerCase().includes('door') ||
+                   (item.model || '').toLowerCase().includes('door');
+
+    const isWindow = !isDoor && (
+      (item.name || '').toLowerCase().includes('window') ||
+      (item.id || '').toLowerCase().includes('window') ||
+      (item.model || '').toLowerCase().includes('window')
+    );
+
     const isPanoramic = (item.name || '').toLowerCase().includes('panoramic') ||
                         (item.id || '').toLowerCase().includes('panoramic');
 
-    // Windows should not touch floor - set default architectural sill height of 85cm
-    if (isWindow && !isPanoramic && targetElevation === 0) {
-      targetElevation = 85;
+    // DOORS: Must stay grounded at floor level (elevation = 0)
+    if (isDoor) {
+      targetElevation = 0;
+    } else if (isWindow && !isPanoramic && targetElevation === 0) {
+      // WINDOWS: Standard architectural sill height (85cm above floor)
+      targetElevation = item.elevation || item.defaultElevation || 85;
     }
 
     if (item.placementType === 'tabletop' || item.placeOnTable || isTabletopItem(item)) {
