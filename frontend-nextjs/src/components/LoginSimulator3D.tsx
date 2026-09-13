@@ -571,9 +571,8 @@ export const LoginSimulator3D: React.FC = () => {
         bpCyanBold.opacity = pulse;
         bpStampMat.opacity = pulse * 0.95;
       } else {
-        blueprintGroup.visible = true;
-        bpCyanBold.opacity = 0.25;
-        bpStampMat.opacity = 0.15;
+        // Completely hide 2D blueprint lines when 3D construction starts
+        blueprintGroup.visible = false;
       }
 
       // Stage 1: 3D Walls Extrusion
