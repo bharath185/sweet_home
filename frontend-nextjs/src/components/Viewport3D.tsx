@@ -49,6 +49,7 @@ interface Viewport3DProps {
   floorMode?: 'single' | 'sideBySide' | 'stacked';
   onFloorModeChange?: (mode: 'single' | 'sideBySide' | 'stacked') => void;
   onFloorChange?: (floor: number) => void;
+  isSplitMode?: boolean;
 }
 
 export const Viewport3D: React.FC<Viewport3DProps> = ({
@@ -62,6 +63,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   floorMode,
   onFloorModeChange,
   onFloorChange,
+  isSplitMode = false,
 }) => {
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -1443,56 +1445,60 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       {/* Top 3D Viewport Controls (Compact & Cleanly aligned) */}
       <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-sm text-xs font-semibold">
-        {/* Floor Mode Selector */}
-        <div className="flex items-center gap-0.5">
-          {(plan.floors || [
-            { level: 0, name: 'Ground Floor' },
-            { level: 1, name: '1st Floor' },
-          ]).map((fl) => (
-            <button
-              key={fl.level}
-              onClick={() => {
-                if (onFloorChange) onFloorChange(fl.level);
-                setFloor3DMode('isolated');
-              }}
-              className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
-                floor3DMode === 'isolated' && activeFloor === fl.level
-                  ? 'bg-sky-600 text-white font-bold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-              title={`Switch to ${fl.name}`}
-            >
-              <span>{fl.name}</span>
-            </button>
-          ))}
+        {/* Floor Mode Selector (Only shown in Full 3D mode; hidden in 2D/3D split to avoid duplicate menus) */}
+        {!isSplitMode && (
+          <>
+            <div className="flex items-center gap-0.5">
+              {(plan.floors || [
+                { level: 0, name: 'Ground Floor' },
+                { level: 1, name: '1st Floor' },
+              ]).map((fl) => (
+                <button
+                  key={fl.level}
+                  onClick={() => {
+                    if (onFloorChange) onFloorChange(fl.level);
+                    setFloor3DMode('isolated');
+                  }}
+                  className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
+                    floor3DMode === 'isolated' && activeFloor === fl.level
+                      ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                  title={`Switch to ${fl.name}`}
+                >
+                  <span>{fl.name}</span>
+                </button>
+              ))}
 
-          <button
-            onClick={() => setFloor3DMode('sideBySide')}
-            className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
-              floor3DMode === 'sideBySide'
-                ? 'bg-emerald-600 text-white font-bold shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-            title="Side-by-Side Multi-Floor View (Show Floor 1 & Floor 2 side-by-side horizontally)"
-          >
-            <Layers className="w-3 h-3" />
-            <span>🔲 Side-by-Side</span>
-          </button>
+              <button
+                onClick={() => setFloor3DMode('sideBySide')}
+                className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
+                  floor3DMode === 'sideBySide'
+                    ? 'bg-emerald-600 text-white font-bold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+                title="Side-by-Side Multi-Floor View (Show Floor 1 & Floor 2 side-by-side horizontally)"
+              >
+                <Layers className="w-3 h-3" />
+                <span>🔲 Side-by-Side</span>
+              </button>
 
-          <button
-            onClick={() => setFloor3DMode('stacked')}
-            className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
-              floor3DMode === 'stacked'
-                ? 'bg-sky-600 text-white font-bold shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-            title="Stack Floors Vertically"
-          >
-            <span>Stacked</span>
-          </button>
-        </div>
+              <button
+                onClick={() => setFloor3DMode('stacked')}
+                className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
+                  floor3DMode === 'stacked'
+                    ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+                title="Stack Floors Vertically"
+              >
+                <span>Stacked</span>
+              </button>
+            </div>
 
-        <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
+            <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
+          </>
+        )}
 
         {/* Camera Mode */}
         <div className="flex items-center gap-0.5">

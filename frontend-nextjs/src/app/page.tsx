@@ -892,6 +892,7 @@ export default function HomeStudioPage() {
                         floorMode={floorMode}
                         onFloorModeChange={setFloorMode}
                         collidingItemIds={collisionReport.collidingItemIds}
+                        isSplitMode={true}
                       />
                     </div>
                   </>
@@ -933,6 +934,7 @@ export default function HomeStudioPage() {
                       floorMode={floorMode}
                       onFloorModeChange={setFloorMode}
                       collidingItemIds={collisionReport.collidingItemIds}
+                      isSplitMode={false}
                     />
                   </div>
                 )}
