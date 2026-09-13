@@ -140,10 +140,19 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const cameraMode = cameraModeProp !== undefined ? cameraModeProp : localCameraMode;
   const setCameraMode = (m: 'aerial' | 'visitor') => {
     setLocalCameraMode(m);
+    if (m === 'visitor') {
+      onSelectId(null);
+    }
     if (onCameraModeChangeProp) onCameraModeChangeProp(m);
   };
   const cameraModeRef = useRef<'aerial' | 'visitor'>('aerial');
   cameraModeRef.current = cameraMode;
+
+  useEffect(() => {
+    if (cameraMode === 'visitor') {
+      onSelectId(null);
+    }
+  }, [cameraMode]);
 
   const [timeOfDay, setTimeOfDay] = useState<number>(plan.environment?.timeOfDay || 14.5);
   const [isCapturing, setIsCapturing] = useState(false);

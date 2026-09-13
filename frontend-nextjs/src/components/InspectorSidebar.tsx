@@ -186,14 +186,15 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
   const [catalogSearch, setCatalogSearch] = useState<string>('');
   const [selectedCatalogCategory, setSelectedCatalogCategory] = useState<string>('All');
 
-  // Automatically open Properties panel when any item or wall is selected
+  // Automatically open Properties panel when any item or wall is selected,
+  // and collapse the properties/finish panel when deselected (e.g. in Walk mode or clicking background)
   useEffect(() => {
-    if (selectedFurniture) {
+    if (selectedFurniture || selectedWall) {
       setActiveTab('transform');
-    } else if (selectedWall) {
-      setActiveTab('transform');
+    } else if (!selectedId) {
+      setActiveTab((prev) => (prev === 'transform' || prev === 'design' ? null : prev));
     }
-  }, [selectedId]);
+  }, [selectedId, selectedFurniture, selectedWall]);
 
   const isDark = theme === 'dark';
 
