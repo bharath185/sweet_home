@@ -1,0 +1,56 @@
+================================================================================
+                    VISUAL RENDERED - LOGIN CREDENTIALS
+================================================================================
+
+Application URL: http://localhost:3000
+Backend API URL: http://localhost:8090/api
+
+--------------------------------------------------------------------------------
+1. ADMINISTRATOR (SUPERUSER)
+--------------------------------------------------------------------------------
+Role:          ADMIN
+Portal:        Superuser Administration Portal
+Email:         admin@visualrendered.io
+Password:      admin
+Name:          Admin Superuser
+Assigned Plan: Sarah Jenkins Luxury Penthouse Suite
+Access:        Full workspace administration, user onboarding, project management,
+               catalog controls, and global system configuration.
+
+--------------------------------------------------------------------------------
+2. INTERIOR DESIGNER (STUDIO ARCHITECT)
+--------------------------------------------------------------------------------
+Role:          DESIGNER
+Portal:        Studio Architect Workspace
+Email:         designer@visualrendered.io
+Password:      designer
+Name:          Interior Architect
+Assigned Plan: David Villa Contemporary Residence
+Access:        2D precision blueprint drafting, 3D scene sculpting, custom
+               furniture creation, photometric lighting, and floor revisions.
+
+--------------------------------------------------------------------------------
+3. CLIENT / CUSTOMER (VIRTUAL 3D TOUR)
+--------------------------------------------------------------------------------
+Role:          CLIENT
+Portal:        Customer Walking Tour & Presentation
+Email:         client.sarah@gmail.com
+Password:      client
+Name:          Sarah Jenkins (Client)
+Assigned Plan: Sarah Jenkins Luxury Penthouse Suite
+Access:        Interactive first-person virtual walking tour with collision
+               detection, automatic proximity door opening, material customizer,
+               finish selector, elevation controls, and quote approvals.
+
+--------------------------------------------------------------------------------
+DATABASE & BACKEND CONFIGURATION (For Reference)
+--------------------------------------------------------------------------------
+Database Type: PostgreSQL 17
+Database Name: sweethome_db
+DB Username:   postgres
+DB Password:   postgres
+DB Port:       5432
+Persistence:   Spring Boot JPA + HikariCP Connection Pooling
+Realtime Auto-Save: Enabled with full revision history
+
+================================================================================
