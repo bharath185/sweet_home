@@ -9,7 +9,9 @@ import {
   Users,
   Palette,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { HomePlan, UserRole, User } from '../types/plan';
 
@@ -25,6 +27,8 @@ interface NavbarProps {
   lastSyncedAt?: string | null;
   currentUser?: User | null;
   onLogout?: () => void;
+  theme?: 'dark' | 'light';
+  onToggleTheme?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -38,6 +42,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   lastSyncedAt,
   currentUser,
   onLogout,
+  theme = 'dark',
+  onToggleTheme,
 }) => {
   // Determine active state for each of the 4 requested tabs
   const isDashboardActive =
@@ -188,6 +194,24 @@ export const Navbar: React.FC<NavbarProps> = ({
               : '☁️ Synced'}
           </span>
         </div>
+
+        {/* Theme Mode Switcher */}
+        {onToggleTheme && (
+          <button
+            onClick={onToggleTheme}
+            className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-amber-300 border border-slate-800 transition flex items-center gap-1 cursor-pointer text-xs"
+            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+          >
+            {theme === 'dark' ? (
+              <Sun className="w-3.5 h-3.5 text-amber-400" />
+            ) : (
+              <Moon className="w-3.5 h-3.5 text-indigo-400" />
+            )}
+            <span className="hidden sm:inline text-[11px] font-semibold">
+              {theme === 'dark' ? 'Light' : 'Dark'}
+            </span>
+          </button>
+        )}
 
         {/* User profile & Logout */}
         {currentUser && (

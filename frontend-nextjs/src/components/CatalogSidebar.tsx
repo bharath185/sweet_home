@@ -14,7 +14,8 @@ import {
   ChevronRight,
   Plus,
   Sparkles,
-  PlusCircle
+  Box,
+  Layers
 } from 'lucide-react';
 import { CatalogItem } from '../types/plan';
 
@@ -22,26 +23,28 @@ interface CatalogSidebarProps {
   catalog: CatalogItem[];
   onAddItem: (item: CatalogItem) => void;
   onOpenCreateItemModal?: () => void;
+  theme?: 'dark' | 'light';
 }
 
 const CATEGORIES = [
   { id: 'All', name: 'All Furniture', icon: Building2 },
-  { id: 'Doors & Windows', name: 'Doors & Windows', icon: DoorOpen },
-  { id: 'Wall Designs', name: 'Wall Designs', icon: Sparkles },
-  { id: 'Shelves & Storage', name: 'Shelves & Storage', icon: Building2 },
-  { id: 'Decor & Plants', name: 'Decor & Plants', icon: Sparkles },
   { id: 'Living', name: 'Living Room', icon: Armchair },
   { id: 'Bedroom', name: 'Bedroom', icon: Bed },
   { id: 'Kitchen', name: 'Kitchen', icon: UtensilsCrossed },
   { id: 'Bathroom', name: 'Bathroom', icon: Bath },
   { id: 'Lighting', name: 'Lighting', icon: Lightbulb },
-  { id: 'Stairs & Structural', name: 'Structural & Stairs', icon: Building2 },
+  { id: 'Doors & Windows', name: 'Doors & Windows', icon: DoorOpen },
+  { id: 'Wall Designs', name: 'Wall Designs', icon: Sparkles },
+  { id: 'Shelves & Storage', name: 'Shelves & Storage', icon: Box },
+  { id: 'Decor & Plants', name: 'Decor & Plants', icon: Sparkles },
+  { id: 'Stairs & Structural', name: 'Structural & Stairs', icon: Layers },
 ];
 
 export const CatalogSidebar: React.FC<CatalogSidebarProps> = ({
   catalog,
   onAddItem,
   onOpenCreateItemModal,
+  theme = 'dark',
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -49,6 +52,7 @@ export const CatalogSidebar: React.FC<CatalogSidebarProps> = ({
   const [isHovered, setIsHovered] = useState<boolean>(false);
 
   const isExpanded = !isCollapsed || isHovered;
+  const isDark = theme === 'dark';
 
   const filteredItems = catalog.filter((item) => {
     const matchesCat =
@@ -63,22 +67,26 @@ export const CatalogSidebar: React.FC<CatalogSidebarProps> = ({
     <aside
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={`bg-white/95 backdrop-blur-xl border-r border-slate-200/90 flex flex-col h-full select-none shadow-sm shadow-slate-900/5 relative z-10 transition-all duration-300 ease-in-out ${
+      className={`${
+        isDark
+          ? 'bg-[#0a1120] border-slate-800 text-slate-100 shadow-slate-950/50'
+          : 'bg-white/95 border-slate-200 text-slate-800 shadow-slate-900/5'
+      } border-r flex flex-col h-full select-none relative z-10 transition-all duration-300 ease-in-out ${
         isExpanded ? 'w-72' : 'w-14'
       }`}
     >
       {/* Header & Search */}
-      <div className="p-3 border-b border-slate-200 bg-slate-50/60">
+      <div className={`p-3 border-b ${isDark ? 'border-slate-800/80 bg-[#0d1527]' : 'border-slate-200 bg-slate-50/80'}`}>
         <div className="flex items-center justify-between mb-2">
           {isExpanded && (
-            <h2 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 truncate">
-              <Building2 className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-              <span>Catalog</span>
+            <h2 className={`text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+              <Box className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <span>3D Catalog</span>
             </h2>
           )}
           {!isExpanded && (
             <div className="w-full flex justify-center">
-              <Building2 className="w-4 h-4 text-sky-600" />
+              <Box className="w-4 h-4 text-indigo-400" />
             </div>
           )}
           {isExpanded && (
@@ -86,20 +94,24 @@ export const CatalogSidebar: React.FC<CatalogSidebarProps> = ({
               {onOpenCreateItemModal && (
                 <button
                   onClick={onOpenCreateItemModal}
-                  className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white text-[10px] font-bold shadow-xs transition flex items-center gap-1"
-                  title="Create New 3D Item with Design Studio"
+                  className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white text-[10px] font-bold shadow-xs transition flex items-center gap-1 cursor-pointer"
+                  title="Create New 3D Item"
                 >
                   <Plus className="w-3 h-3" />
                   <span>New 3D</span>
                 </button>
               )}
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 font-mono font-bold">
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                isDark ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+              }`}>
                 {filteredItems.length}
               </span>
               <button
                 onClick={() => setIsCollapsed(!isCollapsed)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition"
-                title={isCollapsed ? 'Expand Catalog' : 'Collapse Catalog'}
+                className={`p-1 rounded-lg transition ${
+                  isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'
+                }`}
+                title={isCollapsed ? 'Pin Open' : 'Collapse'}
               >
                 {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
               </button>
@@ -107,163 +119,101 @@ export const CatalogSidebar: React.FC<CatalogSidebarProps> = ({
           )}
         </div>
 
+        {/* Search Bar */}
         {isExpanded && (
-          <div className="relative animate-in fade-in duration-150">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+          <div className="relative mt-2">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search items..."
+              placeholder="Search 3D models..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/15 shadow-sm transition"
+              className={`w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border focus:outline-none transition ${
+                isDark
+                  ? 'bg-slate-900/90 border-slate-800 text-slate-100 placeholder-slate-500 focus:border-indigo-500'
+                  : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 shadow-inner'
+              }`}
             />
           </div>
         )}
       </div>
 
-      {/* Category Tabs Scroll / Collapsed Category Rail */}
-      {isExpanded ? (
-        <div className="flex gap-1.5 p-2.5 overflow-x-auto border-b border-slate-200 custom-scrollbar bg-slate-50/30">
+      {/* Category Pills Strip */}
+      {isExpanded && (
+        <div className={`px-2.5 py-2 border-b flex items-center gap-1 overflow-x-auto no-scrollbar ${
+          isDark ? 'border-slate-800/60 bg-[#0c1424]' : 'border-slate-200/80 bg-slate-50/50'
+        }`}>
           {CATEGORIES.map((cat) => {
-            const Icon = cat.icon;
-            const isActive = selectedCategory === cat.id;
+            const isSelected = selectedCategory.toLowerCase() === cat.id.toLowerCase();
             return (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs whitespace-nowrap transition-all ${
-                  isActive
-                    ? 'bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-bold shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition flex items-center gap-1 cursor-pointer ${
+                  isSelected
+                    ? 'bg-indigo-600 text-white shadow-xs font-semibold'
+                    : isDark
+                    ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <cat.icon className="w-3 h-3" />
                 <span>{cat.name}</span>
               </button>
             );
           })}
         </div>
-      ) : (
-        <div className="flex-1 flex flex-col items-center py-2 space-y-1 overflow-y-auto custom-scrollbar">
-          {CATEGORIES.map((cat) => {
-            const Icon = cat.icon;
-            const isActive = selectedCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  setSelectedCategory(cat.id);
-                  setIsCollapsed(false);
-                }}
-                className={`p-2.5 rounded-xl transition-all ${
-                  isActive
-                    ? 'bg-sky-50 text-sky-700 border border-sky-200 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-                title={cat.name}
-              >
-                <Icon className="w-4 h-4" />
-              </button>
-            );
-          })}
-        </div>
       )}
 
-      {/* Item Grid (Only rendered when expanded) */}
-      {isExpanded && (
-        <div className="flex-1 overflow-y-auto p-3 grid grid-cols-2 gap-2.5 content-start custom-scrollbar animate-in fade-in duration-150">
-          {/* Create Item Quick Banner Card */}
-          {onOpenCreateItemModal && (
-            <div
-              onClick={onOpenCreateItemModal}
-              className="col-span-2 p-2.5 rounded-2xl bg-gradient-to-r from-sky-50 via-indigo-50 to-purple-50 border border-sky-200/80 hover:border-sky-400 cursor-pointer transition-all hover:shadow-md flex items-center justify-between gap-2 shadow-2xs group"
-            >
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-sm">
-                  <Sparkles className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-[11px] font-bold text-slate-800 group-hover:text-sky-600 transition">
-                    + Create New 3D Item
-                  </div>
-                  <div className="text-[9px] text-slate-500">Design Studio with 3D Preview</div>
-                </div>
-              </div>
-              <PlusCircle className="w-4 h-4 text-sky-600 group-hover:scale-110 transition" />
-            </div>
-          )}
-
-          {filteredItems.map((item) => (
+      {/* Catalog Items Grid */}
+      <div className="flex-1 overflow-y-auto p-2.5 space-y-2 custom-scrollbar">
+        {filteredItems.length === 0 ? (
+          <div className="py-8 text-center text-xs text-slate-400">
+            No 3D items found.
+          </div>
+        ) : (
+          filteredItems.map((item) => (
             <div
               key={item.id}
-              draggable={true}
+              onClick={() => onAddItem(item)}
+              draggable
               onDragStart={(e) => {
                 e.dataTransfer.setData('application/json', JSON.stringify(item));
-                e.dataTransfer.setData('text/plain', item.id);
-                e.dataTransfer.effectAllowed = 'copy';
               }}
-              onClick={() => onAddItem(item)}
-              className="group relative bg-white hover:bg-slate-50/50 border border-slate-200 hover:border-sky-400 rounded-2xl p-2.5 flex flex-col items-center justify-between cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 active:scale-95 shadow-sm"
-              title={`${item.name} (${item.width}x${item.depth}x${item.height}cm) - Drag into 2D or 3D view`}
+              className={`p-2.5 rounded-xl border transition-all cursor-pointer group flex items-center gap-3 ${
+                isDark
+                  ? 'bg-slate-900/60 hover:bg-slate-800/80 border-slate-800/80 hover:border-indigo-500/50 text-slate-200'
+                  : 'bg-slate-50 hover:bg-white border-slate-200 hover:border-indigo-400 text-slate-800 shadow-2xs hover:shadow-xs'
+              }`}
+              title={`Add ${item.name} (${item.width}x${item.depth}x${item.height} cm)`}
             >
-              {/* Custom Badge */}
-              {item.isCustom && (
-                <div className="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-gradient-to-r from-sky-500 to-indigo-500 text-white text-[8px] font-bold shadow-2xs">
-                  Custom
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
+                isDark ? 'bg-slate-800 text-indigo-400' : 'bg-indigo-50 text-indigo-600'
+              }`}>
+                <Box className="w-5 h-5" />
+              </div>
+
+              {isExpanded && (
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold truncate group-hover:text-indigo-400 transition-colors">
+                      {item.name}
+                    </h4>
+                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full uppercase font-bold tracking-wider ${
+                      isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-600'
+                    }`}>
+                      {item.category}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                    {item.width} × {item.depth} × {item.height} cm
+                  </p>
                 </div>
               )}
-
-              {/* Thumbnail */}
-              <div className="w-14 h-14 relative flex items-center justify-center bg-slate-50 rounded-xl p-1 mb-1.5 border border-slate-100 group-hover:border-sky-200 transition shadow-inner">
-                {item.icon ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={item.icon}
-                    alt={item.name}
-                    className="max-w-full max-h-full object-contain filter group-hover:scale-105 transition drop-shadow-sm"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
-                  />
-                ) : (
-                  <Armchair className="w-6 h-6 text-slate-400 group-hover:text-sky-600 transition" />
-                )}
-              </div>
-
-              {/* Title & Dimensions */}
-              <div className="w-full text-center">
-                <div className="text-[11px] font-semibold text-slate-800 group-hover:text-sky-600 truncate transition">
-                  {item.name}
-                </div>
-                <div className="text-[9px] text-slate-400 font-mono mt-0.5">
-                  {Math.round(item.width)}×{Math.round(item.depth)}×{Math.round(item.height)}cm
-                </div>
-              </div>
-
-              {/* Quick Add Overlay Icon */}
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-all bg-sky-600 hover:bg-sky-500 text-white rounded-full p-1 shadow-sm">
-                <Plus className="w-3 h-3" />
-              </div>
             </div>
-          ))}
-
-          {filteredItems.length === 0 && (
-            <div className="col-span-2 text-center py-12 text-slate-400 text-xs">
-              No furniture matching &quot;{searchQuery}&quot;
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Bottom Hint */}
-      {isExpanded && (
-        <div className="p-2.5 bg-slate-50 border-t border-slate-200 text-[10px] text-slate-500 text-center font-medium">
-          Click or drag item to place in room
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </aside>
   );
 };
-
-export default CatalogSidebar;
-

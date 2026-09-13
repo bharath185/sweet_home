@@ -35,12 +35,63 @@ import {
   deleteCatalogItem,
   fetchFloorTemplates
 } from '../services/api';
+import {
+  Layers,
+  Sparkles,
+  LayoutDashboard,
+  Box,
+  Users,
+  Plus,
+  Trash2,
+  CheckCircle2,
+  Search,
+  ArrowRight,
+  Home,
+  UserPlus,
+  FolderKanban,
+  RotateCcw,
+  RotateCw,
+  Sun,
+  Moon,
+  FolderOpen,
+  Share2,
+  Save,
+  Sliders,
+  Image as ImageIcon,
+  Building,
+  Columns,
+  Eye,
+  AlertTriangle
+} from 'lucide-react';
 
 export default function HomeStudioPage() {
   const [plan, setPlan] = useState<HomePlan>(sampleDefaultPlan);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [templates, setTemplates] = useState<FloorTemplate[]>([]);
+
+  // Theme Management (Dark & Light)
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  // Load theme preference on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('sweethome_theme') as 'dark' | 'light' | null;
+    if (savedTheme) {
+      setTheme(savedTheme);
+      document.documentElement.classList.toggle('dark', savedTheme === 'dark');
+    } else {
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+
+  const handleToggleTheme = () => {
+    setTheme((prev) => {
+      const nextTheme = prev === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('sweethome_theme', nextTheme);
+      document.documentElement.classList.toggle('dark', nextTheme === 'dark');
+      return nextTheme;
+    });
+  };
 
   // Authentication State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -53,7 +104,6 @@ export default function HomeStudioPage() {
   const [floorMode, setFloorMode] = useState<'single' | 'sideBySide' | 'stacked'>('single');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const [isAdminSidebarOpen, setIsAdminSidebarOpen] = useState<boolean>(false);
   const [isFurnitureListOpen, setIsFurnitureListOpen] = useState<boolean>(true);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -73,7 +123,6 @@ export default function HomeStudioPage() {
   const historyRef = useRef<HomePlan[]>([JSON.parse(JSON.stringify(sampleDefaultPlan))]);
   const historyIndexRef = useRef<number>(0);
   const isHistoryActionRef = useRef<boolean>(false);
-  const historyTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [canUndo, setCanUndo] = useState<boolean>(false);
   const [canRedo, setCanRedo] = useState<boolean>(false);
 
@@ -96,7 +145,6 @@ export default function HomeStudioPage() {
     );
   };
 
-  // Commit clean snapshot to history
   const commitSnapshot = useCallback((newPlan: HomePlan) => {
     if (isHistoryActionRef.current) return;
 
@@ -117,700 +165,263 @@ export default function HomeStudioPage() {
     setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
   }, []);
 
-  // Wrap plan state updater to record undo/redo history and persist to client cache
   const handleUpdatePlan = useCallback(
-    (updated: HomePlan | ((prev: HomePlan) => HomePlan), immediate: boolean = false) => {
-      setPlan((prev) => {
-        const nextPlan = typeof updated === 'function' ? updated(prev) : updated;
-        ALL_CLIENT_PLANS[nextPlan.id] = nextPlan;
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(`sweethome_plan_${nextPlan.id}`, JSON.stringify(nextPlan));
+    (newPlan: HomePlan) => {
+      setPlan(newPlan);
+      commitSnapshot(newPlan);
+
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      setCloudSyncStatus('saving');
+
+      autoSaveTimerRef.current = setTimeout(async () => {
+        try {
+          await savePlanToBackend(newPlan);
+          setCloudSyncStatus('synced');
+          setLastSyncedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        } catch (e) {
+          setCloudSyncStatus('offline');
         }
-
-        if (immediate) {
-          if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
-          commitSnapshot(nextPlan);
-        } else {
-          if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
-          historyTimerRef.current = setTimeout(() => {
-            commitSnapshot(nextPlan);
-          }, 300);
-        }
-
-        // Debounced Real-time Auto-Save to PostgreSQL database
-        setCloudSyncStatus('saving');
-        if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-        autoSaveTimerRef.current = setTimeout(async () => {
-          try {
-            const res = await savePlanToBackend(nextPlan, userRole, 'Real-time state auto-save');
-            if (res.success) {
-              setCloudSyncStatus('synced');
-              setLastSyncedAt(new Date().toLocaleTimeString());
-            } else {
-              setCloudSyncStatus('offline');
-            }
-          } catch {
-            setCloudSyncStatus('offline');
-          }
-        }, 900);
-
-        return nextPlan;
-      });
+      }, 1200);
     },
     [commitSnapshot]
   );
 
-  // Handle Undo action
   const handleUndo = useCallback(() => {
-    if (historyIndexRef.current <= 0) return;
-
-    historyIndexRef.current -= 1;
-    const targetPlan = JSON.parse(JSON.stringify(historyRef.current[historyIndexRef.current]));
-
-    isHistoryActionRef.current = true;
-    setPlan(targetPlan);
-    ALL_CLIENT_PLANS[targetPlan.id] = targetPlan;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(`sweethome_plan_${targetPlan.id}`, JSON.stringify(targetPlan));
+    if (historyIndexRef.current > 0) {
+      isHistoryActionRef.current = true;
+      historyIndexRef.current -= 1;
+      const prevPlan = historyRef.current[historyIndexRef.current];
+      setPlan(JSON.parse(JSON.stringify(prevPlan)));
+      setCanUndo(historyIndexRef.current > 0);
+      setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
+      setTimeout(() => {
+        isHistoryActionRef.current = false;
+      }, 50);
     }
-    setCanUndo(historyIndexRef.current > 0);
-    setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
-
-    setTimeout(() => {
-      isHistoryActionRef.current = false;
-    }, 40);
   }, []);
 
-  // Handle Redo action
   const handleRedo = useCallback(() => {
-    if (historyIndexRef.current >= historyRef.current.length - 1) return;
-
-    historyIndexRef.current += 1;
-    const targetPlan = JSON.parse(JSON.stringify(historyRef.current[historyIndexRef.current]));
-
-    isHistoryActionRef.current = true;
-    setPlan(targetPlan);
-    ALL_CLIENT_PLANS[targetPlan.id] = targetPlan;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(`sweethome_plan_${targetPlan.id}`, JSON.stringify(targetPlan));
+    if (historyIndexRef.current < historyRef.current.length - 1) {
+      isHistoryActionRef.current = true;
+      historyIndexRef.current += 1;
+      const nextPlan = historyRef.current[historyIndexRef.current];
+      setPlan(JSON.parse(JSON.stringify(nextPlan)));
+      setCanUndo(historyIndexRef.current > 0);
+      setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
+      setTimeout(() => {
+        isHistoryActionRef.current = false;
+      }, 50);
     }
-    setCanUndo(historyIndexRef.current > 0);
-    setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
-
-    setTimeout(() => {
-      isHistoryActionRef.current = false;
-    }, 40);
   }, []);
 
-  // Global Keyboard Shortcuts (Ctrl+Z for Undo, Ctrl+Y / Ctrl+Shift+Z for Redo)
+  // Initial Data Fetching & Auth Check
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
+    const savedUser = localStorage.getItem('sweethome_current_user');
+    if (savedUser) {
+      try {
+        const u = JSON.parse(savedUser);
+        setCurrentUser(u);
+        setUserRole(u.role);
+      } catch (e) {}
+    }
+    setIsAuthLoaded(true);
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        handleUndo();
-      } else if (
-        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') ||
-        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')
-      ) {
-        e.preventDefault();
-        handleRedo();
+    const initData = async () => {
+      try {
+        const [catData, usersData, tplData] = await Promise.all([
+          fetchCatalog(),
+          fetchUsers(),
+          fetchFloorTemplates()
+        ]);
+        setCatalog(catData);
+        setUsers(usersData);
+        setTemplates(tplData);
+
+        const isHealthy = await checkBackendHealth();
+        setIsBackendConnected(isHealthy);
+      } catch (err) {
+        setIsBackendConnected(false);
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, handleRedo]);
+    initData();
+  }, []);
 
-  // Real-time Collision Detection Computation (isolated by active floor)
   const collisionReport = useMemo(() => {
     return detectCollisions(plan.furniture, plan.walls, activeFloor);
   }, [plan.furniture, plan.walls, activeFloor]);
 
-  // Client Projects List
-  const clientProjects = useMemo(() => {
-    const list: { id: string; name: string; clientName: string; role?: string }[] = [];
-    users.forEach((u) => {
-      const planId = u.assignedPlan || `plan_${u.id}`;
-      const defaultPlanName = ALL_CLIENT_PLANS[planId]?.name || `${u.name}'s Custom Plan`;
-      list.push({
-        id: planId,
-        name: plan.id === planId ? plan.name : defaultPlanName,
-        clientName: u.name,
-        role: u.role,
-      });
-    });
-    return list;
-  }, [users, plan]);
-
-  // Handle Switching Client Project Design
-  const handleSelectClientProject = async (planId: string) => {
-    const loaded = await fetchPlanById(planId);
-    setPlan(loaded);
-    historyRef.current = [JSON.parse(JSON.stringify(loaded))];
-    historyIndexRef.current = 0;
-    setCanUndo(false);
-    setCanRedo(false);
-    setSelectedId(null);
-    setActiveFloor(0);
-  };
-
-  // Session hydration on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedAuth = localStorage.getItem('sweethome_auth_user');
-      if (savedAuth) {
-        try {
-          const parsed: User = JSON.parse(savedAuth);
-          setCurrentUser(parsed);
-          setUserRole(parsed.role);
-          if (parsed.role === 'CLIENT') {
-            setActiveView('customer');
-          }
-        } catch {
-          // Ignore parse errors
-        }
-      }
-      setIsAuthLoaded(true);
-    }
-  }, []);
-
-  // Handle Login
-  const handleLogin = async (user: User) => {
+  const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
     setUserRole(user.role);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('sweethome_auth_user', JSON.stringify(user));
-    }
+    localStorage.setItem('sweethome_current_user', JSON.stringify(user));
     if (user.role === 'CLIENT') {
-      const planToLoad = user.assignedPlan || 'plan-sarah-suite';
-      await handleSelectClientProject(planToLoad);
       setActiveView('customer');
-    } else if (user.role === 'DESIGNER') {
-      const planToLoad = user.assignedPlan || 'plan-david-villa';
-      await handleSelectClientProject(planToLoad);
-      setActiveView('split');
     } else {
       setActiveView('dashboard');
     }
   };
 
-  // Handle Logout
   const handleLogout = () => {
     setCurrentUser(null);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('sweethome_auth_user');
-    }
-    setSelectedId(null);
-    setActiveView('split');
+    localStorage.removeItem('sweethome_current_user');
+    setActiveView('dashboard');
   };
 
-  // Decode URL parameters on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const mode = urlParams.get('mode');
-      const role = urlParams.get('role') as UserRole | null;
-      const planId = urlParams.get('planId');
-      const data = urlParams.get('data');
+  const handleAddItem = (catalogItem: CatalogItem) => {
+    const newItem: FurnitureItem = {
+      id: `f_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      catalogId: catalogItem.id,
+      name: catalogItem.name,
+      category: catalogItem.category,
+      x: 0,
+      y: 0,
+      elevation: catalogItem.defaultElevation || 0,
+      angle: 0,
+      width: catalogItem.width,
+      depth: catalogItem.depth,
+      height: catalogItem.height,
+      model: catalogItem.model,
+      icon: catalogItem.icon,
+      color: catalogItem.defaultColor || '#cbd5e1',
+      floorLevel: activeFloor,
+      isVisible: true,
+      isLocked: false
+    };
 
-      if (role) {
-        setUserRole(role);
-      }
+    const updated = {
+      ...plan,
+      furniture: [...plan.furniture, newItem],
+      updatedAt: new Date().toISOString()
+    };
+    handleUpdatePlan(updated);
+    setSelectedId(newItem.id);
+  };
 
-      if (data) {
-        const decoded = decodePlanFromShareUrl(data);
-        if (decoded) {
-          setPlan(decoded);
-          historyRef.current = [JSON.parse(JSON.stringify(decoded))];
-          historyIndexRef.current = 0;
-          if (mode === 'customer') {
-            setActiveView('customer');
-          }
-        }
-      } else if (planId) {
-        handleSelectClientProject(planId);
-        if (mode === 'customer') {
-          setActiveView('customer');
-        }
-      } else if (mode === 'customer') {
-        setActiveView('customer');
-      }
-    }
-  }, []);
+  const handleToggleItemVisibility = (id: string) => {
+    const updated = {
+      ...plan,
+      furniture: plan.furniture.map((f) => (f.id === id ? { ...f, isVisible: f.isVisible === false ? true : false } : f))
+    };
+    handleUpdatePlan(updated);
+  };
 
-  // Fetch initial data from Spring Boot
-  useEffect(() => {
-    async function loadData() {
-      const [items, userList, templateList, isHealthy] = await Promise.all([
-        fetchCatalog(),
-        fetchUsers(),
-        fetchFloorTemplates(),
-        checkBackendHealth(),
-      ]);
-      setCatalog(items);
-      setUsers(userList);
-      setTemplates(templateList);
-      setIsBackendConnected(isHealthy);
-    }
-    loadData();
+  const handleToggleItemLock = (id: string) => {
+    const updated = {
+      ...plan,
+      furniture: plan.furniture.map((f) => (f.id === id ? { ...f, isLocked: !f.isLocked } : f))
+    };
+    handleUpdatePlan(updated);
+  };
 
-    const interval = setInterval(async () => {
-      const healthy = await checkBackendHealth();
-      setIsBackendConnected(healthy);
-    }, 15000);
+  const handleDeleteItem = (id: string) => {
+    const updated = {
+      ...plan,
+      furniture: plan.furniture.filter((f) => f.id !== id)
+    };
+    handleUpdatePlan(updated);
+    if (selectedId === id) setSelectedId(null);
+  };
 
-    return () => clearInterval(interval);
-  }, []);
-
-  // Save Plan
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const res = await savePlanToBackend(plan);
-      alert(res.message || 'Plan saved successfully to Spring Boot!');
-    } catch (err) {
-      alert('Error saving plan.');
+      await savePlanToBackend(plan);
+      setCloudSyncStatus('synced');
+      setLastSyncedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    } catch (e) {
+      setCloudSyncStatus('offline');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Create new blank plan
-  const handleNewPlan = () => {
-    if (confirm('Create a new blank plan? Any unsaved changes will be lost.')) {
-      const freshPlanCreated: HomePlan = {
-        id: `plan_${Date.now()}`,
-        name: 'New Space Plan Project',
-        version: '1.0',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        currentFloor: 0,
-        floors: [
-          { level: 0, name: 'Ground Floor', elevation: 0, height: 250 },
-          { level: 1, name: '1st Floor', elevation: 250, height: 250 },
-        ],
-        walls: [
-          { id: 'w1', xStart: -300, yStart: -200, xEnd: 300, yEnd: -200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
-          { id: 'w2', xStart: 300, yStart: -200, xEnd: 300, yEnd: 200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
-          { id: 'w3', xStart: 300, yStart: 200, xEnd: -300, yEnd: 200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
-          { id: 'w4', xStart: -300, yStart: 200, xEnd: -300, yEnd: -200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
-        ],
-        furniture: [],
-        rooms: [
-          {
-            id: 'r1',
-            name: 'Main Living Room',
-            floorLevel: 0,
-            points: [
-              { x: -300, y: -200 },
-              { x: 300, y: -200 },
-              { x: 300, y: 200 },
-              { x: -300, y: 200 },
-            ],
-            floorColor: '#e2e8f0',
-            areaSquareMeters: 24.0,
-          }
-        ],
-        dimensionLines: [],
-        textNotes: [],
-        preferences: {
-          unitSystem: 'cm',
-          defaultWallThickness: 15,
-          defaultWallHeight: 250,
-          gridSize: 20,
-          magnetismEnabled: true,
-          showRulers: true,
-        },
-      };
-      setPlan(freshPlanCreated);
-      historyRef.current = [JSON.parse(JSON.stringify(freshPlanCreated))];
-      historyIndexRef.current = 0;
-      setCanUndo(false);
-      setCanRedo(false);
-      setSelectedId(null);
-    }
+  const handleAddCustomItem = async (newItem: CatalogItem) => {
+    try {
+      const created = await addCustomCatalogItem(newItem);
+      setCatalog((prev) => [created, ...prev]);
+      setIsAddItemModalOpen(false);
+    } catch (e) {}
   };
 
-  // Export Plan JSON
-  const handleExport = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(plan, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `${plan.name.replace(/\s+/g, '_')}_SpacePlanner.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-  };
-
-  // Add Item from Catalog to Floor Plan (with Tabletop Auto-Attachment)
-  const handleAddItem = (item: CatalogItem) => {
-    let targetX = 0;
-    let targetY = 0;
-    let targetElevation = item.elevation || item.defaultElevation || 0;
-    let hostId: string | undefined = undefined;
-
-    const isDoor = (item.name || '').toLowerCase().includes('door') ||
-                   (item.id || '').toLowerCase().includes('door') ||
-                   (item.model || '').toLowerCase().includes('door');
-
-    const isWindow = !isDoor && (
-      (item.name || '').toLowerCase().includes('window') ||
-      (item.id || '').toLowerCase().includes('window') ||
-      (item.model || '').toLowerCase().includes('window')
-    );
-
-    const isPanoramic = (item.name || '').toLowerCase().includes('panoramic') ||
-                        (item.id || '').toLowerCase().includes('panoramic');
-
-    // DOORS: Must stay grounded at floor level (elevation = 0)
-    if (isDoor) {
-      targetElevation = 0;
-    } else if (isWindow && !isPanoramic && targetElevation === 0) {
-      // WINDOWS: Standard architectural sill height (85cm above floor)
-      targetElevation = item.elevation || item.defaultElevation || 85;
-    }
-
-    if (item.placementType === 'tabletop' || item.placeOnTable || isTabletopItem(item)) {
-      const nearestTable = findNearestSupportingSurface(
-        { x: 0, y: 0, floorLevel: activeFloor, id: 'temp' } as any,
-        plan.furniture
-      );
-      if (nearestTable) {
-        targetX = nearestTable.x;
-        targetY = nearestTable.y;
-        targetElevation = (nearestTable.elevation || 0) + nearestTable.height;
-        hostId = nearestTable.id;
+  const handleAddUser = async (user: User) => {
+    try {
+      const res = await createAdminUser(user);
+      if (res && res.user) {
+        setUsers((prev) => [...prev, res.user]);
       }
-    } else if (item.placementType === 'ceiling') {
-      const activeFloorObj = plan.floors?.find((fl) => fl.level === activeFloor);
-      const floorHeight = activeFloorObj?.height || plan.preferences?.defaultWallHeight || 250;
-      targetElevation = Math.max(0, floorHeight - item.height);
-    }
+      setIsAddUserModalOpen(false);
+    } catch (e) {}
+  };
 
-    const newItem: FurnitureItem = {
-      id: `f_${Date.now()}`,
-      catalogId: item.id,
-      name: item.name,
-      category: item.category,
-      x: targetX,
-      y: targetY,
-      elevation: targetElevation,
-      angle: 0,
-      width: item.width,
-      depth: item.depth,
-      height: item.height,
-      model: item.model,
-      icon: item.icon,
-      color: item.defaultColor,
-      floorLevel: activeFloor,
-      isVisible: true,
-      isLocked: false,
-      placementType: item.placementType || (isTabletopItem(item) ? 'tabletop' : 'floor'),
-      placeOnTable: item.placeOnTable || isTabletopItem(item),
-      hostFurnitureId: hostId,
+  const handleSaveBlueprint = (bp: BlueprintImage | null) => {
+    const updated = {
+      ...plan,
+      blueprint: bp || undefined
     };
-
-    handleUpdatePlan((prev) => ({
-      ...prev,
-      furniture: [...prev.furniture, newItem],
-      updatedAt: new Date().toISOString(),
-    }), true);
-    setSelectedId(newItem.id);
+    handleUpdatePlan(updated);
+    setIsBlueprintModalOpen(false);
   };
 
-  // Toggle Item Visibility
-  const handleToggleItemVisibility = (id: string) => {
-    handleUpdatePlan((prev) => ({
-      ...prev,
-      furniture: prev.furniture.map((f) =>
-        f.id === id ? { ...f, isVisible: !(f.isVisible ?? true) } : f
-      ),
-      updatedAt: new Date().toISOString(),
-    }), true);
+  const handleSavePreferences = (prefs: ProjectPreferences) => {
+    const updated = {
+      ...plan,
+      preferences: prefs
+    };
+    handleUpdatePlan(updated);
+    setIsPreferencesModalOpen(false);
   };
 
-  // Toggle Item Lock
-  const handleToggleItemLock = (id: string) => {
-    handleUpdatePlan((prev) => ({
-      ...prev,
-      furniture: prev.furniture.map((f) =>
-        f.id === id ? { ...f, isLocked: !f.isLocked } : f
-      ),
-      updatedAt: new Date().toISOString(),
-    }), true);
-  };
-
-  // Delete Item from Plan
-  const handleDeleteItem = (id: string) => {
-    const item = plan.furniture.find((f) => f.id === id);
-    if (item?.isLocked) {
-      alert(`⚠️ Cannot delete "${item.name}": This item is LOCKED.\nPlease unlock it first before deleting.`);
-      return;
-    }
-    handleUpdatePlan((prev) => ({
-      ...prev,
-      furniture: prev.furniture.filter((f) => f.id !== id),
-      updatedAt: new Date().toISOString(),
-    }), true);
-    if (selectedId === id) setSelectedId(null);
-  };
-
-  // Add Custom 3D Catalog Item & Automatically Load / Place in 3D Scene
-  const handleAddCustomItem = async (newItem: CatalogItem, autoPlaceInScene: boolean = true) => {
-    const saved = await addCustomCatalogItem(newItem);
-    setCatalog((prev) => [saved, ...prev.filter((i) => i.id !== saved.id)]);
-
-    if (autoPlaceInScene) {
-      let targetX = 0;
-      let targetY = 0;
-      let targetElevation = 0;
-      let hostId: string | undefined = undefined;
-
-      if (saved.placementType === 'tabletop' || saved.placeOnTable || isTabletopItem(saved)) {
-        const nearestTable = findNearestSupportingSurface(
-          { x: 0, y: 0, floorLevel: activeFloor, id: 'temp' } as any,
-          plan.furniture
-        );
-        if (nearestTable) {
-          targetX = nearestTable.x;
-          targetY = nearestTable.y;
-          targetElevation = (nearestTable.elevation || 0) + nearestTable.height;
-          hostId = nearestTable.id;
-        }
-      } else if (saved.placementType === 'ceiling') {
-        const activeFloorObj = plan.floors?.find((fl) => fl.level === activeFloor);
-        const floorHeight = activeFloorObj?.height || plan.preferences?.defaultWallHeight || 250;
-        targetElevation = Math.max(0, floorHeight - saved.height);
+  const handleSelectClientProject = async (planId: string) => {
+    try {
+      const loaded = await fetchPlanById(planId);
+      if (loaded) {
+        setPlan(loaded);
+        historyRef.current = [JSON.parse(JSON.stringify(loaded))];
+        historyIndexRef.current = 0;
+        setCanUndo(false);
+        setCanRedo(false);
       }
-
-      const placedItem: FurnitureItem = {
-        id: `f_${Date.now()}`,
-        catalogId: saved.id,
-        name: saved.name,
-        category: saved.category,
-        x: targetX,
-        y: targetY,
-        elevation: targetElevation,
-        angle: 0,
-        width: saved.width,
-        depth: saved.depth,
-        height: saved.height,
-        model: saved.model,
-        icon: saved.icon,
-        color: saved.defaultColor,
-        materialCategory: saved.materialCategory,
-        materialFinish: saved.materialFinish,
-        roughness: saved.roughness,
-        metalness: saved.metalness,
-        opacity: saved.opacity,
-        stylePreset: saved.stylePreset,
-        lightIntensity: saved.lightIntensity,
-        lightColor: saved.lightColor,
-        floorLevel: activeFloor,
-        isVisible: true,
-        isLocked: false,
-        placementType: saved.placementType,
-        placeOnTable: saved.placeOnTable,
-        hostFurnitureId: hostId,
-      };
-
-      handleUpdatePlan((prev) => ({
-        ...prev,
-        furniture: [...prev.furniture, placedItem],
-        updatedAt: new Date().toISOString(),
-      }), true);
-
-      setSelectedId(placedItem.id);
-
-      if (activeView === 'dashboard') {
-        setActiveView('split');
-      }
-    }
+    } catch (e) {}
   };
 
-  // Delete Item from Catalog
-  const handleDeleteCatalogItem = async (itemId: string) => {
-    if (confirm('Delete this item from the catalog?')) {
-      await deleteCatalogItem(itemId);
-      setCatalog((prev) => prev.filter((i) => i.id !== itemId));
-    }
-  };
-
-  // Create User & Fresh Dedicated Design Project
-  const handleAddUser = async (userData: Partial<User>, templateType?: string) => {
-    const { user: newUser, plan: newPlan } = await createAdminUser(userData, templateType);
-    setUsers((prev) => [newUser, ...prev]);
-    // Immediately select and switch to the new client's fresh design!
-    handleUpdatePlan(newPlan, true);
-    setSelectedId(null);
-    setActiveFloor(0);
-    setActiveView('split');
-    alert(`🎉 Client "${newUser.name}" onboarded successfully!\nA fresh, dedicated design project has been created and opened.`);
-  };
-
-  // Toggle User Online Status
-  const handleToggleUserStatus = async (userId: string) => {
-    await toggleUserStatus(userId);
-    setUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, isOnline: !u.isOnline } : u))
-    );
-  };
-
-  // Delete User
-  const handleDeleteUser = (userId: string) => {
-    if (confirm('Remove this user from the directory?')) {
-      setUsers((prev) => prev.filter((u) => u.id !== userId));
-    }
-  };
-
-  // Load Template in Studio
-  
-  // Start New Design for a specific Client
   const handleStartNewDesignForClient = (client: User, templateId?: string) => {
-    let basePlan: HomePlan;
-
-    if (templateId === 'duplex_2floor' && ALL_CLIENT_PLANS['plan-sarah-suite']) {
-      basePlan = JSON.parse(JSON.stringify(ALL_CLIENT_PLANS['plan-sarah-suite']));
-      basePlan.name = `${client.name}'s Luxury Duplex`;
-    } else if (templateId === 'studio_apt' && ALL_CLIENT_PLANS['plan-david-villa']) {
-      basePlan = JSON.parse(JSON.stringify(ALL_CLIENT_PLANS['plan-david-villa']));
-      basePlan.name = `${client.name}'s Modern Studio`;
-    } else {
-      // Blank / Custom Template
-      basePlan = {
-        id: `plan-${client.id || Date.now()}`,
-        name: `${client.name}'s Custom Suite`,
-        version: '1.0',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        currentFloor: 0,
-        floors: [
-          { level: 0, name: 'Ground Floor', elevation: 0, height: 250 },
-          { level: 1, name: '1st Floor', elevation: 250, height: 250 },
-        ],
-        walls: [
-          { id: 'w1', xStart: -300, yStart: -200, xEnd: 300, yEnd: -200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
-          { id: 'w2', xStart: 300, yStart: -200, xEnd: 300, yEnd: 200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
-          { id: 'w3', xStart: 300, yStart: 200, xEnd: -300, yEnd: 200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
-          { id: 'w4', xStart: -300, yStart: 200, xEnd: -300, yEnd: -200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
-        ],
-        furniture: [],
-        rooms: [
-          {
-            id: 'r1',
-            name: 'Main Living Room',
-            floorLevel: 0,
-            points: [
-              { x: -300, y: -200 },
-              { x: 300, y: -200 },
-              { x: 300, y: 200 },
-              { x: -300, y: 200 },
-            ],
-            floorColor: '#e2e8f0',
-            areaSquareMeters: 24.0,
-          },
-        ],
-        dimensionLines: [],
-        textNotes: [],
-        preferences: {
-          unitSystem: 'cm',
-          defaultWallThickness: 15,
-          defaultWallHeight: 250,
-          gridSize: 20,
-          magnetismEnabled: true,
-          showRulers: true,
-        },
-      };
-    }
-
-    const newPlanId = `plan-${client.id || Date.now()}`;
-    basePlan.id = newPlanId;
-    basePlan.updatedAt = new Date().toISOString();
-
-    // Cache in global memory & localStorage
-    ALL_CLIENT_PLANS[newPlanId] = basePlan;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(`sweethome_plan_${newPlanId}`, JSON.stringify(basePlan));
-    }
-
-    // Link plan to client
-    setUsers((prev) =>
-      prev.map((u) => (u.id === client.id ? { ...u, assignedPlan: newPlanId } : u))
-    );
-
-    setPlan(basePlan);
-    historyRef.current = [JSON.parse(JSON.stringify(basePlan))];
+    const freshPlan: HomePlan = {
+      ...sampleDefaultPlan,
+      id: `plan_${client.id}_${Date.now()}`,
+      name: `${client.name}'s Residence`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    setPlan(freshPlan);
+    historyRef.current = [JSON.parse(JSON.stringify(freshPlan))];
     historyIndexRef.current = 0;
     setCanUndo(false);
     setCanRedo(false);
-    setSelectedId(null);
-    setActiveFloor(0);
-
     setIsClientSelectModalOpen(false);
-    setActiveView(userRole === 'CLIENT' ? 'customer' : 'split');
-  };
-
-  const handleOpenStudioWithTemplate = (templateId: string) => {
-    const tpl = templates.find((t) => t.id === templateId);
-    if (tpl) {
-      handleUpdatePlan((prev) => ({
-        ...prev,
-        name: tpl.name,
-        version: '1.0',
-      }), true);
-    }
     setActiveView('split');
   };
 
-  // Save Blueprint Image
-  const handleSaveBlueprint = (blueprint: BlueprintImage | undefined) => {
-    handleUpdatePlan((prev) => ({
-      ...prev,
-      blueprint,
-      updatedAt: new Date().toISOString(),
-    }), true);
-  };
-
-  // Save Preferences
-  const handleSavePreferences = (preferences: ProjectPreferences) => {
-    handleUpdatePlan((prev) => ({
-      ...prev,
-      preferences,
-      updatedAt: new Date().toISOString(),
-    }), true);
-  };
-
-  const onlineUsersCount = users.filter((u) => u.isOnline).length;
-
-  // Strict Authentication Guard: without logging in, users CANNOT access anything
-  if (!currentUser) {
-    if (!isAuthLoaded) {
-      return (
-        <div className="w-screen h-screen flex items-center justify-center bg-slate-900 text-white">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-3 border-sky-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm font-medium text-slate-400">Loading Visual Rendered 3D Studio...</p>
-          </div>
+  if (!isAuthLoaded) {
+    return (
+      <div className="h-screen w-screen bg-[#080d19] flex items-center justify-center text-slate-400">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+          <span>Loading SweetHome 3D Studio...</span>
         </div>
-      );
-    }
-    return <LoginPage onLogin={handleLogin} availableUsers={users} />;
+      </div>
+    );
   }
 
+  if (!currentUser) {
+    return <LoginPage onLogin={handleLoginSuccess} availableUsers={users} />;
+  }
+
+  const isDark = theme === 'dark';
+
   return (
-    <div className="w-screen h-screen flex flex-col bg-[#080f1e] text-slate-100 overflow-hidden">
-      {/* Top Navbar */}
+    <div className={`flex flex-col h-screen w-screen overflow-hidden font-sans ${isDark ? 'bg-[#080d19] text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
+      {/* Top Main Navigation Bar */}
       <Navbar
         plan={plan}
         activeView={activeView}
@@ -823,12 +434,13 @@ export default function HomeStudioPage() {
         lastSyncedAt={lastSyncedAt}
         currentUser={currentUser}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
       />
 
       {/* Main Workspace Body */}
-      {/* Main Workspace Body - Clean Full-Width Easy Access Mode */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* VIEW 1: ADMIN CONTROL DASHBOARD */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* VIEW 1: Admin / Enterprise Dashboard */}
         {activeView === 'dashboard' && (
           <AdminDashboard
             users={users}
@@ -836,226 +448,328 @@ export default function HomeStudioPage() {
             templates={templates}
             adminTab={adminTab}
             setAdminTab={setAdminTab}
-            onOpenStudioWithTemplate={handleOpenStudioWithTemplate}
+            onOpenStudioWithTemplate={(tplId) => {
+              setActiveView('split');
+            }}
             onOpenClientPlan={(planId) => {
               handleSelectClientProject(planId);
               setActiveView('split');
             }}
             onStartNewDesignForClient={handleStartNewDesignForClient}
-            onToggleUserStatus={handleToggleUserStatus}
-            onDeleteUser={handleDeleteUser}
-            onDeleteCatalogItem={handleDeleteCatalogItem}
+            onToggleUserStatus={async (uId) => {
+              await toggleUserStatus(uId);
+              setUsers((prev) => prev.map((u) => (u.id === uId ? { ...u, isOnline: !u.isOnline } : u)));
+            }}
+            onDeleteUser={(uId) => {
+              setUsers((prev) => prev.filter((u) => u.id !== uId));
+            }}
+            onDeleteCatalogItem={async (itemId) => {
+              await deleteCatalogItem(itemId);
+              setCatalog((prev) => prev.filter((c) => c.id !== itemId));
+            }}
             onOpenAddItemModal={() => setIsAddItemModalOpen(true)}
             onOpenAddUserModal={() => setIsAddUserModalOpen(true)}
             onOpenClientSelectModal={() => setIsClientSelectModalOpen(true)}
             plan={plan}
             onOpenBlueprintModal={() => setIsBlueprintModalOpen(true)}
-            onNewPlan={handleNewPlan}
+            onNewPlan={() => {
+              const fresh: HomePlan = {
+                ...sampleDefaultPlan,
+                id: `plan_${Date.now()}`,
+                name: 'New Custom Home Plan',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              };
+              setPlan(fresh);
+              setActiveView('split');
+            }}
             onSwitchToStudio={() => setActiveView('split')}
             currentUser={currentUser}
             onLogout={handleLogout}
           />
         )}
 
-        {/* VIEW 2: CUSTOMER / CLIENT 3D INTERACTIVE TOUR */}
+        {/* VIEW 2: Client Presentation / 3D Walkthrough View */}
         {activeView === 'customer' && (
-          <main className="flex-1 h-full overflow-hidden bg-slate-100 relative">
-            <CustomerPresentationView
-              plan={plan}
-              catalog={catalog}
-              clientName={
-                currentUser?.role === 'CLIENT'
-                  ? currentUser.name
-                  : (users.find((u) => u.assignedPlan === plan.id || u.id === plan.assignedToUserId)?.name ||
-                     users.find((u) => u.role === 'CLIENT')?.name ||
-                     'Sarah Jenkins')
-              }
-              userRole={userRole}
-              onUpdatePlan={handleUpdatePlan}
-              onSwitchToStudio={() => setActiveView('split')}
-              onOpenShare={() => setIsShareModalOpen(true)}
-              collidingItemIds={collisionReport.collidingItemIds}
-              activeFloor={activeFloor}
-              onFloorChange={setActiveFloor}
-              floorMode={floorMode}
-              onFloorModeChange={setFloorMode}
-            />
-          </main>
+          <CustomerPresentationView
+            plan={plan}
+            catalog={catalog}
+            clientName={currentUser?.name || 'Client'}
+            userRole={userRole}
+            onUpdatePlan={handleUpdatePlan}
+            onSwitchToStudio={() => setActiveView('split')}
+            onOpenShare={() => setIsShareModalOpen(true)}
+            collidingItemIds={collisionReport.collidingItemIds}
+            activeFloor={activeFloor}
+            onFloorChange={setActiveFloor}
+            floorMode={floorMode}
+            onFloorModeChange={setFloorMode}
+          />
         )}
 
-        {/* VIEW 3: 4-PANE CAD & 3D DESIGN STUDIO */}
+        {/* VIEW 3: Interactive Design Studio (Split, 2D Blueprint, 3D WebGL) */}
         {(activeView === 'split' || activeView === '2d' || activeView === '3d') && (
-          <div className="flex-1 flex flex-col overflow-hidden bg-slate-900 text-slate-100">
-            {/* DESIGN STUDIO DEDICATED TOOLBAR (All design-related controls consolidated here) */}
-            <div className="h-12 bg-[#0c162d] border-b border-slate-800 px-3 sm:px-4 flex items-center justify-between select-none shrink-0 z-20 shadow-md">
-              {/* Left: 2D/3D Mode Switcher */}
-              <div className="flex items-center gap-1 bg-slate-900/90 p-0.5 rounded-xl border border-slate-800">
+          <div className="flex-1 flex flex-col h-full overflow-hidden">
+            {/* Beautiful Scattered Pro Design Studio Command Center */}
+            <div className={`flex-shrink-0 px-4 py-2 border-b flex items-center justify-between gap-2 select-none z-20 backdrop-blur-md ${
+              isDark ? 'bg-[#0b1222]/90 border-slate-800/90 text-slate-200' : 'bg-white/95 border-slate-200 text-slate-800 shadow-xs'
+            }`}>
+              {/* Cluster 1: View Mode Pill Switcher */}
+              <div className={`flex items-center p-1 rounded-xl border ${
+                isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100 border-slate-200'
+              }`}>
                 <button
                   onClick={() => setActiveView('2d')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
                     activeView === '2d'
-                      ? 'bg-sky-500 text-slate-950 shadow-xs'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : isDark
+                      ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
                   }`}
-                  title="2D CAD Blueprint Mode"
+                  title="2D CAD Architectural Floor Plan"
                 >
-                  <span>📐 2D CAD</span>
+                  <span>📐</span>
+                  <span>2D Plan</span>
                 </button>
 
                 <button
                   onClick={() => setActiveView('3d')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
                     activeView === '3d'
-                      ? 'bg-sky-500 text-slate-950 shadow-xs'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : isDark
+                      ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
                   }`}
-                  title="3D WebGL Viewport Mode"
+                  title="3D WebGL Real-time Orbit Viewport"
                 >
-                  <span>🌐 3D WebGL</span>
+                  <span>🧊</span>
+                  <span>3D View</span>
                 </button>
 
                 <button
                   onClick={() => setActiveView('split')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
                     activeView === 'split'
-                      ? 'bg-sky-500 text-slate-950 shadow-xs'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : isDark
+                      ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
                   }`}
-                  title="Side-by-Side 2D CAD + 3D Studio"
+                  title="Simultaneous 2D & 3D Split Screen"
                 >
-                  <span>🔀 2D / 3D Split</span>
+                  <Columns className="w-3.5 h-3.5" />
+                  <span>Split View</span>
                 </button>
 
                 <button
                   onClick={() => setActiveView('customer')}
-                  className="px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-400 hover:text-white hover:bg-emerald-500/20 transition flex items-center gap-1"
-                  title="Switch to Client Interactive Presentation"
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                    isDark
+                      ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                  }`}
+                  title="Interactive Client Walkthrough & Room Presentation"
                 >
-                  <span>✨ Client Tour</span>
+                  <span>🚶</span>
+                  <span>Tour</span>
                 </button>
               </div>
 
-              {/* Center: Floor Level Switcher */}
-              <div className="hidden md:flex items-center gap-1 bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-xs">
+              {/* Cluster 2: Multi-Floor & Elevation Navigator */}
+              <div className={`flex items-center p-1 rounded-xl border ${
+                isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100 border-slate-200'
+              }`}>
+                <div className="flex items-center gap-1 px-1">
+                  <Building className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                  <span className="text-[11px] font-bold text-slate-400 mr-1 hidden sm:inline">Level:</span>
+                </div>
+
                 {(plan.floors || [
                   { level: 0, name: 'Ground Floor' },
-                  { level: 1, name: '1st Floor' },
+                  { level: 1, name: '1st Floor' }
                 ]).map((fl) => (
                   <button
                     key={fl.level}
-                    onClick={() => setActiveFloor(fl.level)}
-                    className={`px-2.5 py-1 rounded-lg font-bold transition ${
-                      activeFloor === fl.level
+                    onClick={() => {
+                      setActiveFloor(fl.level);
+                      setFloorMode('single');
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      floorMode !== 'sideBySide' && activeFloor === fl.level
                         ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        : isDark
+                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
                     }`}
                   >
-                    Level {fl.level}: {fl.name}
+                    {fl.level === 0 ? 'Ground' : fl.level === 1 ? '1st Fl' : `L${fl.level}`}
                   </button>
                 ))}
+
+                <button
+                  onClick={() => setFloorMode(floorMode === 'sideBySide' ? 'single' : 'sideBySide')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition border ml-1 cursor-pointer ${
+                    floorMode === 'sideBySide'
+                      ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
+                      : isDark
+                      ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                  title="Display all floors side-by-side"
+                >
+                  🔲 All Levels
+                </button>
               </div>
 
-              {/* Right: Studio Action Buttons (Undo, Redo, Blueprint, Preferences, Save, Share) */}
+              {/* Cluster 3: History, Calibration & Tools */}
               <div className="flex items-center gap-1.5">
                 {/* Undo / Redo */}
-                <div className="flex items-center bg-slate-900 p-0.5 rounded-xl border border-slate-800">
+                <div className={`flex items-center p-0.5 rounded-xl border ${
+                  isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
+                }`}>
                   <button
                     onClick={handleUndo}
                     disabled={!canUndo}
                     className={`p-1.5 rounded-lg transition ${
                       canUndo
-                        ? 'text-slate-200 hover:text-white hover:bg-slate-800 active:scale-95 cursor-pointer'
-                        : 'text-slate-600 cursor-not-allowed opacity-40'
+                        ? isDark
+                          ? 'text-slate-200 hover:text-white hover:bg-slate-800 active:scale-95 cursor-pointer'
+                          : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200 active:scale-95 cursor-pointer'
+                        : 'text-slate-500 opacity-40 cursor-not-allowed'
                     }`}
                     title="Undo (Ctrl+Z)"
                   >
-                    ↩
+                    <RotateCcw className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={handleRedo}
                     disabled={!canRedo}
                     className={`p-1.5 rounded-lg transition ${
                       canRedo
-                        ? 'text-slate-200 hover:text-white hover:bg-slate-800 active:scale-95 cursor-pointer'
-                        : 'text-slate-600 cursor-not-allowed opacity-40'
+                        ? isDark
+                          ? 'text-slate-200 hover:text-white hover:bg-slate-800 active:scale-95 cursor-pointer'
+                          : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200 active:scale-95 cursor-pointer'
+                        : 'text-slate-500 opacity-40 cursor-not-allowed'
                     }`}
                     title="Redo (Ctrl+Y)"
                   >
-                    ↪
+                    <RotateCw className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                {/* Switch Client Project */}
-                <button
-                  onClick={() => setIsClientSelectModalOpen(true)}
-                  className="px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
-                  title="Switch Client Project Plan"
-                >
-                  📁 Projects
-                </button>
-
-                {/* Import Blueprint */}
+                {/* Blueprint Scan Importer */}
                 <button
                   onClick={() => setIsBlueprintModalOpen(true)}
-                  className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition"
-                  title="Import Blueprint Scan"
+                  className={`p-1.5 rounded-xl border transition flex items-center gap-1 text-xs font-semibold cursor-pointer ${
+                    isDark
+                      ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+                  }`}
+                  title="Import Blueprint Scan Overlay"
                 >
-                  📐 Blueprint
+                  <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
+                  <span className="hidden md:inline">Blueprint</span>
                 </button>
 
-                {/* Preferences */}
+                {/* Grid Preferences */}
                 <button
                   onClick={() => setIsPreferencesModalOpen(true)}
-                  className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition"
+                  className={`p-1.5 rounded-xl border transition cursor-pointer ${
+                    isDark
+                      ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+                  }`}
                   title="Grid & Unit Preferences"
                 >
-                  ⚙️
+                  <Sliders className="w-3.5 h-3.5" />
                 </button>
 
-                {/* Collision Warning */}
+                {/* Collision Warning Indicator */}
                 {collisionReport.totalCollisions > 0 && (
                   <span
-                    className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse"
+                    className="px-2 py-1 rounded-xl text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse flex items-center gap-1"
                     title={`${collisionReport.totalCollisions} collision(s) detected`}
                   >
-                    ⚠️ {collisionReport.totalCollisions} Overlap
+                    <AlertTriangle className="w-3 h-3 text-rose-400" />
+                    <span>{collisionReport.totalCollisions} Overlap</span>
                   </span>
                 )}
+              </div>
+
+              {/* Cluster 4: Theme Toggle & Cloud Actions */}
+              <div className="flex items-center gap-1.5">
+                {/* Theme Switcher Button */}
+                <button
+                  onClick={handleToggleTheme}
+                  className={`p-1.5 rounded-xl border transition flex items-center gap-1 text-xs font-semibold cursor-pointer ${
+                    isDark
+                      ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+                  }`}
+                  title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
+                >
+                  {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-500" />}
+                </button>
+
+                {/* Projects Switcher */}
+                <button
+                  onClick={() => setIsClientSelectModalOpen(true)}
+                  className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1 text-xs font-semibold cursor-pointer ${
+                    isDark
+                      ? 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-800'
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+                  }`}
+                  title="Switch Client Project Plan"
+                >
+                  <FolderOpen className="w-3.5 h-3.5 text-indigo-400" />
+                  <span className="hidden sm:inline">Projects</span>
+                </button>
 
                 {/* Save Button */}
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="px-3 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 border border-sky-500/30 text-xs font-bold transition flex items-center gap-1 active:scale-95 disabled:opacity-50"
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer ${
+                    isDark
+                      ? 'bg-slate-900 hover:bg-slate-800 text-indigo-300 border-indigo-500/30'
+                      : 'bg-white hover:bg-slate-100 text-indigo-700 border-indigo-300 shadow-2xs'
+                  }`}
                   title="Save plan to backend"
                 >
-                  💾 <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                  <Save className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>{isSaving ? 'Saving...' : 'Save'}</span>
                 </button>
 
                 {/* Share Button */}
                 <button
                   onClick={() => setIsShareModalOpen(true)}
-                  className="px-3 py-1 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-bold shadow-sm shadow-sky-500/20 transition active:scale-95"
+                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
                   title="Share 3D Client Presentation Link"
                 >
-                  🔗 <span>Share</span>
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Share</span>
                 </button>
               </div>
             </div>
+
+            {/* Design Studio Viewport & Sidebars Area */}
             <div className="flex-1 flex overflow-hidden">
-              {/* Left Pane 1: Furniture & Element Catalog */}
+              {/* Left Pane: 3D Element & Furniture Catalog */}
               <CatalogSidebar
                 catalog={catalog}
                 onAddItem={handleAddItem}
                 onOpenCreateItemModal={() => setIsAddItemModalOpen(true)}
+                theme={theme}
               />
 
               {/* Center Viewports */}
               <div className="flex-1 flex relative overflow-hidden">
-                {/* Split Mode: 2D on Left, 3D on Right */}
+                {/* Split Mode: 2D Blueprint on Left, 3D Orbit on Right */}
                 {activeView === 'split' && (
                   <>
-                    <div className="w-1/2 h-full border-r border-slate-200 relative">
+                    <div className={`w-1/2 h-full border-r relative ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
                       <PlanCanvas2D
                         plan={plan}
                         onUpdatePlan={handleUpdatePlan}
@@ -1133,7 +847,7 @@ export default function HomeStudioPage() {
                 )}
               </div>
 
-              {/* Right Pane 2: Properties & Transform Inspector */}
+              {/* Right Pane: Properties & Material Inspector */}
               <InspectorSidebar
                 plan={plan}
                 selectedId={selectedId}
@@ -1145,9 +859,9 @@ export default function HomeStudioPage() {
               />
             </div>
 
-            {/* Bottom Pane: Furniture Element List */}
+            {/* Bottom Expandable Furniture List Pane */}
             <FurnitureListPane
-              furniture={plan.furniture}
+              furniture={plan.furniture.filter((f) => (f.floorLevel ?? 0) === activeFloor)}
               selectedId={selectedId}
               onSelectId={setSelectedId}
               onToggleVisibility={handleToggleItemVisibility}
@@ -1156,33 +870,31 @@ export default function HomeStudioPage() {
               collidingItemIds={collisionReport.collidingItemIds}
               isOpen={isFurnitureListOpen}
               setIsOpen={setIsFurnitureListOpen}
+              theme={theme}
             />
           </div>
         )}
       </div>
 
-      {/* Share Modal */}
+      {/* Modals & Dialogs */}
       <ShareModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         plan={plan}
       />
 
-      {/* Onboard User Modal */}
       <AddUserModal
         isOpen={isAddUserModalOpen}
         onClose={() => setIsAddUserModalOpen(false)}
         onAddUser={handleAddUser}
       />
 
-      {/* 3D Item Studio Modal */}
       <AddItemModal
         isOpen={isAddItemModalOpen}
         onClose={() => setIsAddItemModalOpen(false)}
         onAddItem={handleAddCustomItem}
       />
 
-      {/* Blueprint Scan Import Modal */}
       <BlueprintImportModal
         isOpen={isBlueprintModalOpen}
         onClose={() => setIsBlueprintModalOpen(false)}
@@ -1190,8 +902,6 @@ export default function HomeStudioPage() {
         onSaveBlueprint={handleSaveBlueprint}
       />
 
-      
-      {/* Client Project Selector Modal */}
       <ClientProjectSelectModal
         isOpen={isClientSelectModalOpen}
         onClose={() => setIsClientSelectModalOpen(false)}
@@ -1207,7 +917,6 @@ export default function HomeStudioPage() {
         onOpenAddClientModal={() => setIsAddUserModalOpen(true)}
       />
 
-      {/* Project Preferences Modal */}
       <PreferencesModal
         isOpen={isPreferencesModalOpen}
         onClose={() => setIsPreferencesModalOpen(false)}
