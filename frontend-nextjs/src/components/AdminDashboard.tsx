@@ -38,7 +38,9 @@ import {
   Sliders,
   ChevronRight,
   RefreshCw,
-  LogOut
+  LogOut,
+  BarChart2,
+  Layers3
 } from 'lucide-react';
 import { User, CatalogItem, FloorTemplate, HomePlan, UserRole } from '../types/plan';
 import { ALL_CLIENT_PLANS } from '../services/api';
@@ -104,18 +106,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ? 'floors'
       : 'dashboard';
 
-  const handleTabChange = (t: DashboardMenuTab) => {
-    setAdminTab(t === 'dashboard' ? 'overview' : t);
-  };
-
   const [userSearch, setUserSearch] = useState('');
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogCategory, setCatalogCategory] = useState<string>('ALL');
   const [projectFilter, setProjectFilter] = useState<string>('ALL');
   const [chartTimeframe, setChartTimeframe] = useState<'monthly' | 'weekly'>('monthly');
+  const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
 
-  // Statistics
+  // User breakdown statistics
   const onlineUsersCount = users.filter((u) => u.isOnline).length;
   const adminCount = users.filter((u) => u.role === 'ADMIN').length;
   const designerCount = users.filter((u) => u.role === 'DESIGNER').length;
@@ -140,7 +139,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     });
   }, [catalog, catalogSearch, catalogCategory]);
 
-  // Catalog Category Breakdown for Donut Chart
+  // Catalog Category Breakdown for Donut Chart & Progress Bars
   const categoryCounts = useMemo(() => {
     const counts: { [key: string]: number } = {
       Living: 0,
@@ -149,7 +148,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       Office: 0,
       Lighting: 0,
       Outdoor: 0,
-      Other: 0,
     };
     catalog.forEach((item) => {
       const cat = item.category?.toLowerCase() || '';
@@ -163,16 +161,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         counts.Office += 1;
       } else if (cat.includes('light') || cat.includes('lamp') || cat.includes('ceiling')) {
         counts.Lighting += 1;
-      } else if (cat.includes('plant') || cat.includes('door') || cat.includes('outdoor')) {
-        counts.Outdoor += 1;
       } else {
-        counts.Other += 1;
+        counts.Outdoor += 1;
       }
     });
     return counts;
   }, [catalog]);
 
-  // Calculate total floor area
+  // Total floor area computation
   const totalFloorAreaSqM = useMemo(() => {
     return plan.rooms.reduce((acc, r) => {
       if (r.areaSquareMeters) return acc + r.areaSquareMeters;
@@ -189,40 +185,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }, 0);
   }, [plan.rooms]);
 
-  // Monthly Activity Chart Dataset
-  const monthlyData = [
-    { label: 'Apr', renders: 340, cadExports: 85, projects: 4 },
-    { label: 'May', renders: 520, cadExports: 120, projects: 7 },
-    { label: 'Jun', renders: 480, cadExports: 140, projects: 9 },
-    { label: 'Jul', renders: 690, cadExports: 210, projects: 12 },
-    { label: 'Aug', renders: 890, cadExports: 290, projects: 16 },
-    { label: 'Sep', renders: 1140, cadExports: 380, projects: 22 },
+  // Dataset 1: Monthly Bar Chart (Projects Created vs Clients Onboarded)
+  const barChartData = [
+    { month: 'Apr', projects: 8, clients: 5, renders: 340 },
+    { month: 'May', projects: 12, clients: 8, renders: 520 },
+    { month: 'Jun', projects: 15, clients: 11, renders: 480 },
+    { month: 'Jul', projects: 19, clients: 14, renders: 690 },
+    { month: 'Aug', projects: 24, clients: 18, renders: 890 },
+    { month: 'Sep', projects: 31, clients: 22, renders: 1140 },
   ];
 
-  const weeklyData = [
-    { label: 'Mon', renders: 120, cadExports: 35, projects: 2 },
-    { label: 'Tue', renders: 180, cadExports: 55, projects: 4 },
-    { label: 'Wed', renders: 240, cadExports: 70, projects: 5 },
-    { label: 'Thu', renders: 210, cadExports: 65, projects: 6 },
-    { label: 'Fri', renders: 310, cadExports: 95, projects: 8 },
-    { label: 'Sat', renders: 160, cadExports: 40, projects: 3 },
-    { label: 'Sun', renders: 190, cadExports: 50, projects: 4 },
+  // Dataset 2: Render Activity Area Chart Data
+  const activityData = [
+    { label: 'Apr', renders: 340, cadOps: 1200 },
+    { label: 'May', renders: 520, cadOps: 1650 },
+    { label: 'Jun', renders: 480, cadOps: 1890 },
+    { label: 'Jul', renders: 690, cadOps: 2400 },
+    { label: 'Aug', renders: 890, cadOps: 3100 },
+    { label: 'Sep', renders: 1140, cadOps: 4200 },
   ];
 
-  const activeChartData = chartTimeframe === 'monthly' ? monthlyData : weeklyData;
-  const maxRenderVal = Math.max(...activeChartData.map((d) => d.renders)) * 1.15;
+  const maxRenderVal = Math.max(...activityData.map((d) => d.renders)) * 1.15;
 
   // SVG Area Chart Coordinate Generator
   const chartPoints = useMemo(() => {
-    const width = 560;
-    const height = 180;
-    const paddingX = 40;
-    const paddingY = 25;
+    const width = 500;
+    const height = 150;
+    const paddingX = 35;
+    const paddingY = 20;
     const innerWidth = width - paddingX * 2;
     const innerHeight = height - paddingY * 2;
 
-    const points = activeChartData.map((d, index) => {
-      const x = paddingX + (index / (activeChartData.length - 1)) * innerWidth;
+    const points = activityData.map((d, index) => {
+      const x = paddingX + (index / (activityData.length - 1)) * innerWidth;
       const y = height - paddingY - (d.renders / maxRenderVal) * innerHeight;
       return { x, y, data: d };
     });
@@ -240,9 +235,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const areaString = `${pathString} L ${points[points.length - 1].x} ${height - paddingY} L ${points[0].x} ${height - paddingY} Z`;
 
     return { points, pathString, areaString, width, height, paddingY, innerHeight };
-  }, [activeChartData, maxRenderVal]);
+  }, [activityData, maxRenderVal]);
 
-  // Client Projects List for Projects Tab & Dashboard Recent Showcase
+  // Client Projects List for Projects Tab
   const clientProjects = useMemo(() => {
     return users.map((u) => {
       const planId = u.assignedPlan || `plan-${u.id}`;
@@ -285,23 +280,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#080f1e] text-slate-100 overflow-hidden font-sans select-none">
-      {/* ========================================================= */}
-      {/* FULL-WIDTH DASHBOARD CONTENT (EDGE TO EDGE, NO SUB-HEADER) */}
-      {/* ========================================================= */}
       <main className="flex-1 flex flex-col overflow-y-auto bg-[#080f1e] custom-scrollbar select-none">
-        {/* Dynamic Tab Body (Fit Screen Full Width) */}
-        <div className="p-4 sm:p-5 lg:p-6 space-y-6 w-full">
+        {/* Dynamic Tab Body (Edge to Edge Full Width) */}
+        <div className="p-4 sm:p-5 lg:p-6 space-y-6 w-full max-w-full">
           {/* ========================================================= */}
-          {/* TAB 1: INITIAL DASHBOARD HOME (GRAPHS, CHARTS, CARDS) */}
+          {/* TAB 1: DASHBOARD OVERVIEW (BAR CHARTS, DONUT, KPIS) */}
           {/* ========================================================= */}
           {currentTab === 'dashboard' && (
             <>
-              {/* TOP KPI CARDS STRIP */}
+              {/* 1. TOP ESSENTIAL KPI CARDS (CLIENTS, PROJECTS, 3D CATALOG, MULTI-FLOOR) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* KPI Card 1: Total Projects */}
-                <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-4 border border-slate-800/90 shadow-xl shadow-black/20 hover:border-sky-500/40 transition group">
+                {/* KPI Card 1: Clients & Users */}
+                <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-4 sm:p-5 border border-slate-800/90 shadow-xl shadow-black/20 hover:border-emerald-500/40 transition group">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                    <span className="text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
+                      Clients & Team
+                    </span>
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center group-hover:scale-110 transition">
+                      <Users className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                      {users.length}
+                    </span>
+                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      {onlineUsersCount} Online Now
+                    </span>
+                  </div>
+                  <div className="mt-3 text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2.5">
+                    <span className="font-semibold text-sky-400">{clientCount} Clients</span>
+                    <span>•</span>
+                    <span className="font-semibold text-indigo-400">{designerCount} Designers</span>
+                    <span>•</span>
+                    <span className="font-semibold text-slate-300">{adminCount} Admins</span>
+                  </div>
+                </div>
+
+                {/* KPI Card 2: Total Projects */}
+                <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-4 sm:p-5 border border-slate-800/90 shadow-xl shadow-black/20 hover:border-sky-500/40 transition group">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
                       Architectural Projects
                     </span>
                     <div className="w-9 h-9 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center justify-center group-hover:scale-110 transition">
@@ -309,274 +329,247 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-black text-white tracking-tight">
+                    <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
                       {users.length + templates.length}
                     </span>
-                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-0.5">
-                      <TrendingUp className="w-3 h-3" /> +18.4%
+                    <span className="text-xs font-bold text-sky-400 flex items-center gap-0.5">
+                      <TrendingUp className="w-3.5 h-3.5" /> +24% Active
                     </span>
                   </div>
-                  <div className="mt-2 text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2">
-                    <span>{users.length} Client Custom Suites</span>
-                    <span className="text-sky-400 font-semibold">{templates.length} Templates</span>
+                  <div className="mt-3 text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2.5">
+                    <span>{users.length} Custom Suites</span>
+                    <span>•</span>
+                    <span className="font-semibold text-sky-400">{templates.length} Blueprints</span>
                   </div>
                 </div>
 
-                {/* KPI Card 2: 3D Compute & Renders */}
-                <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-4 border border-slate-800/90 shadow-xl shadow-black/20 hover:border-indigo-500/40 transition group">
+                {/* KPI Card 3: 3D Catalog Assets */}
+                <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-4 sm:p-5 border border-slate-800/90 shadow-xl shadow-black/20 hover:border-amber-500/40 transition group">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                      3D WebGL Compute
-                    </span>
-                    <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center group-hover:scale-110 transition">
-                      <Cpu className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-black text-white tracking-tight">
-                      60 FPS
-                    </span>
-                    <span className="text-xs font-bold text-sky-400">
-                      WebGL 2.0 Active
-                    </span>
-                  </div>
-                  <div className="mt-2 text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2">
-                    <span>Hardware Shaders: OK</span>
-                    <span className="text-indigo-400 font-semibold">1,140 Renders/mo</span>
-                  </div>
-                </div>
-
-                {/* KPI Card 3: 3D Catalog Models */}
-                <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-4 border border-slate-800/90 shadow-xl shadow-black/20 hover:border-amber-500/40 transition group">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                      3D Element Catalog
+                    <span className="text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
+                      3D Catalog Items
                     </span>
                     <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center group-hover:scale-110 transition">
                       <Box className="w-4 h-4" />
                     </div>
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-black text-amber-400 tracking-tight">
+                    <span className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">
                       {catalog.length} Models
                     </span>
                     <span className="text-xs font-bold text-slate-400">
-                      OBJ & GLTF
+                      OBJ / GLTF
                     </span>
                   </div>
-                  <div className="mt-2 text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2">
-                    <span>{catalog.filter((c) => c.isCustom).length} Custom Assets</span>
-                    <span className="text-amber-400 font-semibold">7 Categories</span>
+                  <div className="mt-3 text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2.5">
+                    <span>{catalog.filter((c) => c.isCustom).length} Custom Models</span>
+                    <span>•</span>
+                    <span className="font-semibold text-amber-400">6 Room Categories</span>
                   </div>
                 </div>
 
-                {/* KPI Card 4: Multi-Floor Total Area */}
-                <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-4 border border-slate-800/90 shadow-xl shadow-black/20 hover:border-purple-500/40 transition group">
+                {/* KPI Card 4: Multi-Floor Total Space */}
+                <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-4 sm:p-5 border border-slate-800/90 shadow-xl shadow-black/20 hover:border-purple-500/40 transition group">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                      Multi-Floor Area
+                    <span className="text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
+                      Multi-Floor Area & Walls
                     </span>
                     <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center group-hover:scale-110 transition">
                       <Building className="w-4 h-4" />
                     </div>
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-black text-purple-300 tracking-tight">
+                    <span className="text-2xl sm:text-3xl font-black text-purple-300 tracking-tight">
                       {totalFloorAreaSqM > 0 ? `${totalFloorAreaSqM.toFixed(1)} m²` : '240.0 m²'}
                     </span>
-                    <span className="text-xs font-bold text-slate-400">
-                      {plan.floors?.length || 2} Floors
+                    <span className="text-xs font-bold text-purple-400">
+                      {plan.floors?.length || 2} Levels
                     </span>
                   </div>
-                  <div className="mt-2 text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2">
-                    <span>{plan.rooms.length} Active Rooms</span>
-                    <span className="text-purple-400 font-semibold">{plan.walls.length} CAD Walls</span>
+                  <div className="mt-3 text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2.5">
+                    <span>{plan.rooms.length} Defined Rooms</span>
+                    <span>•</span>
+                    <span className="font-semibold text-purple-400">{plan.walls.length} CAD Walls</span>
                   </div>
                 </div>
               </div>
 
-              {/* CHARTS SECTION (2 COLUMNS: AREA CHART & DONUT CHART) */}
+              {/* 2. ROW OF MAIN CHARTS (BAR CHART + DONUT / PROGRESS CHART) */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* 1. Main Render & CAD Activity Area Chart (2 cols) */}
+                {/* CHART 1: MONTHLY PROJECTS & CLIENT ONBOARDING BAR CHART (2 cols) */}
                 <div className="lg:col-span-2 bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-5 border border-slate-800/90 shadow-xl shadow-black/20 flex flex-col justify-between">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="p-1 rounded-lg bg-sky-500/10 text-sky-400">
-                          <BarChart3 className="w-4 h-4" />
-                        </span>
-                        <h2 className="text-sm font-bold text-white">
-                          3D Rendering & CAD Export Activity
-                        </h2>
+                  <div>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="p-1 rounded-lg bg-sky-500/10 text-sky-400">
+                            <BarChart2 className="w-4 h-4" />
+                          </span>
+                          <h2 className="text-sm font-bold text-white">
+                            Monthly Projects & Client Growth (Bar Chart)
+                          </h2>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Architectural plans created vs client accounts onboarded per month.
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Real-time compute volume, architectural changes, and scene exports.
-                      </p>
+
+                      {/* Legend */}
+                      <div className="flex items-center gap-4 text-xs font-semibold bg-slate-900/80 px-3 py-1.5 rounded-xl border border-slate-800">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 rounded-md bg-gradient-to-tr from-sky-500 to-cyan-400" />
+                          <span className="text-slate-300">Projects ({users.length + templates.length})</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 rounded-md bg-gradient-to-tr from-indigo-500 to-purple-500" />
+                          <span className="text-slate-300">Clients ({clientCount})</span>
+                        </div>
+                      </div>
                     </div>
 
-                    {/* Timeframe Toggle Buttons */}
-                    <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800">
-                      <button
-                        onClick={() => setChartTimeframe('monthly')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                          chartTimeframe === 'monthly'
-                            ? 'bg-sky-500 text-slate-950 shadow-sm'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        Monthly
-                      </button>
-                      <button
-                        onClick={() => setChartTimeframe('weekly')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                          chartTimeframe === 'weekly'
-                            ? 'bg-sky-500 text-slate-950 shadow-sm'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        Weekly
-                      </button>
-                    </div>
-                  </div>
+                    {/* SVG Bar Chart */}
+                    <div className="relative w-full h-52 my-3 flex items-center justify-center">
+                      <svg viewBox="0 0 520 180" className="w-full h-full overflow-visible">
+                        <defs>
+                          <linearGradient id="barSkyGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#38bdf8" />
+                            <stop offset="100%" stopColor="#0284c7" />
+                          </linearGradient>
+                          <linearGradient id="barIndigoGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#818cf8" />
+                            <stop offset="100%" stopColor="#4f46e5" />
+                          </linearGradient>
+                        </defs>
 
-                  {/* SVG Line & Glowing Area Chart */}
-                  <div className="relative w-full overflow-hidden flex flex-col items-center justify-center my-2">
-                    <svg
-                      viewBox={`0 0 ${chartPoints.width} ${chartPoints.height}`}
-                      className="w-full h-48 overflow-visible"
-                    >
-                      <defs>
-                        <linearGradient id="cyanIndigoArea" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
-                          <stop offset="60%" stopColor="#6366f1" stopOpacity="0.15" />
-                          <stop offset="100%" stopColor="#0f172a" stopOpacity="0.0" />
-                        </linearGradient>
-                        <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
-                          <stop offset="0%" stopColor="#38bdf8" />
-                          <stop offset="50%" stopColor="#818cf8" />
-                          <stop offset="100%" stopColor="#c084fc" />
-                        </linearGradient>
-                      </defs>
-
-                      {/* Grid Lines */}
-                      {[0.25, 0.5, 0.75, 1].map((lvl) => {
-                        const yPos =
-                          chartPoints.height -
-                          chartPoints.paddingY -
-                          lvl * chartPoints.innerHeight;
-                        return (
-                          <line
-                            key={lvl}
-                            x1="35"
-                            y1={yPos}
-                            x2={chartPoints.width - 35}
-                            y2={yPos}
-                            stroke="#1e293b"
-                            strokeDasharray="4 4"
-                            strokeWidth="1"
-                          />
-                        );
-                      })}
-
-                      {/* Area Fill */}
-                      <path d={chartPoints.areaString} fill="url(#cyanIndigoArea)" />
-
-                      {/* Line Stroke */}
-                      <path
-                        d={chartPoints.pathString}
-                        fill="none"
-                        stroke="url(#lineGrad)"
-                        strokeWidth="3.5"
-                        strokeLinecap="round"
-                      />
-
-                      {/* Data Point Circles & Tooltips */}
-                      {chartPoints.points.map((pt, idx) => (
-                        <g key={idx} className="cursor-pointer">
-                          <circle
-                            cx={pt.x}
-                            cy={pt.y}
-                            r={hoveredPointIndex === idx ? '6' : '4'}
-                            fill="#0f172a"
-                            stroke="#38bdf8"
-                            strokeWidth="2.5"
-                            className="transition-all duration-150"
-                            onMouseEnter={() => setHoveredPointIndex(idx)}
-                            onMouseLeave={() => setHoveredPointIndex(null)}
-                          />
-                          {/* Label under point */}
-                          <text
-                            x={pt.x}
-                            y={chartPoints.height - 6}
-                            textAnchor="middle"
-                            fill="#64748b"
-                            fontSize="11"
-                            fontWeight="600"
-                          >
-                            {pt.data.label}
-                          </text>
-
-                          {/* Hover Tooltip */}
-                          {hoveredPointIndex === idx && (
-                            <g>
-                              <rect
-                                x={pt.x - 45}
-                                y={pt.y - 42}
-                                width="90"
-                                height="32"
-                                rx="8"
-                                fill="#091020"
-                                stroke="#38bdf8"
-                                strokeWidth="1"
-                                filter="drop-shadow(0 4px 12px rgba(0,0,0,0.5))"
-                              />
-                              <text
-                                x={pt.x}
-                                y={pt.y - 22}
-                                textAnchor="middle"
-                                fill="#ffffff"
-                                fontSize="10"
-                                fontWeight="bold"
-                              >
-                                {pt.data.renders} Renders
-                              </text>
+                        {/* Horizontal Grid lines */}
+                        {[0, 10, 20, 30].map((val) => {
+                          const y = 150 - (val / 35) * 130;
+                          return (
+                            <g key={val}>
+                              <line x1="30" y1={y} x2="500" y2={y} stroke="#1e293b" strokeDasharray="3 3" strokeWidth="1" />
+                              <text x="18" y={y + 4} fill="#64748b" fontSize="10" fontWeight="bold" textAnchor="end">{val}</text>
                             </g>
-                          )}
-                        </g>
-                      ))}
-                    </svg>
+                          );
+                        })}
+
+                        {/* Render Bars for Each Month */}
+                        {barChartData.map((d, idx) => {
+                          const groupX = 55 + idx * 75;
+                          const projectBarHeight = (d.projects / 35) * 130;
+                          const clientBarHeight = (d.clients / 35) * 130;
+                          const isHovered = hoveredBarIndex === idx;
+
+                          return (
+                            <g
+                              key={d.month}
+                              className="cursor-pointer transition-all"
+                              onMouseEnter={() => setHoveredBarIndex(idx)}
+                              onMouseLeave={() => setHoveredBarIndex(null)}
+                            >
+                              {/* Hover column background highlight */}
+                              {isHovered && (
+                                <rect x={groupX - 8} y="15" width="60" height="138" rx="8" fill="#1e293b" opacity="0.5" />
+                              )}
+
+                              {/* Project Bar (Cyan) */}
+                              <rect
+                                x={groupX}
+                                y={150 - projectBarHeight}
+                                width="18"
+                                height={projectBarHeight}
+                                rx="4"
+                                fill="url(#barSkyGrad)"
+                                className="transition-all duration-200"
+                                opacity={isHovered ? 1 : 0.9}
+                              />
+
+                              {/* Client Bar (Indigo) */}
+                              <rect
+                                x={groupX + 22}
+                                y={150 - clientBarHeight}
+                                width="18"
+                                height={clientBarHeight}
+                                rx="4"
+                                fill="url(#barIndigoGrad)"
+                                className="transition-all duration-200"
+                                opacity={isHovered ? 1 : 0.9}
+                              />
+
+                              {/* Month label */}
+                              <text
+                                x={groupX + 20}
+                                y="168"
+                                fill={isHovered ? '#ffffff' : '#94a3b8'}
+                                fontSize="11"
+                                fontWeight="bold"
+                                textAnchor="middle"
+                              >
+                                {d.month}
+                              </text>
+
+                              {/* Hover Tooltip */}
+                              {isHovered && (
+                                <g>
+                                  <rect
+                                    x={groupX - 25}
+                                    y={Math.min(150 - projectBarHeight, 150 - clientBarHeight) - 38}
+                                    width="95"
+                                    height="30"
+                                    rx="6"
+                                    fill="#091020"
+                                    stroke="#38bdf8"
+                                    strokeWidth="1"
+                                    filter="drop-shadow(0 4px 10px rgba(0,0,0,0.6))"
+                                  />
+                                  <text
+                                    x={groupX + 22}
+                                    y={Math.min(150 - projectBarHeight, 150 - clientBarHeight) - 20}
+                                    fill="#ffffff"
+                                    fontSize="10"
+                                    fontWeight="bold"
+                                    textAnchor="middle"
+                                  >
+                                    {d.projects} Proj • {d.clients} Clients
+                                  </text>
+                                </g>
+                              )}
+                            </g>
+                          );
+                        })}
+                      </svg>
+                    </div>
                   </div>
 
                   {/* Summary Metric Footer */}
-                  <div className="grid grid-cols-3 gap-3 border-t border-slate-800/80 pt-4 mt-2">
+                  <div className="grid grid-cols-3 gap-3 border-t border-slate-800/80 pt-3 mt-1">
                     <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 text-center">
                       <span className="text-[10px] text-slate-400 font-bold uppercase block">
                         Monthly Average
                       </span>
                       <span className="text-sm font-black text-sky-400 mt-0.5 block">
-                        710 Renders
+                        18 Projects / mo
                       </span>
                     </div>
                     <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 text-center">
                       <span className="text-[10px] text-slate-400 font-bold uppercase block">
-                        CAD Modifications
-                      </span>
-                      <span className="text-sm font-black text-indigo-400 mt-0.5 block">
-                        2,890 Operations
-                      </span>
-                    </div>
-                    <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 text-center">
-                      <span className="text-[10px] text-slate-400 font-bold uppercase block">
-                        Cloud Sync Rate
+                        Client Conversion
                       </span>
                       <span className="text-sm font-black text-emerald-400 mt-0.5 block">
-                        99.98% Synced
+                        86.5% Closed
+                      </span>
+                    </div>
+                    <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 text-center">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                        Peak Growth
+                      </span>
+                      <span className="text-sm font-black text-indigo-400 mt-0.5 block">
+                        +31 Designs (Sep)
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* 2. 3D Catalog Category Distribution Donut Chart (1 col) */}
+                {/* CHART 2: 3D CATALOG CATEGORY BREAKDOWN (DONUT + PROGRESS BARS) (1 col) */}
                 <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-5 border border-slate-800/90 shadow-xl shadow-black/20 flex flex-col justify-between">
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -584,120 +577,224 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <span className="p-1 rounded-lg bg-amber-500/10 text-amber-400">
                           <PieChartIcon className="w-4 h-4" />
                         </span>
-                        <h2 className="text-sm font-bold text-white">3D Catalog Mix</h2>
+                        <h2 className="text-sm font-bold text-white">3D Catalog Distribution</h2>
                       </div>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                        {catalog.length} Total
+                        {catalog.length} Items
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400 mb-4">
-                      Asset categorization across interior spaces.
+                    <p className="text-xs text-slate-400 mb-3">
+                      Asset categorization across CAD interior spaces.
                     </p>
 
                     {/* Donut Chart Visual */}
-                    <div className="flex items-center justify-center my-2 relative">
-                      <svg className="w-36 h-36 transform -rotate-90">
-                        {/* Circle Segments */}
-                        <circle
-                          cx="72"
-                          cy="72"
-                          r="54"
-                          stroke="#1e293b"
-                          strokeWidth="16"
-                          fill="transparent"
-                        />
+                    <div className="flex items-center justify-center my-1 relative">
+                      <svg className="w-32 h-32 transform -rotate-90">
+                        <circle cx="64" cy="64" r="48" stroke="#1e293b" strokeWidth="14" fill="transparent" />
                         {/* Living */}
-                        <circle
-                          cx="72"
-                          cy="72"
-                          r="54"
-                          stroke="#38bdf8"
-                          strokeWidth="16"
-                          strokeDasharray="339"
-                          strokeDashoffset="180"
-                          fill="transparent"
-                          strokeLinecap="round"
-                        />
+                        <circle cx="64" cy="64" r="48" stroke="#38bdf8" strokeWidth="14" strokeDasharray="301" strokeDashoffset="160" fill="transparent" strokeLinecap="round" />
                         {/* Bedroom */}
-                        <circle
-                          cx="72"
-                          cy="72"
-                          r="54"
-                          stroke="#6366f1"
-                          strokeWidth="16"
-                          strokeDasharray="339"
-                          strokeDashoffset="270"
-                          fill="transparent"
-                          strokeLinecap="round"
-                        />
+                        <circle cx="64" cy="64" r="48" stroke="#818cf8" strokeWidth="14" strokeDasharray="301" strokeDashoffset="240" fill="transparent" strokeLinecap="round" />
                         {/* Lighting */}
-                        <circle
-                          cx="72"
-                          cy="72"
-                          r="54"
-                          stroke="#f59e0b"
-                          strokeWidth="16"
-                          strokeDasharray="339"
-                          strokeDashoffset="310"
-                          fill="transparent"
-                          strokeLinecap="round"
-                        />
+                        <circle cx="64" cy="64" r="48" stroke="#f59e0b" strokeWidth="14" strokeDasharray="301" strokeDashoffset="275" fill="transparent" strokeLinecap="round" />
                       </svg>
-                      {/* Center Label */}
                       <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-                        <span className="text-xs font-bold text-slate-400 uppercase">Models</span>
-                        <span className="text-xl font-black text-white">{catalog.length}</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">3D Assets</span>
+                        <span className="text-lg font-black text-white">{catalog.length}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Category Progress Legend */}
-                  <div className="space-y-2 mt-3 pt-3 border-t border-slate-800/80">
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-sky-400" />
-                        <span className="text-slate-300 font-medium">Living & Seating</span>
+                  {/* Clean Horizontal Progress Distribution Bars */}
+                  <div className="space-y-2 mt-2 pt-2 border-t border-slate-800/80 text-xs">
+                    {/* Living */}
+                    <div>
+                      <div className="flex justify-between font-medium mb-1">
+                        <span className="text-slate-300">🛋️ Living & Seating</span>
+                        <span className="text-white font-bold">{categoryCounts.Living} items</span>
                       </div>
-                      <span className="text-white font-bold">{categoryCounts.Living} items</span>
+                      <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                        <div className="h-full bg-sky-400 rounded-full" style={{ width: `${Math.min(100, (categoryCounts.Living / (catalog.length || 1)) * 100)}%` }} />
+                      </div>
                     </div>
 
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
-                        <span className="text-slate-300 font-medium">Bedroom & Storage</span>
+                    {/* Bedroom */}
+                    <div>
+                      <div className="flex justify-between font-medium mb-1">
+                        <span className="text-slate-300">🛏️ Bedroom & Storage</span>
+                        <span className="text-white font-bold">{categoryCounts.Bedroom} items</span>
                       </div>
-                      <span className="text-white font-bold">{categoryCounts.Bedroom} items</span>
+                      <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${Math.min(100, (categoryCounts.Bedroom / (catalog.length || 1)) * 100)}%` }} />
+                      </div>
                     </div>
 
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                        <span className="text-slate-300 font-medium">Lighting & Ceiling</span>
+                    {/* Lighting */}
+                    <div>
+                      <div className="flex justify-between font-medium mb-1">
+                        <span className="text-slate-300">💡 Lighting & Ceiling</span>
+                        <span className="text-white font-bold">{categoryCounts.Lighting} items</span>
                       </div>
-                      <span className="text-white font-bold">{categoryCounts.Lighting} items</span>
+                      <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-400 rounded-full" style={{ width: `${Math.min(100, (categoryCounts.Lighting / (catalog.length || 1)) * 100)}%` }} />
+                      </div>
                     </div>
 
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                        <span className="text-slate-300 font-medium">Kitchen & Dining</span>
+                    {/* Kitchen */}
+                    <div>
+                      <div className="flex justify-between font-medium mb-1">
+                        <span className="text-slate-300">🍳 Kitchen & Dining</span>
+                        <span className="text-white font-bold">{categoryCounts.Kitchen} items</span>
                       </div>
-                      <span className="text-white font-bold">{categoryCounts.Kitchen} items</span>
+                      <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${Math.min(100, (categoryCounts.Kitchen / (catalog.length || 1)) * 100)}%` }} />
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* QUICK ACTIONS ROW */}
+              {/* 3. ROW 2 OF SPECIALIZED CHARTS (3D COMPUTE AREA CHART + MULTI-FLOOR LEVEL DISTRIBUTION) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* CHART 3: 3D COMPUTE & RENDER PERFORMANCE AREA CHART */}
+                <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-5 border border-slate-800/90 shadow-xl shadow-black/20 flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="p-1 rounded-lg bg-indigo-500/10 text-indigo-400">
+                        <Cpu className="w-4 h-4" />
+                      </span>
+                      <div>
+                        <h2 className="text-sm font-bold text-white">3D WebGL Render Throughput</h2>
+                        <p className="text-xs text-slate-400">Monthly scene renders & Three.js shader operations.</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-lg border border-sky-500/20">
+                      60 FPS Active
+                    </span>
+                  </div>
+
+                  {/* SVG Area Chart */}
+                  <div className="relative w-full h-40 my-2 flex items-center justify-center">
+                    <svg viewBox={`0 0 ${chartPoints.width} ${chartPoints.height}`} className="w-full h-full overflow-visible">
+                      <defs>
+                        <linearGradient id="renderAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#818cf8" stopOpacity="0.4" />
+                          <stop offset="100%" stopColor="#080f1e" stopOpacity="0.0" />
+                        </linearGradient>
+                      </defs>
+
+                      {/* Area Fill */}
+                      <path d={chartPoints.areaString} fill="url(#renderAreaGrad)" />
+
+                      {/* Line Stroke */}
+                      <path d={chartPoints.pathString} fill="none" stroke="#818cf8" strokeWidth="3" strokeLinecap="round" />
+
+                      {/* Data Point Circles */}
+                      {chartPoints.points.map((pt, idx) => (
+                        <g key={idx} className="cursor-pointer">
+                          <circle
+                            cx={pt.x}
+                            cy={pt.y}
+                            r={hoveredPointIndex === idx ? '5' : '3.5'}
+                            fill="#080f1e"
+                            stroke="#38bdf8"
+                            strokeWidth="2"
+                            onMouseEnter={() => setHoveredPointIndex(idx)}
+                            onMouseLeave={() => setHoveredPointIndex(null)}
+                          />
+                          <text x={pt.x} y={chartPoints.height - 4} textAnchor="middle" fill="#64748b" fontSize="10" fontWeight="bold">
+                            {pt.data.label}
+                          </text>
+                        </g>
+                      ))}
+                    </svg>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-slate-800/80 pt-3 text-xs text-slate-400">
+                    <span>Peak Render Load: <strong className="text-white">1,140/mo</strong></span>
+                    <span>Shader Precision: <strong className="text-emerald-400">High-P</strong></span>
+                    <span>WebGL Buffer: <strong className="text-sky-400">142 MB</strong></span>
+                  </div>
+                </div>
+
+                {/* CHART 4: MULTI-FLOOR LEVEL AREA & ROOM BREAKDOWN (HORIZONTAL BARS) */}
+                <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-5 border border-slate-800/90 shadow-xl shadow-black/20 flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="p-1 rounded-lg bg-purple-500/10 text-purple-400">
+                        <Layers3 className="w-4 h-4" />
+                      </span>
+                      <div>
+                        <h2 className="text-sm font-bold text-white">Multi-Floor Space Allocation</h2>
+                        <p className="text-xs text-slate-400">Floor area and architectural density per level.</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-purple-300 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20">
+                      {plan.floors?.length || 2} Active Floors
+                    </span>
+                  </div>
+
+                  {/* Level Bars List */}
+                  <div className="space-y-3.5 my-2">
+                    {(plan.floors || [
+                      { level: 0, name: 'Ground Floor', height: 250, elevation: 0 },
+                      { level: 1, name: '1st Floor', height: 250, elevation: 250 },
+                      { level: 2, name: 'Penthouse Roof', height: 250, elevation: 500 },
+                    ]).map((fl, i) => {
+                      const roomsOnLevel = plan.rooms.filter((r) => (r.floorLevel || 0) === fl.level).length || (i === 0 ? 4 : i === 1 ? 3 : 2);
+                      const itemsOnLevel = plan.furniture.filter((f) => (f.floorLevel || 0) === fl.level).length || (i === 0 ? 8 : i === 1 ? 5 : 3);
+                      const areaSqM = i === 0 ? 120 : i === 1 ? 95 : 65;
+
+                      return (
+                        <div key={fl.level} className="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80">
+                          <div className="flex items-center justify-between text-xs mb-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-white">Level {fl.level}: {fl.name}</span>
+                              <span className="text-[10px] text-slate-400">({fl.height}cm ceiling)</span>
+                            </div>
+                            <span className="text-emerald-400 font-bold">{areaSqM} m²</span>
+                          </div>
+                          <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden mb-2">
+                            <div
+                              className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full"
+                              style={{ width: `${(areaSqM / 140) * 100}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-400">
+                            <span>{roomsOnLevel} Room Zones</span>
+                            <span>{itemsOnLevel} CAD Furniture Items</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-slate-800/80 pt-3 text-xs text-slate-400">
+                    <span>Combined Total Space: <strong className="text-white">{totalFloorAreaSqM.toFixed(1)} m²</strong></span>
+                    <button
+                      onClick={() => {
+                        if (onSwitchToStudio) onSwitchToStudio();
+                        else onOpenStudioWithTemplate('duplex_2floor');
+                      }}
+                      className="text-sky-400 hover:text-sky-300 font-bold flex items-center gap-1"
+                    >
+                      <span>Modify in 3D</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. STUDIO QUICK ACTIONS ROW */}
               <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-5 border border-slate-800/90 shadow-xl shadow-black/20">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <span className="p-1 rounded-lg bg-sky-500/10 text-sky-400">
                       <Zap className="w-4 h-4" />
                     </span>
-                    <h2 className="text-sm font-bold text-white">Studio Quick Actions</h2>
+                    <h2 className="text-sm font-bold text-white">Studio Quick Shortcuts</h2>
                   </div>
-                  <span className="text-xs text-slate-400">Instant shortcuts</span>
+                  <span className="text-xs text-slate-400">1-Click Launchers</span>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -750,12 +847,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </button>
                 </div>
               </div>
-
-              </>
+            </>
           )}
 
           {/* ========================================================= */}
-          {/* TAB 2: PROJECTS MANAGEMENT */}
+          {/* TAB 2: PROJECTS DIRECTORY */}
           {/* ========================================================= */}
           {currentTab === 'projects' && (
             <div className="space-y-6">
@@ -960,7 +1056,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           )}
 
           {/* ========================================================= */}
-          {/* TAB 3: USERS DIRECTORY */}
+          {/* TAB 3: USERS & ROLES */}
           {/* ========================================================= */}
           {currentTab === 'users' && (
             <div className="bg-[#101c38]/90 backdrop-blur-xl rounded-2xl p-5 border border-slate-800/90 shadow-xl shadow-black/20 space-y-4">
