@@ -159,6 +159,23 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   const [initialWallState, setInitialWallState] = useState<Wall | null>(null);
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  // Marquee Drag Box Selection State
+  const [marqueeBox, setMarqueeBox] = useState<{ start: { x: number; y: number }; current: { x: number; y: number } } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [initialMultiState, setInitialMultiState] = useState<{
+    furniture: { id: string; x: number; y: number }[];
+    walls: { id: string; xStart: number; yStart: number; xEnd: number; yEnd: number }[];
+  }>({ furniture: [], walls: [] });
+
+  // Sync selectedId with selectedIds
+  useEffect(() => {
+    if (selectedId && !selectedIds.includes(selectedId)) {
+      setSelectedIds([selectedId]);
+    } else if (!selectedId && selectedIds.length > 0 && !marqueeBox) {
+      setSelectedIds([]);
+    }
+  }, [selectedId]);
+
   // Warning Toast State
   const [walkWarning, setWalkWarning] = useState<string | null>(null);
   const walkWarningTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -288,55 +305,30 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         })()
       : null;
 
-  // Delete selected entity (Room, Wall, Furniture, Dimension, Note)
+  // Delete selected entity or entities (Room, Wall, Furniture, Dimension, Note)
   const handleDeleteSelected = useCallback(() => {
-    if (!selectedId) return;
+    const ids = new Set(selectedIds.length > 0 ? selectedIds : selectedId ? [selectedId] : []);
+    if (ids.size === 0) return;
 
-    if (selectedRoom) {
-      onUpdatePlan({
-        ...plan,
-        rooms: plan.rooms.filter((r) => r.id !== selectedId),
-        updatedAt: new Date().toISOString(),
-      });
-      onSelectId(null);
-    } else if (selectedWall) {
-      onUpdatePlan({
-        ...plan,
-        walls: plan.walls.filter((w) => w.id !== selectedId),
-        updatedAt: new Date().toISOString(),
-      });
-      onSelectId(null);
-    } else if (selectedFurniture) {
-      if (selectedFurniture.isLocked) {
-        triggerWalkWarning(`⚠️ Cannot delete "${selectedFurniture.name}": Locked item.`);
-        return;
-      }
-      onUpdatePlan({
-        ...plan,
-        furniture: plan.furniture.filter((f) => f.id !== selectedId),
-        updatedAt: new Date().toISOString(),
-      });
-      onSelectId(null);
-    } else {
-      const isDim = (plan.dimensionLines || []).some((d) => d.id === selectedId);
-      const isNote = (plan.textNotes || []).some((n) => n.id === selectedId);
-      if (isDim) {
-        onUpdatePlan({
-          ...plan,
-          dimensionLines: (plan.dimensionLines || []).filter((d) => d.id !== selectedId),
-          updatedAt: new Date().toISOString(),
-        });
-        onSelectId(null);
-      } else if (isNote) {
-        onUpdatePlan({
-          ...plan,
-          textNotes: (plan.textNotes || []).filter((n) => n.id !== selectedId),
-          updatedAt: new Date().toISOString(),
-        });
-        onSelectId(null);
-      }
+    // Check if any selected furniture is locked
+    const lockedItems = plan.furniture.filter((f) => ids.has(f.id) && f.isLocked);
+    if (lockedItems.length > 0) {
+      triggerWalkWarning(`⚠️ Cannot delete "${lockedItems[0].name}": Locked item.`);
+      return;
     }
-  }, [selectedId, selectedRoom, selectedWall, selectedFurniture, plan, onUpdatePlan, onSelectId]);
+
+    onUpdatePlan({
+      ...plan,
+      rooms: plan.rooms.filter((r) => !ids.has(r.id)),
+      walls: plan.walls.filter((w) => !ids.has(w.id)),
+      furniture: plan.furniture.filter((f) => !ids.has(f.id)),
+      dimensionLines: (plan.dimensionLines || []).filter((d) => !ids.has(d.id)),
+      textNotes: (plan.textNotes || []).filter((n) => !ids.has(n.id)),
+      updatedAt: new Date().toISOString(),
+    });
+    setSelectedIds([]);
+    onSelectId(null);
+  }, [selectedIds, selectedId, plan, onUpdatePlan, onSelectId]);
 
   // Keyboard Shortcuts (Space for Pan, Shift for Ortho, Delete/Backspace for Delete, V/W/R/D/T/H)
   useEffect(() => {
@@ -975,7 +967,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         if (layers.rooms) {
           curRooms.forEach((room) => {
             if (room.points.length < 3) return;
-            const isSelected = selectedId === room.id;
+            const isSelected = selectedId === room.id || selectedIds.includes(room.id);
             ctx.fillStyle = isSelected ? 'rgba(14, 165, 233, 0.15)' : room.floorColor || 'rgba(14, 165, 233, 0.06)';
             ctx.strokeStyle = isSelected ? '#0284c7' : 'rgba(14, 165, 233, 0.4)';
             ctx.lineWidth = isSelected ? 2 : 1.2;
@@ -999,46 +991,46 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         if (layers.furniture || layers.structure) {
           curFurniture.forEach((item) => {
             const isDoor = item.catalogId === 'door' || item.category === 'Doors & Windows';
-            if (isDoor) return; // Doors drawn in Layer 4 (Openings)
+            if (!isDoor) {
+              const isSelected = selectedId === item.id || selectedIds.includes(item.id);
+              const sp = planToScreen(item.x, item.y, flLevel);
+              const w = item.width * scale;
+              const d = item.depth * scale;
 
-            const isSelected = selectedId === item.id;
-            const sp = planToScreen(item.x, item.y, flLevel);
-            const w = item.width * scale;
-            const d = item.depth * scale;
+              ctx.save();
+              ctx.translate(sp.x, sp.y);
+              ctx.rotate(item.angle || 0);
 
-            ctx.save();
-            ctx.translate(sp.x, sp.y);
-            ctx.rotate(item.angle || 0);
+              // Standard Furniture Item
+              ctx.fillStyle = item.color || '#f8fafc';
+              ctx.strokeStyle = isSelected ? '#0284c7' : '#334155';
+              ctx.lineWidth = isSelected ? 2.5 : 1.5;
+              ctx.beginPath();
+              ctx.roundRect(-w / 2, -d / 2, w, d, 4);
+              ctx.fill();
+              ctx.stroke();
 
-            // Standard Furniture Item
-            ctx.fillStyle = item.color || '#f8fafc';
-            ctx.strokeStyle = isSelected ? '#0284c7' : '#334155';
-            ctx.lineWidth = isSelected ? 2.5 : 1.5;
-            ctx.beginPath();
-            ctx.roundRect(-w / 2, -d / 2, w, d, 4);
-            ctx.fill();
-            ctx.stroke();
+              ctx.fillStyle = '#0f172a';
+              ctx.font = 'bold 9.5px system-ui';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(item.name, 0, 0);
 
-            ctx.fillStyle = '#0f172a';
-            ctx.font = 'bold 9.5px system-ui';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(item.name, 0, 0);
-
-            // Selection Handles
-            if (isSelected) {
-              ctx.strokeStyle = '#0284c7';
-              ctx.fillStyle = '#ffffff';
-              ctx.lineWidth = 1.5;
-              const handles = [
-                [-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]
-              ];
-              handles.forEach(([hx, hy]) => {
-                ctx.fillRect(hx - 4, hy - 4, 8, 8);
-                ctx.strokeRect(hx - 4, hy - 4, 8, 8);
-              });
+              // Selection Handles
+              if (isSelected) {
+                ctx.strokeStyle = '#0284c7';
+                ctx.fillStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                const handles = [
+                  [-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]
+                ];
+                handles.forEach(([hx, hy]) => {
+                  ctx.fillRect(hx - 4, hy - 4, 8, 8);
+                  ctx.strokeRect(hx - 4, hy - 4, 8, 8);
+                });
+              }
+              ctx.restore();
             }
-            ctx.restore();
           });
         }
 
@@ -1047,7 +1039,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         // ==========================================
         if (layers.walls) {
           curWalls.forEach((wall) => {
-            const isSelected = selectedId === wall.id;
+            const isSelected = selectedId === wall.id || selectedIds.includes(wall.id);
             const p1 = planToScreen(wall.xStart, wall.yStart, flLevel);
             const p2 = planToScreen(wall.xEnd, wall.yEnd, flLevel);
 
@@ -1106,7 +1098,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             const isDoor = item.catalogId === 'door' || item.category === 'Doors & Windows';
             if (!isDoor) return;
 
-            const isSelected = selectedId === item.id;
+            const isSelected = selectedId === item.id || selectedIds.includes(item.id);
             const sp = planToScreen(item.x, item.y, flLevel);
             const w = item.width * scale;
             const d = item.depth * scale;
@@ -1143,7 +1135,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         if (layers.rooms) {
           curRooms.forEach((room) => {
             if (room.points.length < 3) return;
-            const isSelected = selectedId === room.id;
+            const isSelected = selectedId === room.id || selectedIds.includes(room.id);
             const avgX = room.points.reduce((acc, p) => acc + p.x, 0) / room.points.length;
             const avgY = room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length;
             const screenAvg = planToScreen(avgX, avgY, flLevel);
@@ -1197,7 +1189,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
           curDimensions.forEach((dim) => {
             const p1 = planToScreen(dim.xStart, dim.yStart, flLevel);
             const p2 = planToScreen(dim.xEnd, dim.yEnd, flLevel);
-            const isSelected = selectedId === dim.id;
+            const isSelected = selectedId === dim.id || selectedIds.includes(dim.id);
 
             ctx.strokeStyle = isSelected ? '#0284c7' : '#0284c7';
             ctx.lineWidth = isSelected ? 2 : 1.5;
@@ -1401,6 +1393,53 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       ctx.textAlign = 'center';
       ctx.fillText('N', 0, -6);
       ctx.restore();
+
+      // 12. CAD Marquee Drag Selection Box (Window vs Crossing)
+      if (marqueeBox) {
+        const p1 = planToScreen(marqueeBox.start.x, marqueeBox.start.y, activeFloor);
+        const p2 = planToScreen(marqueeBox.current.x, marqueeBox.current.y, activeFloor);
+
+        const left = Math.min(p1.x, p2.x);
+        const top = Math.min(p1.y, p2.y);
+        const width = Math.abs(p2.x - p1.x);
+        const height = Math.abs(p2.y - p1.y);
+
+        const isCrossing = marqueeBox.current.x < marqueeBox.start.x; // Right-to-left = Crossing
+
+        ctx.save();
+        if (isCrossing) {
+          // Green crossing marquee
+          ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
+          ctx.strokeStyle = '#059669';
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([5, 4]);
+        } else {
+          // Blue window marquee
+          ctx.fillStyle = 'rgba(2, 132, 199, 0.12)';
+          ctx.strokeStyle = '#0284c7';
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([]);
+        }
+
+        ctx.fillRect(left, top, width, height);
+        ctx.strokeRect(left, top, width, height);
+
+        // Count badge if any items selected
+        if (selectedIds.length > 0 && width > 40 && height > 28) {
+          ctx.setLineDash([]);
+          ctx.fillStyle = isCrossing ? '#059669' : '#0284c7';
+          ctx.beginPath();
+          ctx.roundRect(left + width - 75, top + height - 24, 70, 20, 4);
+          ctx.fill();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 10px system-ui';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`${selectedIds.length} Selected`, left + width - 40, top + height - 14);
+        }
+        ctx.restore();
+      }
     };
 
     render();
@@ -1408,6 +1447,8 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     scale,
     panOffset,
     selectedId,
+    selectedIds,
+    marqueeBox,
     toolMode,
     wallStart,
     dimStart,
@@ -1563,7 +1604,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       return;
     }
 
-    // Select Tool Hit Testing
+    // Select Tool Hit Testing & Drag Box Marquee Selection
     if (toolMode === 'select') {
       // 1. Check Furniture
       const hitFurniture = floorFurniture.slice().reverse().find((f) => {
@@ -1577,10 +1618,29 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       });
 
       if (hitFurniture) {
-        onSelectId(hitFurniture.id);
+        const isShift = e.shiftKey;
+        let nextSelected: string[];
+        if (isShift) {
+          nextSelected = selectedIds.includes(hitFurniture.id)
+            ? selectedIds.filter((id) => id !== hitFurniture.id)
+            : [...selectedIds, hitFurniture.id];
+        } else if (selectedIds.includes(hitFurniture.id) && selectedIds.length > 1) {
+          nextSelected = selectedIds;
+        } else {
+          nextSelected = [hitFurniture.id];
+        }
+
+        setSelectedIds(nextSelected);
+        onSelectId(nextSelected.length > 0 ? nextSelected[0] : null);
         setActiveFurnitureHandle('body');
         setDragStartPos(clickPlan);
         setInitialFurnitureState({ ...hitFurniture });
+
+        // Save multi-element initial positions for group moving
+        setInitialMultiState({
+          furniture: plan.furniture.filter((f) => nextSelected.includes(f.id)).map((f) => ({ id: f.id, x: f.x, y: f.y })),
+          walls: plan.walls.filter((w) => nextSelected.includes(w.id)).map((w) => ({ id: w.id, xStart: w.xStart, yStart: w.yStart, xEnd: w.xEnd, yEnd: w.yEnd })),
+        });
         return;
       }
 
@@ -1591,21 +1651,45 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       });
 
       if (hitWall) {
-        onSelectId(hitWall.id);
+        const isShift = e.shiftKey;
+        let nextSelected: string[];
+        if (isShift) {
+          nextSelected = selectedIds.includes(hitWall.id)
+            ? selectedIds.filter((id) => id !== hitWall.id)
+            : [...selectedIds, hitWall.id];
+        } else if (selectedIds.includes(hitWall.id) && selectedIds.length > 1) {
+          nextSelected = selectedIds;
+        } else {
+          nextSelected = [hitWall.id];
+        }
+
+        setSelectedIds(nextSelected);
+        onSelectId(nextSelected.length > 0 ? nextSelected[0] : null);
         setActiveWallHandle('body');
         setDragStartPos(clickPlan);
         setInitialWallState({ ...hitWall });
+
+        setInitialMultiState({
+          furniture: plan.furniture.filter((f) => nextSelected.includes(f.id)).map((f) => ({ id: f.id, x: f.x, y: f.y })),
+          walls: plan.walls.filter((w) => nextSelected.includes(w.id)).map((w) => ({ id: w.id, xStart: w.xStart, yStart: w.yStart, xEnd: w.xEnd, yEnd: w.yEnd })),
+        });
         return;
       }
 
       // 3. Check Rooms
       const hitRoom = floorRooms.find((r) => isPointInPolygon(clickPlan, r.points));
       if (hitRoom) {
+        setSelectedIds([hitRoom.id]);
         onSelectId(hitRoom.id);
         return;
       }
 
-      onSelectId(null);
+      // 4. Clicked on empty canvas -> Initiate Drag Marquee Box Selection
+      if (!e.shiftKey) {
+        setSelectedIds([]);
+        onSelectId(null);
+      }
+      setMarqueeBox({ start: clickPlan, current: clickPlan });
     }
   };
 
@@ -1649,33 +1733,142 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       return;
     }
 
-    // Dragging Selected Furniture
-    if (activeFurnitureHandle === 'body' && initialFurnitureState && selectedFurniture) {
-      const dx = currentPlan.x - dragStartPos.x;
-      const dy = currentPlan.y - dragStartPos.y;
-      const updated = plan.furniture.map((f) =>
-        f.id === selectedFurniture.id ? { ...f, x: initialFurnitureState.x + dx, y: initialFurnitureState.y + dy } : f
-      );
-      onUpdatePlan({ ...plan, furniture: updated, updatedAt: new Date().toISOString() });
+    // Drag Marquee Box Selection Calculation
+    if (marqueeBox) {
+      setMarqueeBox((prev) => (prev ? { ...prev, current: currentPlan } : null));
+
+      const minX = Math.min(marqueeBox.start.x, currentPlan.x);
+      const maxX = Math.max(marqueeBox.start.x, currentPlan.x);
+      const minY = Math.min(marqueeBox.start.y, currentPlan.y);
+      const maxY = Math.max(marqueeBox.start.y, currentPlan.y);
+
+      const enclosedIds: string[] = [];
+
+      // Furniture inside box
+      floorFurniture.forEach((f) => {
+        const hw = f.width / 2;
+        const hd = f.depth / 2;
+        if (f.x + hw >= minX && f.x - hw <= maxX && f.y + hd >= minY && f.y - hd <= maxY) {
+          enclosedIds.push(f.id);
+        }
+      });
+
+      // Walls inside or crossing box
+      floorWalls.forEach((w) => {
+        const wMinX = Math.min(w.xStart, w.xEnd);
+        const wMaxX = Math.max(w.xStart, w.xEnd);
+        const wMinY = Math.min(w.yStart, w.yEnd);
+        const wMaxY = Math.max(w.yStart, w.yEnd);
+        if (wMaxX >= minX && wMinX <= maxX && wMaxY >= minY && wMinY <= maxY) {
+          enclosedIds.push(w.id);
+        }
+      });
+
+      // Rooms inside box
+      floorRooms.forEach((r) => {
+        if (r.points.length >= 3) {
+          const avgX = r.points.reduce((acc, p) => acc + p.x, 0) / r.points.length;
+          const avgY = r.points.reduce((acc, p) => acc + p.y, 0) / r.points.length;
+          if (avgX >= minX && avgX <= maxX && avgY >= minY && avgY <= maxY) {
+            enclosedIds.push(r.id);
+          }
+        }
+      });
+
+      // Dimensions inside box
+      floorDimensionLines.forEach((d) => {
+        const dMinX = Math.min(d.xStart, d.xEnd);
+        const dMaxX = Math.max(d.xStart, d.xEnd);
+        const dMinY = Math.min(d.yStart, d.yEnd);
+        const dMaxY = Math.max(d.yStart, d.yEnd);
+        if (dMaxX >= minX && dMinX <= maxX && dMaxY >= minY && dMinY <= maxY) {
+          enclosedIds.push(d.id);
+        }
+      });
+
+      setSelectedIds(enclosedIds);
       return;
     }
 
-    // Dragging Selected Wall
+    // Dragging Selected Furniture (Single or Multi-Group Drag)
+    if (activeFurnitureHandle === 'body' && initialFurnitureState && selectedFurniture) {
+      const dx = currentPlan.x - dragStartPos.x;
+      const dy = currentPlan.y - dragStartPos.y;
+
+      if (initialMultiState.furniture.length > 1 || initialMultiState.walls.length > 0) {
+        const furnMap = new Map(initialMultiState.furniture.map((f) => [f.id, f]));
+        const wallMap = new Map(initialMultiState.walls.map((w) => [w.id, w]));
+
+        const updatedFurn = plan.furniture.map((f) => {
+          const init = furnMap.get(f.id);
+          return init ? { ...f, x: Math.round(init.x + dx), y: Math.round(init.y + dy) } : f;
+        });
+
+        const updatedWalls = plan.walls.map((w) => {
+          const init = wallMap.get(w.id);
+          return init
+            ? {
+                ...w,
+                xStart: Math.round(init.xStart + dx),
+                yStart: Math.round(init.yStart + dy),
+                xEnd: Math.round(init.xEnd + dx),
+                yEnd: Math.round(init.yEnd + dy),
+              }
+            : w;
+        });
+
+        onUpdatePlan({ ...plan, furniture: updatedFurn, walls: updatedWalls, updatedAt: new Date().toISOString() });
+      } else {
+        const updated = plan.furniture.map((f) =>
+          f.id === selectedFurniture.id ? { ...f, x: Math.round(initialFurnitureState.x + dx), y: Math.round(initialFurnitureState.y + dy) } : f
+        );
+        onUpdatePlan({ ...plan, furniture: updated, updatedAt: new Date().toISOString() });
+      }
+      return;
+    }
+
+    // Dragging Selected Wall (Single or Multi-Group Drag)
     if (activeWallHandle === 'body' && initialWallState && selectedWall) {
       const dx = currentPlan.x - dragStartPos.x;
       const dy = currentPlan.y - dragStartPos.y;
-      const updated = plan.walls.map((w) =>
-        w.id === selectedWall.id
-          ? {
-              ...w,
-              xStart: initialWallState.xStart + dx,
-              yStart: initialWallState.yStart + dy,
-              xEnd: initialWallState.xEnd + dx,
-              yEnd: initialWallState.yEnd + dy,
-            }
-          : w
-      );
-      onUpdatePlan({ ...plan, walls: updated, updatedAt: new Date().toISOString() });
+
+      if (initialMultiState.furniture.length > 0 || initialMultiState.walls.length > 1) {
+        const furnMap = new Map(initialMultiState.furniture.map((f) => [f.id, f]));
+        const wallMap = new Map(initialMultiState.walls.map((w) => [w.id, w]));
+
+        const updatedFurn = plan.furniture.map((f) => {
+          const init = furnMap.get(f.id);
+          return init ? { ...f, x: Math.round(init.x + dx), y: Math.round(init.y + dy) } : f;
+        });
+
+        const updatedWalls = plan.walls.map((w) => {
+          const init = wallMap.get(w.id);
+          return init
+            ? {
+                ...w,
+                xStart: Math.round(init.xStart + dx),
+                yStart: Math.round(init.yStart + dy),
+                xEnd: Math.round(init.xEnd + dx),
+                yEnd: Math.round(init.yEnd + dy),
+              }
+            : w;
+        });
+
+        onUpdatePlan({ ...plan, furniture: updatedFurn, walls: updatedWalls, updatedAt: new Date().toISOString() });
+      } else {
+        const updated = plan.walls.map((w) =>
+          w.id === selectedWall.id
+            ? {
+                ...w,
+                xStart: Math.round(initialWallState.xStart + dx),
+                yStart: Math.round(initialWallState.yStart + dy),
+                xEnd: Math.round(initialWallState.xEnd + dx),
+                yEnd: Math.round(initialWallState.yEnd + dy),
+              }
+            : w
+        );
+        onUpdatePlan({ ...plan, walls: updated, updatedAt: new Date().toISOString() });
+      }
       return;
     }
   };
@@ -1685,6 +1878,15 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     setIsPanning(false);
     setActiveFurnitureHandle(null);
     setActiveWallHandle(null);
+
+    if (marqueeBox) {
+      if (selectedIds.length > 0) {
+        onSelectId(selectedIds[0]);
+      } else {
+        onSelectId(null);
+      }
+      setMarqueeBox(null);
+    }
   };
 
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
@@ -1904,6 +2106,23 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         <div className="absolute bottom-3 left-3 z-10 flex items-center gap-1.5 bg-rose-600 text-white backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-rose-500 text-xs font-bold animate-pulse">
           <AlertTriangle className="w-3.5 h-3.5" />
           <span>{collidingItemIds.size} {collidingItemIds.size === 1 ? 'Item' : 'Items'} Overlapping</span>
+        </div>
+      )}
+
+      {/* Floating Multi-Selection Action Badge */}
+      {selectedIds.length > 1 && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 bg-slate-900/95 backdrop-blur-md text-white px-3.5 py-1.5 rounded-xl shadow-2xl border border-slate-700 pointer-events-auto text-xs animate-in fade-in slide-in-from-top-2">
+          <span className="font-semibold text-slate-200">
+            {selectedIds.length} Items Selected
+          </span>
+          <button
+            onClick={handleDeleteSelected}
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-lg text-xs font-bold transition shadow-md cursor-pointer"
+            title="Delete all selected items (Delete or Backspace key)"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete All</span>
+          </button>
         </div>
       )}
 
