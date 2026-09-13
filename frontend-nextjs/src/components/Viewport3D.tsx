@@ -750,51 +750,75 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       padMesh.receiveShadow = true;
       group.add(padMesh);
 
-      // High-Definition 3D Floor Placard Signboard
+      // High-Definition 3D Floor Placard Signboard (Matching 2D Vector Style)
       const roomNames = floorRooms.map((r) => r.name);
       const labelCanvas = document.createElement('canvas');
-      labelCanvas.width = 1024;
-      labelCanvas.height = 256;
+      labelCanvas.width = 2048;
+      labelCanvas.height = 512;
       const lctx = labelCanvas.getContext('2d');
       if (lctx) {
-        const grad = lctx.createLinearGradient(0, 0, 1024, 256);
+        lctx.imageSmoothingEnabled = true;
+        lctx.imageSmoothingQuality = 'high';
+
+        // Outer ambient drop shadow
+        lctx.shadowColor = 'rgba(15, 23, 42, 0.35)';
+        lctx.shadowBlur = 28;
+        lctx.shadowOffsetY = 10;
+
+        const grad = lctx.createLinearGradient(0, 0, 2048, 512);
         if (fl.level === 0) {
           grad.addColorStop(0, '#0284c7');
           grad.addColorStop(1, '#0369a1');
-        } else {
+        } else if (fl.level === 1) {
           grad.addColorStop(0, '#059669');
           grad.addColorStop(1, '#047857');
+        } else {
+          grad.addColorStop(0, '#6366f1');
+          grad.addColorStop(1, '#4f46e5');
         }
         lctx.fillStyle = grad;
         lctx.beginPath();
-        lctx.roundRect(16, 16, 992, 224, 28);
+        lctx.roundRect(32, 32, 1984, 448, 64);
         lctx.fill();
 
-        lctx.strokeStyle = '#ffffff';
-        lctx.lineWidth = 6;
+        // Reset Shadow for crisp borders & typography
+        lctx.shadowColor = 'transparent';
+        lctx.shadowBlur = 0;
+        lctx.shadowOffsetY = 0;
+
+        // White Border Stroke
+        lctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+        lctx.lineWidth = 14;
+        lctx.beginPath();
+        lctx.roundRect(32, 32, 1984, 448, 64);
         lctx.stroke();
 
         // Floor Name Title
         lctx.fillStyle = '#ffffff';
-        lctx.font = 'bold 52px system-ui, -apple-system, sans-serif';
+        lctx.font = 'bold 96px system-ui, -apple-system, sans-serif';
         lctx.textAlign = 'center';
         lctx.textBaseline = 'middle';
         const floorTitle = fl.level === 0 ? `🏢 ${fl.name.toUpperCase()}` : `🏡 ${fl.name.toUpperCase()}`;
-        lctx.fillText(floorTitle, 512, 78);
+        lctx.fillText(floorTitle, 1024, 180);
 
         // Subtitle (Room names & Elevation)
         lctx.fillStyle = '#f0fdf4';
-        lctx.font = 'bold 30px system-ui, -apple-system, sans-serif';
+        lctx.font = '500 68px system-ui, -apple-system, sans-serif';
         const subText =
           roomNames.length > 0
             ? roomNames.join('   •   ')
             : `Floor Level ${fl.level} (Elevation: ${fl.elevation || fl.level * 250}cm)`;
-        lctx.fillText(subText, 512, 165);
+        lctx.fillText(subText, 1024, 330);
 
         const labelTex = new THREE.CanvasTexture(labelCanvas);
-        labelTex.minFilter = THREE.LinearFilter;
-        const placardW = Math.min(6.5, padW * 0.75);
-        const placardH = placardW * (256 / 1024);
+        labelTex.generateMipmaps = true;
+        labelTex.minFilter = THREE.LinearMipmapLinearFilter;
+        labelTex.magFilter = THREE.LinearFilter;
+        labelTex.anisotropy = 16;
+        labelTex.needsUpdate = true;
+
+        const placardW = Math.min(6.2, Math.max(3.8, padW * 0.7));
+        const placardH = placardW * (512 / 2048);
         const labelGeom = new THREE.PlaneGeometry(placardW, placardH);
         const labelMat = new THREE.MeshBasicMaterial({
           map: labelTex,
