@@ -189,6 +189,30 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const sphericalRef = useRef({ radius: 14, theta: Math.PI / 4, phi: Math.PI / 3.2 });
   const targetRef = useRef(new THREE.Vector3(0, 1.0, 0));
 
+  // Floor Mode and Active Floor Refs
+  const floor3DModeRef = useRef(floor3DMode);
+  floor3DModeRef.current = floor3DMode;
+
+  const activeFloorRef = useRef(activeFloor);
+  activeFloorRef.current = activeFloor;
+
+  const getFloor3DOffset = (level: number = 0, currentFloorMode = floor3DModeRef.current) => {
+    const allFloors = planRef.current.floors && planRef.current.floors.length > 0 ? planRef.current.floors : [
+      { level: 0, name: 'Ground Floor', height: 250, elevation: 0 },
+      { level: 1, name: '1st Floor', height: 250, elevation: 250 },
+    ];
+    if (currentFloorMode === 'isolated') {
+      return { x: 0, y: 0, z: 0 };
+    } else if (currentFloorMode === 'sideBySide') {
+      const floorIdx = allFloors.findIndex((fl) => fl.level === level);
+      const validIdx = floorIdx >= 0 ? floorIdx : 0;
+      const mid = (allFloors.length - 1) / 2;
+      return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
+    } else {
+      return { x: 0, y: level * 2.5, z: 0 };
+    }
+  };
+
   // Virtual Visitor State (Human eye level 1.6m above active floor)
   const visitorPosRef = useRef(new THREE.Vector3(0, 1.6, 0));
   const visitorYawRef = useRef(0);
@@ -471,10 +495,14 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           visitorYawRef.current -= 1.8 * delta;
         }
 
-        // Apply Visitor Camera Position & Look Direction
+        // Apply Visitor Camera Position & Look Direction with exact 3D Floor Offset
         const vp = visitorPosRef.current;
-        const floorHeight = (activeFloor || 0) * 2.5;
-        camera.position.set(vp.x, floorHeight + 1.6, vp.z);
+        const curOffset = getFloor3DOffset(activeFloorRef.current || 0);
+        camera.position.set(
+          vp.x + (floor3DModeRef.current === 'sideBySide' ? curOffset.x : 0),
+          curOffset.y + 1.6,
+          vp.z + (floor3DModeRef.current === 'sideBySide' ? curOffset.z : 0)
+        );
 
         const lookDir = new THREE.Vector3(
           Math.sin(visitorYawRef.current) * Math.cos(visitorPitchRef.current),
@@ -499,7 +527,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
               y: cmY,
               yaw: curYaw,
               elevation: 160,
-              floorLevel: activeFloor,
+              floorLevel: activeFloorRef.current,
             });
           }
         }
@@ -576,6 +604,31 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       }
       renderer.dispose();
     };
+  }, []);
+
+  // Synchronize visitor position when switching activeFloor
+  useEffect(() => {
+    const targetRoom = plan.rooms.find((r) => (r.floorLevel ?? 0) === (activeFloor ?? 0)) || plan.rooms[0];
+    let initX = 0;
+    let initZ = 0;
+    if (targetRoom && targetRoom.points.length > 0) {
+      initX = (targetRoom.points.reduce((acc, p) => acc + p.x, 0) / targetRoom.points.length) * 0.01;
+      initZ = (targetRoom.points.reduce((acc, p) => acc + p.y, 0) / targetRoom.points.length) * 0.01;
+    }
+    visitorPosRef.current.set(initX, 1.6, initZ);
+    visitorYawRef.current = 0;
+    visitorPitchRef.current = 0;
+    lastSentPosRef.current = { x: Math.round(initX * 100), y: Math.round(initZ * 100), yaw: 0 };
+
+    if (onVisitorCameraChange) {
+      onVisitorCameraChange({
+        x: Math.round(initX * 100),
+        y: Math.round(initZ * 100),
+        yaw: 0,
+        elevation: 160,
+        floorLevel: activeFloor,
+      });
+    }
   }, [activeFloor]);
 
   // Update Sunlight based on Time of Day
@@ -1492,8 +1545,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         raycaster.setFromCamera(mouse, cameraRef.current);
 
         // Find intersection with the floor plane or 3D object under mouse
-        const floorHeight = (activeFloor || 0) * 2.5;
-        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -floorHeight);
+        const curOffset = getFloor3DOffset(activeFloor || 0);
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -curOffset.y);
         const hitPoint = new THREE.Vector3();
         let targetFocusPoint: THREE.Vector3 | null = null;
 
@@ -1528,42 +1581,23 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const handleSwitchToVisitor = () => {
     setCameraMode('visitor');
     onSelectId(null); // Close all properties and inspector panels in walk view!
-    const allFloors = plan.floors && plan.floors.length > 0 ? plan.floors : [
-      { level: 0, name: 'Ground Floor' },
-      { level: 1, name: '1st Floor' },
-    ];
-    const getFloor3DOffset = (level: number = 0) => {
-      if (floor3DMode === 'isolated') {
-        return { x: 0, y: 0, z: 0 };
-      } else if (floor3DMode === 'sideBySide') {
-        const floorIdx = allFloors.findIndex((fl) => fl.level === level);
-        const validIdx = floorIdx >= 0 ? floorIdx : 0;
-        const mid = (allFloors.length - 1) / 2;
-        return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
-      } else {
-        return { x: 0, y: level * 2.5, z: 0 };
-      }
-    };
 
     const targetRoom = plan.rooms.find((r) => (r.floorLevel ?? 0) === (activeFloor ?? 0)) || plan.rooms[0];
-    let initX = 3.5;
-    let initZ = 2.5;
+    let initX = 0;
+    let initZ = 0;
     if (targetRoom && targetRoom.points.length > 0) {
-      const offset = getFloor3DOffset(targetRoom.floorLevel ?? 0);
-      initX = (targetRoom.points.reduce((acc, p) => acc + p.x, 0) / targetRoom.points.length) * 0.01 + offset.x;
-      initZ = (targetRoom.points.reduce((acc, p) => acc + p.y, 0) / targetRoom.points.length) * 0.01 + offset.z;
-      visitorPosRef.current.set(initX, offset.y + 1.6, initZ);
-    } else {
-      const offset = getFloor3DOffset(activeFloor || 0);
-      visitorPosRef.current.set(offset.x, offset.y + 1.6, offset.z);
+      initX = (targetRoom.points.reduce((acc, p) => acc + p.x, 0) / targetRoom.points.length) * 0.01;
+      initZ = (targetRoom.points.reduce((acc, p) => acc + p.y, 0) / targetRoom.points.length) * 0.01;
     }
+    visitorPosRef.current.set(initX, 1.6, initZ);
     visitorYawRef.current = 0;
     visitorPitchRef.current = 0;
+    lastSentPosRef.current = { x: Math.round(initX * 100), y: Math.round(initZ * 100), yaw: 0 };
 
     if (onVisitorCameraChange) {
       onVisitorCameraChange({
-        x: Math.round(visitorPosRef.current.x * 100),
-        y: Math.round(visitorPosRef.current.z * 100),
+        x: Math.round(initX * 100),
+        y: Math.round(initZ * 100),
         yaw: 0,
         elevation: 160,
         floorLevel: activeFloor,
@@ -1581,28 +1615,27 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
   const handleTeleportToRoom = (room: Room) => {
     setCameraMode('visitor');
-    const allFloors = plan.floors && plan.floors.length > 0 ? plan.floors : [
-      { level: 0, name: 'Ground Floor' },
-      { level: 1, name: '1st Floor' },
-    ];
-    const getFloor3DOffset = (level: number = 0) => {
-      if (floor3DMode === 'isolated') {
-        return { x: 0, y: 0, z: 0 };
-      } else if (floor3DMode === 'sideBySide') {
-        const floorIdx = allFloors.findIndex((fl) => fl.level === level);
-        const validIdx = floorIdx >= 0 ? floorIdx : 0;
-        const mid = (allFloors.length - 1) / 2;
-        return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
-      } else {
-        return { x: 0, y: level * 2.5, z: 0 };
-      }
-    };
-    const offset = getFloor3DOffset(room.floorLevel ?? 0);
-    const avgX = (room.points.reduce((acc, p) => acc + p.x, 0) / room.points.length) * 0.01 + offset.x;
-    const avgZ = (room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length) * 0.01 + offset.z;
-    visitorPosRef.current.set(avgX, offset.y + 1.6, avgZ);
+    onSelectId(null);
+    let avgX = 0;
+    let avgZ = 0;
+    if (room && room.points && room.points.length > 0) {
+      avgX = (room.points.reduce((acc, p) => acc + p.x, 0) / room.points.length) * 0.01;
+      avgZ = (room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length) * 0.01;
+    }
+    visitorPosRef.current.set(avgX, 1.6, avgZ);
     visitorYawRef.current = 0;
     visitorPitchRef.current = 0;
+    lastSentPosRef.current = { x: Math.round(avgX * 100), y: Math.round(avgZ * 100), yaw: 0 };
+
+    if (onVisitorCameraChange) {
+      onVisitorCameraChange({
+        x: Math.round(avgX * 100),
+        y: Math.round(avgZ * 100),
+        yaw: 0,
+        elevation: 160,
+        floorLevel: room.floorLevel ?? activeFloor,
+      });
+    }
   };
 
   // Virtual D-pad Movement actions for mouse/touch
