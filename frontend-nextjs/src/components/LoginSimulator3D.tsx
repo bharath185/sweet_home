@@ -224,10 +224,10 @@ export const LoginSimulator3D: React.FC = () => {
     const blueprintGroup = new THREE.Group();
     roomRoot.add(blueprintGroup);
 
-    const bpCyanBold = new THREE.LineBasicMaterial({ color: 0x0284c7, linewidth: 3, transparent: true, opacity: 0.95 });
-    const bpCyanFine = new THREE.LineBasicMaterial({ color: 0x0369a1, linewidth: 1.5, transparent: true, opacity: 0.75 });
-    const bpDashedMat = new THREE.LineDashedMaterial({ color: 0x0284c7, dashSize: 0.08, gapSize: 0.05, linewidth: 1.5, transparent: true, opacity: 0.85 });
-    const bpDimMat = new THREE.LineBasicMaterial({ color: 0x475569, linewidth: 1.5, transparent: true, opacity: 0.8 });
+    const bpCyanBold = new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 3, transparent: true, opacity: 0.95 });
+    const bpCyanFine = new THREE.LineBasicMaterial({ color: 0x0284c7, linewidth: 1.5, transparent: true, opacity: 0.75 });
+    const bpDashedMat = new THREE.LineDashedMaterial({ color: 0x38bdf8, dashSize: 0.08, gapSize: 0.05, linewidth: 1.5, transparent: true, opacity: 0.85 });
+    const bpDimMat = new THREE.LineBasicMaterial({ color: 0x94a3b8, linewidth: 1.5, transparent: true, opacity: 0.75 });
 
     const createLine = (pts: THREE.Vector3[], mat: THREE.Material) => {
       const geom = new THREE.BufferGeometry().setFromPoints(pts);
@@ -347,28 +347,28 @@ export const LoginSimulator3D: React.FC = () => {
       if (ctx) {
         ctx.clearRect(0, 0, 1024, 1024);
 
-        ctx.fillStyle = '#0284c7';
+        ctx.fillStyle = '#38bdf8';
         ctx.font = 'bold 36px "Courier New", monospace';
         ctx.textAlign = 'center';
         ctx.fillText('LIVING ROOM SUITE', 512, 420);
 
-        ctx.fillStyle = '#334155';
+        ctx.fillStyle = '#cbd5e1';
         ctx.font = 'bold 24px "Courier New", monospace';
         ctx.fillText('AREA: 19.60 m²  |  DIMENSIONS: 5.60m × 3.50m', 512, 465);
         ctx.fillText('SCALE: 1:50  |  VISUAL RENDERED CAD', 512, 505);
 
         // Top dimension text
-        ctx.fillStyle = '#0284c7';
+        ctx.fillStyle = '#38bdf8';
         ctx.font = 'bold 28px "Courier New", monospace';
         ctx.fillText('5.60 m', 512, 105);
 
         // North Arrow
-        ctx.strokeStyle = '#0284c7';
+        ctx.strokeStyle = '#38bdf8';
         ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.arc(900, 200, 36, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = '#0284c7';
+        ctx.fillStyle = '#38bdf8';
         ctx.beginPath();
         ctx.moveTo(900, 170);
         ctx.lineTo(912, 210);
