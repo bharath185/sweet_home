@@ -284,233 +284,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [clientProjects, userSearch, projectFilter]);
 
   return (
-    <div className="flex-1 flex h-full bg-[#080f1e] text-slate-100 overflow-hidden font-sans select-none">
+    <div className="flex-1 flex flex-col h-full bg-[#080f1e] text-slate-100 overflow-hidden font-sans select-none">
       {/* ========================================================= */}
-      {/* 1. LEFT NAVIGATION MENU SIDEBAR */}
-      {/* ========================================================= */}
-      <aside className="w-64 bg-[#0a1224] border-r border-slate-800/80 flex flex-col justify-between shrink-0 z-20 shadow-2xl">
-        <div>
-          {/* Brand Header */}
-          <div className="h-16 border-b border-slate-800/80 flex items-center px-5 gap-3 bg-gradient-to-r from-slate-900/90 to-[#0c162d]">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 via-indigo-500 to-cyan-400 p-[1px] shadow-lg shadow-sky-500/20 shrink-0">
-              <div className="w-full h-full bg-[#091020] rounded-xl flex items-center justify-center text-sky-400">
-                <Layers className="w-5 h-5" />
-              </div>
-            </div>
-            <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-sm tracking-tight text-white truncate">
-                  Visual Rendered
-                </span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              </div>
-              <span className="text-[10px] font-semibold text-sky-400/90 uppercase tracking-wider">
-                Enterprise Studio
-              </span>
-            </div>
-          </div>
-
-          {/* Navigation Menu Links */}
-          <div className="p-3 space-y-1">
-            <div className="px-3 py-2 text-[10px] font-extrabold text-slate-300 uppercase tracking-widest">
-              Navigation Suite
-            </div>
-
-            {/* Tab 1: Dashboard Home */}
-            <button
-              onClick={() => handleTabChange('dashboard')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 group ${
-                currentTab === 'dashboard'
-                  ? 'bg-gradient-to-r from-sky-500/20 to-indigo-500/10 text-sky-300 border border-sky-500/30 shadow-md shadow-sky-500/10'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50 border border-transparent'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition ${
-                    currentTab === 'dashboard'
-                      ? 'bg-sky-500 text-slate-950 font-black shadow-sm shadow-sky-400/30'
-                      : 'bg-slate-800/80 text-slate-400 group-hover:text-white'
-                  }`}
-                >
-                  <LayoutDashboard className="w-4 h-4" />
-                </div>
-                <span>Dashboard</span>
-              </div>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                Live
-              </span>
-            </button>
-
-            {/* Tab 2: Projects */}
-            <button
-              onClick={() => handleTabChange('projects')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 group ${
-                currentTab === 'projects'
-                  ? 'bg-gradient-to-r from-sky-500/20 to-indigo-500/10 text-sky-300 border border-sky-500/30 shadow-md shadow-sky-500/10'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50 border border-transparent'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition ${
-                    currentTab === 'projects'
-                      ? 'bg-indigo-500 text-white font-black shadow-sm shadow-indigo-400/30'
-                      : 'bg-slate-800/80 text-slate-400 group-hover:text-white'
-                  }`}
-                >
-                  <FolderKanban className="w-4 h-4" />
-                </div>
-                <span>Projects</span>
-              </div>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-800 text-slate-400">
-                {users.length + templates.length}
-              </span>
-            </button>
-
-            {/* Tab 3: Users */}
-            <button
-              onClick={() => handleTabChange('users')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 group ${
-                currentTab === 'users'
-                  ? 'bg-gradient-to-r from-sky-500/20 to-indigo-500/10 text-sky-300 border border-sky-500/30 shadow-md shadow-sky-500/10'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50 border border-transparent'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition ${
-                    currentTab === 'users'
-                      ? 'bg-emerald-500 text-slate-950 font-black shadow-sm shadow-emerald-400/30'
-                      : 'bg-slate-800/80 text-slate-400 group-hover:text-white'
-                  }`}
-                >
-                  <Users className="w-4 h-4" />
-                </div>
-                <span>Users & Roles</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                <span className="text-[10px] font-semibold text-emerald-400">{onlineUsersCount}</span>
-              </div>
-            </button>
-
-            {/* Tab 4: 3D Catalog */}
-            <button
-              onClick={() => handleTabChange('catalog')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 group ${
-                currentTab === 'catalog'
-                  ? 'bg-gradient-to-r from-sky-500/20 to-indigo-500/10 text-sky-300 border border-sky-500/30 shadow-md shadow-sky-500/10'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50 border border-transparent'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition ${
-                    currentTab === 'catalog'
-                      ? 'bg-amber-500 text-slate-950 font-black shadow-sm shadow-amber-400/30'
-                      : 'bg-slate-800/80 text-slate-400 group-hover:text-white'
-                  }`}
-                >
-                  <Box className="w-4 h-4" />
-                </div>
-                <span>3D Catalog</span>
-              </div>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-800 text-slate-400">
-                {catalog.length}
-              </span>
-            </button>
-
-            {/* Tab 5: Multi Floor Levels */}
-            <button
-              onClick={() => handleTabChange('floors')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 group ${
-                currentTab === 'floors'
-                  ? 'bg-gradient-to-r from-sky-500/20 to-indigo-500/10 text-sky-300 border border-sky-500/30 shadow-md shadow-sky-500/10'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50 border border-transparent'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition ${
-                    currentTab === 'floors'
-                      ? 'bg-purple-500 text-white font-black shadow-sm shadow-purple-400/30'
-                      : 'bg-slate-800/80 text-slate-400 group-hover:text-white'
-                  }`}
-                >
-                  <Building className="w-4 h-4" />
-                </div>
-                <span>Multi Floor Levels</span>
-              </div>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-300 border border-purple-500/20">
-                {plan.floors?.length || 2} Floors
-              </span>
-            </button>
-          </div>
-
-          {/* Quick Studio Launch Banner */}
-          <div className="p-3 mx-3 mt-4 rounded-2xl bg-gradient-to-br from-slate-900 via-[#101c38] to-[#0d162d] border border-slate-800 p-3.5 shadow-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="p-1 rounded-md bg-sky-500/20 text-sky-400">
-                <Sparkles className="w-3.5 h-3.5" />
-              </span>
-              <span className="text-xs font-bold text-white">Active Studio</span>
-            </div>
-            <p className="text-[11px] text-slate-400 leading-snug mb-3">
-              Directly enter the 2D CAD blueprint & 3D photorealistic workspace.
-            </p>
-            <button
-              onClick={() => {
-                if (onSwitchToStudio) {
-                  onSwitchToStudio();
-                } else {
-                  onOpenStudioWithTemplate('duplex_2floor');
-                }
-              }}
-              className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-sky-500/25 transition-all flex items-center justify-center gap-2 active:scale-95"
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-              <span>Launch 3D Studio</span>
-            </button>
-          </div>
-        </div>
-
-        {/* User Profile & System Status Footer */}
-        <div className="p-3 border-t border-slate-800/80 bg-[#080e1b]">
-          <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900/60 border border-slate-800">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white text-xs font-black shrink-0">
-                {(currentUser?.name || 'Admin').substring(0, 2).toUpperCase()}
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-xs font-bold text-white truncate">
-                  {currentUser?.name || 'Administrator'}
-                </span>
-                <span className="text-[10px] text-slate-400 truncate">
-                  {currentUser?.email || 'admin@sweethome.io'}
-                </span>
-              </div>
-            </div>
-
-            {onLogout && (
-              <button
-                onClick={onLogout}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition"
-                title="Sign Out"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        </div>
-      </aside>
-
-      {/* ========================================================= */}
-      {/* 2. MAIN DASHBOARD CONTENT AREA */}
+      {/* FULL-WIDTH DASHBOARD CONTENT (NO SIDEBAR) */}
       {/* ========================================================= */}
       <main className="flex-1 flex flex-col overflow-y-auto bg-[#080f1e] custom-scrollbar select-none">
-        {/* Top Header Bar */}
-        <header className="h-16 border-b border-slate-800/80 bg-[#0a1224]/80 backdrop-blur-xl px-6 flex items-center justify-between sticky top-0 z-10">
+        {/* Top Header / Sub-Bar */}
+        <header className="h-14 border-b border-slate-800/80 bg-[#0a1224]/90 backdrop-blur-xl px-6 lg:px-8 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <h1 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
               {currentTab === 'dashboard' && 'Enterprise Architectural Dashboard'}
@@ -519,13 +299,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {currentTab === 'catalog' && '3D CAD Inventory & Element Catalog'}
               {currentTab === 'floors' && 'Multi-Floor Structural Hierarchy'}
             </h1>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-              v2.5 High Precision
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-sky-400 border border-slate-700">
+              v2.5 Full View
             </span>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Quick Actions */}
+            {/* Quick Action Buttons */}
             <button
               onClick={onOpenAddUserModal}
               className="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 text-xs font-semibold border border-slate-700/80 transition flex items-center gap-1.5 active:scale-95"
@@ -558,8 +338,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </header>
 
-        {/* Dynamic Tab Body */}
-        <div className="p-6 space-y-6 max-w-7xl mx-auto w-full">
+        {/* Dynamic Tab Body (Full Width Container) */}
+        <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
           {/* ========================================================= */}
           {/* TAB 1: INITIAL DASHBOARD HOME (GRAPHS, CHARTS, CARDS) */}
           {/* ========================================================= */}

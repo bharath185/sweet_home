@@ -809,7 +809,7 @@ export default function HomeStudioPage() {
   }
 
   return (
-    <div className="w-screen h-screen flex flex-col bg-slate-50 text-slate-900 overflow-hidden">
+    <div className="w-screen h-screen flex flex-col bg-[#080f1e] text-slate-100 overflow-hidden">
       {/* Top Navbar */}
       <Navbar
         plan={plan}
