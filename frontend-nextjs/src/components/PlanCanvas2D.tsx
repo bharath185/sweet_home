@@ -418,7 +418,11 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     ctx.globalAlpha = 1.0;
 
     // Multi-Floor Drawing Loop (Single Floor vs Side-by-Side)
-    const floorsToRender = canvasFloorMode === 'sideBySide' ? allFloors : [{ level: activeFloor, name: 'Active Floor', height: 250, elevation: 0 }];
+    const floorsToRender = canvasFloorMode === 'sideBySide' 
+      ? allFloors 
+      : (allFloors.filter((fl) => fl.level === activeFloor).length > 0 
+          ? allFloors.filter((fl) => fl.level === activeFloor) 
+          : [{ level: activeFloor, name: activeFloor === 0 ? 'Ground Floor (Living & Dining)' : '1st Floor (Master Suite & Terrace)', height: 250, elevation: activeFloor * 250 }]);
 
     // If Side-by-Side mode, draw architectural floor boundary plates
     if (canvasFloorMode === 'sideBySide') {
@@ -864,6 +868,95 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
         ctx.restore();
       });
+
+      // 10. Architectural Floor Placard Signboard in 2D
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      curRooms.forEach((r) => {
+        r.points.forEach((p) => {
+          minX = Math.min(minX, p.x);
+          maxX = Math.max(maxX, p.x);
+          minY = Math.min(minY, p.y);
+          maxY = Math.max(maxY, p.y);
+        });
+      });
+      curWalls.forEach((w) => {
+        minX = Math.min(minX, w.xStart, w.xEnd);
+        maxX = Math.max(maxX, w.xStart, w.xEnd);
+        minY = Math.min(minY, w.yStart, w.yEnd);
+        maxY = Math.max(maxY, w.yStart, w.yEnd);
+      });
+
+      if (minX === Infinity) {
+        minX = -350; maxX = 350; minY = -250; maxY = 250;
+      }
+
+      const centerX = (minX + maxX) / 2;
+      const placardPlanY = maxY + 70; // Positioned 70cm south of the floorplan boundary
+      const centerScreen = planToScreen(centerX, placardPlanY, flLevel);
+
+      const roomNames = curRooms.map((r) => r.name);
+      const floorTitle = flLevel === 0 ? `🏢 ${currentFloorObj.name.toUpperCase()}` : `🏡 ${currentFloorObj.name.toUpperCase()}`;
+      const subText =
+        roomNames.length > 0
+          ? roomNames.join('   •   ')
+          : `Floor Level ${flLevel} (Elevation: ${currentFloorObj.elevation || flLevel * 250}cm)`;
+
+      ctx.save();
+      ctx.translate(centerScreen.x, centerScreen.y);
+
+      // Placard Dimensions
+      const badgeW = Math.max(300, Math.min(460, floorTitle.length * 8.5 + 40));
+      const badgeH = 56;
+      const radius = 14;
+
+      // Drop Shadow
+      ctx.shadowColor = 'rgba(15, 23, 42, 0.22)';
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetY = 4;
+
+      // Gradient Fill
+      const grad = ctx.createLinearGradient(-badgeW / 2, -badgeH / 2, badgeW / 2, badgeH / 2);
+      if (flLevel === 0) {
+        grad.addColorStop(0, '#0284c7');
+        grad.addColorStop(1, '#0369a1');
+      } else if (flLevel === 1) {
+        grad.addColorStop(0, '#059669');
+        grad.addColorStop(1, '#047857');
+      } else {
+        grad.addColorStop(0, '#6366f1');
+        grad.addColorStop(1, '#4f46e5');
+      }
+      ctx.fillStyle = grad;
+
+      ctx.beginPath();
+      ctx.roundRect(-badgeW / 2, -badgeH / 2, badgeW, badgeH, radius);
+      ctx.fill();
+
+      // Reset Shadow for crisp borders and text
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+
+      // White Border Outline
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(-badgeW / 2, -badgeH / 2, badgeW, badgeH, radius);
+      ctx.stroke();
+
+      // Main Floor Title Text
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(floorTitle, 0, -10);
+
+      // Subtitle (Room names & Details)
+      ctx.fillStyle = '#f0fdf4';
+      ctx.font = '500 10.5px system-ui, -apple-system, sans-serif';
+      ctx.fillText(subText, 0, 11);
+
+      ctx.restore();
     });
 
     // 10.5. Real-Time Virtual Visitor Person Position & FOV Vision Cone
