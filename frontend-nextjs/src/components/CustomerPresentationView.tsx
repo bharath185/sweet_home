@@ -56,44 +56,13 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
 }) => {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(plan.rooms[0] || null);
   const [showSpecDrawer, setShowSpecDrawer] = useState<boolean>(false);
-  const [showAddDrawer, setShowAddDrawer] = useState<boolean>(false);
   const [consultationBooked, setConsultationBooked] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const selectedFurniture = plan.furniture.find((f) => f.id === selectedId);
   const isSelectedColliding = selectedFurniture ? collidingItemIds.has(selectedFurniture.id) : false;
 
-  // Add Item
-  const handleClientAddItem = (item: CatalogItem) => {
-    const newItem: FurnitureItem = {
-      id: `client_f_${Date.now()}`,
-      catalogId: item.id,
-      name: item.name,
-      category: item.category,
-      x: 0,
-      y: 0,
-      elevation: 0,
-      angle: 0,
-      width: item.width,
-      depth: item.depth,
-      height: item.height,
-      model: item.model,
-      icon: item.icon,
-      color: item.defaultColor,
-      floorLevel: activeFloor,
-      isVisible: true,
-      isLocked: false,
-    };
-
-    onUpdatePlan({
-      ...plan,
-      furniture: [...plan.furniture, newItem],
-      updatedAt: new Date().toISOString(),
-    });
-    setSelectedId(newItem.id);
-  };
-
-  // Delete Item
+  // Delete Item (if client wants to remove an unwanted item)
   const handleDeleteFurniture = (id: string) => {
     const item = plan.furniture.find((f) => f.id === id);
     if (item?.isLocked) {
@@ -157,27 +126,27 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
     });
   };
 
-  // Duplicate Item
+  // Duplicate Selected Item
   const duplicateSelected = () => {
     if (!selectedFurniture) return;
-    const copy: FurnitureItem = {
+    const duplicated: FurnitureItem = {
       ...selectedFurniture,
-      id: `client_f_${Date.now()}`,
+      id: 'f_' + Math.random().toString(36).substr(2, 9),
       name: `${selectedFurniture.name} (Copy)`,
       x: selectedFurniture.x + 30,
       y: selectedFurniture.y + 30,
     };
     onUpdatePlan({
       ...plan,
-      furniture: [...plan.furniture, copy],
+      furniture: [...plan.furniture, duplicated],
       updatedAt: new Date().toISOString(),
     });
-    setSelectedId(copy.id);
+    setSelectedId(duplicated.id);
   };
 
   return (
-    <div className="relative w-full h-full bg-slate-100 flex flex-col overflow-hidden select-none">
-      {/* 3D WebGL Fullscreen Viewport */}
+    <div className="relative w-full h-full bg-slate-900 flex flex-col overflow-hidden select-none">
+      {/* 3D WebGL Fullscreen Viewport in First-Person Human Visitor Mode */}
       <div className="absolute inset-0">
         <Viewport3D
           plan={plan}
@@ -190,21 +159,21 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
         />
       </div>
 
-      {/* Top Customer Header Bar */}
+      {/* Top Virtual Tour Header Bar */}
       <header className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
         <div className="pointer-events-auto bg-white/95 px-4 py-2.5 rounded-2xl shadow-md flex items-center gap-3 border border-slate-200 backdrop-blur-xl">
-          <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-600/20">
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-bold text-slate-900 tracking-tight">{plan.name}</h1>
               <span className="text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Interactive Client Customizer
+                🚶 Human Eye-Level Tour (165 cm)
               </span>
             </div>
             <p className="text-[11px] text-slate-500">
-              {plan.rooms.length} Rooms • {plan.furniture.length} Pieces • Click any 3D piece to move/rotate/delete
+              WASD / Arrow Keys to walk • Drag mouse to look around • Click pieces to customize finish
             </p>
           </div>
         </div>
@@ -212,25 +181,7 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
         {/* Action Controls */}
         <div className="pointer-events-auto flex items-center gap-2">
           <button
-            onClick={() => {
-              setShowAddDrawer(!showAddDrawer);
-              setShowSpecDrawer(false);
-            }}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold backdrop-blur-xl border transition shadow-xs ${
-              showAddDrawer
-                ? 'bg-sky-600 text-white border-sky-700 shadow-sm'
-                : 'bg-white/95 text-slate-700 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Furniture</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setShowSpecDrawer(!showSpecDrawer);
-              setShowAddDrawer(false);
-            }}
+            onClick={() => setShowSpecDrawer(!showSpecDrawer)}
             className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold backdrop-blur-xl border transition shadow-xs ${
               showSpecDrawer
                 ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
@@ -246,7 +197,7 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/95 hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-xs border border-slate-200 transition"
           >
             <Share2 className="w-4 h-4 text-sky-600" />
-            <span>Share</span>
+            <span>Share 3D</span>
           </button>
 
           <button
@@ -536,45 +487,6 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
               <Trash2 className="w-3.5 h-3.5" />
               <span>Delete Item</span>
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Client Item Placement Drawer */}
-      {showAddDrawer && (
-        <div className="absolute top-20 right-4 bottom-24 w-84 bg-white/95 border border-slate-200 rounded-2xl shadow-xl z-20 flex flex-col overflow-hidden animate-in slide-in-from-right duration-200 backdrop-blur-xl">
-          <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-              Add Furniture to Layout
-            </h3>
-            <span className="text-xs text-sky-600 font-mono font-bold">
-              Click to Place
-            </span>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-3.5 grid grid-cols-2 gap-2.5 custom-scrollbar">
-            {catalog.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => handleClientAddItem(item)}
-                className="bg-slate-50 hover:bg-white border border-slate-200 hover:border-sky-300 rounded-xl p-2.5 flex flex-col items-center justify-between cursor-pointer transition active:scale-95 text-center group shadow-2xs hover:shadow-xs"
-              >
-                <div className="w-14 h-14 bg-white rounded-lg flex items-center justify-center p-1.5 mb-1.5 border border-slate-200 group-hover:border-sky-200 transition">
-                  {item.icon ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.icon} alt={item.name} className="max-w-full max-h-full object-contain drop-shadow" />
-                  ) : (
-                    <Layers className="w-6 h-6 text-slate-400" />
-                  )}
-                </div>
-                <div className="text-[11px] font-semibold text-slate-900 truncate w-full group-hover:text-sky-600 transition">
-                  {item.name}
-                </div>
-                <div className="text-[9px] text-slate-500 font-mono mt-0.5">
-                  {Math.round(item.width)}×{Math.round(item.depth)}cm
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       )}

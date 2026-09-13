@@ -131,6 +131,25 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     }
   }, [plan.blueprint?.url, plan.blueprint?.isVisible]);
 
+  // Multi-Floor Canvas Mode: 'single' (Focus on active floor) | 'sideBySide' (Show Floor 1 & Floor 2 side-by-side)
+  const [canvasFloorMode, setCanvasFloorMode] = useState<'single' | 'sideBySide'>('single');
+  const allFloors = plan.floors && plan.floors.length > 0 ? plan.floors : [
+    { level: 0, name: 'Ground Floor', height: 250, elevation: 0 },
+    { level: 1, name: '1st Floor', height: 250, elevation: 250 },
+  ];
+
+  const FLOOR_SPACING_CM = 900;
+  const getFloorOffset = useCallback(
+    (lvl: number = 0) => {
+      if (canvasFloorMode === 'single') return { x: 0, y: 0 };
+      const floorIdx = allFloors.findIndex((fl) => fl.level === lvl);
+      const validIdx = floorIdx >= 0 ? floorIdx : 0;
+      const mid = (allFloors.length - 1) / 2;
+      return { x: (validIdx - mid) * FLOOR_SPACING_CM, y: 0 };
+    },
+    [canvasFloorMode, allFloors]
+  );
+
   // Convert Screen pixel coordinates to Plan (cm) coordinates
   const screenToPlan = useCallback(
     (clientX: number, clientY: number, bypassSnap: boolean = false) => {
@@ -139,8 +158,18 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       const centerX = rect.width / 2 + panOffset.x;
       const centerY = rect.height / 2 + panOffset.y;
 
-      let x = (clientX - rect.left - centerX) / scale;
-      let y = (clientY - rect.top - centerY) / scale;
+      let rawX = (clientX - rect.left - centerX) / scale;
+      let rawY = (clientY - rect.top - centerY) / scale;
+
+      // In side-by-side mode, subtract the active floor offset
+      if (canvasFloorMode === 'sideBySide') {
+        const offset = getFloorOffset(activeFloor);
+        rawX -= offset.x;
+        rawY -= offset.y;
+      }
+
+      let x = rawX;
+      let y = rawY;
 
       if (snapToGrid && !bypassSnap) {
         x = Math.round(x / GRID_SIZE_CM) * GRID_SIZE_CM;
@@ -149,23 +178,24 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
       return { x, y };
     },
-    [scale, panOffset, snapToGrid, GRID_SIZE_CM]
+    [scale, panOffset, snapToGrid, GRID_SIZE_CM, canvasFloorMode, activeFloor, getFloorOffset]
   );
 
-  // Convert Plan (cm) coordinates to Screen pixel coordinates
+  // Convert Plan (cm) coordinates to Screen pixel coordinates (with optional floor level offset)
   const planToScreen = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, floorLvl?: number) => {
       if (!canvasRef.current) return { x: 0, y: 0 };
       const rect = canvasRef.current.getBoundingClientRect();
       const centerX = rect.width / 2 + panOffset.x;
       const centerY = rect.height / 2 + panOffset.y;
+      const offset = floorLvl !== undefined ? getFloorOffset(floorLvl) : { x: 0, y: 0 };
 
       return {
-        x: centerX + x * scale,
-        y: centerY + y * scale,
+        x: centerX + (x + offset.x) * scale,
+        y: centerY + (y + offset.y) * scale,
       };
     },
-    [scale, panOffset]
+    [scale, panOffset, getFloorOffset]
   );
 
   // Filter items for current floor
@@ -334,372 +364,372 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     ctx.stroke();
     ctx.globalAlpha = 1.0;
 
-    // 3. Draw Rooms
-    floorRooms.forEach((room) => {
-      if (room.points.length < 3) return;
-      ctx.fillStyle = 'rgba(14, 165, 233, 0.06)';
-      ctx.strokeStyle = 'rgba(14, 165, 233, 0.35)';
-      ctx.lineWidth = 1.2;
+    // Multi-Floor Drawing Loop (Single Floor vs Side-by-Side)
+    const floorsToRender = canvasFloorMode === 'sideBySide' ? allFloors : [{ level: activeFloor, name: 'Active Floor', height: 250, elevation: 0 }];
 
-      ctx.beginPath();
-      const p0 = planToScreen(room.points[0].x, room.points[0].y);
-      ctx.moveTo(p0.x, p0.y);
-      for (let i = 1; i < room.points.length; i++) {
-        const p = planToScreen(room.points[i].x, room.points[i].y);
-        ctx.lineTo(p.x, p.y);
-      }
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+    // If Side-by-Side mode, draw architectural floor boundary plates
+    if (canvasFloorMode === 'sideBySide') {
+      allFloors.forEach((fl) => {
+        const isCurActive = activeFloor === fl.level;
+        const boxW = 820 * scale;
+        const boxH = 680 * scale;
+        const centerScreen = planToScreen(0, 0, fl.level);
 
-      const avgX = room.points.reduce((acc, p) => acc + p.x, 0) / room.points.length;
-      const avgY = room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length;
-      const screenAvg = planToScreen(avgX, avgY);
-
-      ctx.font = '600 12px system-ui, sans-serif';
-      ctx.fillStyle = '#334155';
-      ctx.textAlign = 'center';
-      ctx.fillText(room.name, screenAvg.x, screenAvg.y - 8);
-      ctx.font = 'bold 10px monospace';
-      ctx.fillStyle = '#64748b';
-      ctx.fillText(formatArea(room.areaSquareMeters || 12.5, unit), screenAvg.x, screenAvg.y + 8);
-    });
-
-    // 4. Draw Walls
-    floorWalls.forEach((wall) => {
-      const p1 = planToScreen(wall.xStart, wall.yStart);
-      const p2 = planToScreen(wall.xEnd, wall.yEnd);
-      const isSelected = selectedId === wall.id;
-
-      ctx.save();
-      // Outer wall rendering
-      ctx.strokeStyle = isSelected ? '#38bdf8' : wall.color || '#e2e8f0';
-      ctx.lineWidth = Math.max(3, wall.thickness * scale);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
-
-      // Inner architectural core line
-      ctx.strokeStyle = isSelected ? '#0284c7' : '#94a3b8';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
-      ctx.restore();
-
-      // Wall Length dimension label
-      const lengthCm = Math.round(
-        Math.hypot(wall.xEnd - wall.xStart, wall.yEnd - wall.yStart)
-      );
-      const midX = (p1.x + p2.x) / 2;
-      const midY = (p1.y + p2.y) / 2;
-
-      ctx.font = 'bold 10px monospace';
-      ctx.fillStyle = isSelected ? '#38bdf8' : '#cbd5e1';
-      ctx.textAlign = 'center';
-      ctx.fillText(formatDistance(lengthCm, unit), midX, midY - 8);
-
-      // If Wall is selected, draw vertex adjustment handles
-      if (isSelected) {
-        // Start Vertex Handle
         ctx.save();
-        ctx.fillStyle = '#38bdf8';
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(p1.x, p1.y, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+        // Floor plate boundary
+        ctx.fillStyle = isCurActive ? 'rgba(2, 132, 199, 0.02)' : 'rgba(241, 245, 249, 0.4)';
+        ctx.fillRect(centerScreen.x - boxW / 2, centerScreen.y - boxH / 2, boxW, boxH);
 
-        // End Vertex Handle
-        ctx.beginPath();
-        ctx.arc(p2.x, p2.y, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+        ctx.strokeStyle = isCurActive ? '#0284c7' : '#cbd5e1';
+        ctx.lineWidth = isCurActive ? 2 : 1;
+        ctx.setLineDash(isCurActive ? [] : [6, 4]);
+        ctx.strokeRect(centerScreen.x - boxW / 2, centerScreen.y - boxH / 2, boxW, boxH);
 
-        // Glowing outer rings
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(p1.x, p1.y, 11, 0, Math.PI * 2);
-        ctx.arc(p2.x, p2.y, 11, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
-    });
-
-    // 5. Draw Active Wall Preview
-    if (toolMode === 'drawWall' && wallStart) {
-      const p1 = planToScreen(wallStart.x, wallStart.y);
-      const p2 = planToScreen(mouseCanvasPos.x, mouseCanvasPos.y);
-
-      ctx.save();
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = (plan.preferences?.defaultWallThickness || 15) * scale;
-      ctx.lineCap = 'round';
-      ctx.setLineDash([6, 6]);
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
-
-      const previewLen = Math.round(
-        Math.hypot(mouseCanvasPos.x - wallStart.x, mouseCanvasPos.y - wallStart.y)
-      );
-      ctx.font = 'bold 11px monospace';
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillText(formatDistance(previewLen, unit), (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 8);
-      ctx.restore();
-    }
-
-    // 6. Draw Dimension Lines
-    floorDimensionLines.forEach((dim) => {
-      const p1 = planToScreen(dim.xStart, dim.yStart);
-      const p2 = planToScreen(dim.xEnd, dim.yEnd);
-      const dist = Math.hypot(dim.xEnd - dim.xStart, dim.yEnd - dim.yStart);
-
-      ctx.save();
-      ctx.strokeStyle = '#38bdf8';
-      ctx.fillStyle = '#38bdf8';
-      ctx.lineWidth = 1.2;
-
-      // Line
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
-
-      // Tick markers at ends
-      ctx.beginPath();
-      ctx.arc(p1.x, p1.y, 3, 0, Math.PI * 2);
-      ctx.arc(p2.x, p2.y, 3, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Text label
-      ctx.font = 'bold 10px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(dim.text || formatDistance(dist, unit), (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 6);
-      ctx.restore();
-    });
-
-    // 7. Draw Active Dimension Preview
-    if (toolMode === 'dimension' && dimStart) {
-      const p1 = planToScreen(dimStart.x, dimStart.y);
-      const p2 = planToScreen(mouseCanvasPos.x, mouseCanvasPos.y);
-      const dist = Math.hypot(mouseCanvasPos.x - dimStart.x, mouseCanvasPos.y - dimStart.y);
-
-      ctx.save();
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
-
-      ctx.font = 'bold 11px monospace';
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillText(formatDistance(dist, unit), (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 8);
-      ctx.restore();
-    }
-
-    // 8. Draw Contractor Text Notes
-    floorTextNotes.forEach((note) => {
-      const p = planToScreen(note.x, note.y);
-      ctx.save();
-      ctx.font = 'bold 11px system-ui, sans-serif';
-      ctx.fillStyle = note.color || '#fef08a';
-      ctx.textAlign = 'center';
-      ctx.fillText(`📌 ${note.text}`, p.x, p.y);
-      ctx.restore();
-    });
-
-    // 9. Draw Furniture Items with Architectural Details & Collision Red Glow
-    floorFurniture.forEach((item) => {
-      const pos = planToScreen(item.x, item.y);
-      const isSelected = selectedId === item.id;
-      const isColliding = collidingItemIds.has(item.id);
-      const isLocked = item.isLocked;
-      const w = item.width * scale;
-      const d = item.depth * scale;
-      const cat = (item.category || '').toLowerCase();
-      const itemName = (item.name || '').toLowerCase();
-
-      ctx.save();
-      ctx.translate(pos.x, pos.y);
-      ctx.rotate(item.angle || 0);
-
-      if (isColliding) {
-        ctx.shadowColor = '#ef4444';
-        ctx.shadowBlur = 16;
-        ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
-        ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 2.5;
-        ctx.setLineDash([4, 2]);
-      } else {
-        ctx.fillStyle = item.color
-          ? item.color + (isSelected ? 'dd' : 'ff')
-          : isSelected
-          ? 'rgba(14, 165, 233, 0.35)'
-          : cat.includes('door') || cat.includes('window')
-          ? 'rgba(234, 179, 8, 0.45)'
-          : '#e2e8f0';
-
-        ctx.strokeStyle = isSelected
-          ? '#0284c7'
-          : cat.includes('door') || cat.includes('window')
-          ? '#d97706'
-          : '#64748b';
-
-        ctx.lineWidth = isSelected ? 2.5 : 1.5;
-      }
-
-      // Base Body
-      ctx.fillRect(-w / 2, -d / 2, w, d);
-      ctx.strokeRect(-w / 2, -d / 2, w, d);
-
-      // Architectural Details for specific types
-      ctx.save();
-      ctx.strokeStyle = isColliding ? '#ef4444' : isSelected ? '#0284c7' : '#64748b';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([]);
-
-      if (cat.includes('sofa') || cat.includes('living') || itemName.includes('sofa') || itemName.includes('chair')) {
-        // Armrests & cushions
-        const armW = Math.min(w * 0.15, 12);
-        const backD = Math.min(d * 0.2, 14);
-        ctx.strokeRect(-w / 2, -d / 2, armW, d);
-        ctx.strokeRect(w / 2 - armW, -d / 2, armW, d);
-        ctx.strokeRect(-w / 2 + armW, -d / 2, w - 2 * armW, backD);
-      } else if (cat.includes('bed') || itemName.includes('bed')) {
-        // Pillows & fold line
-        const pillowW = Math.min(w * 0.35, 24);
-        const pillowD = Math.min(d * 0.2, 16);
-        ctx.strokeRect(-w / 2 + 4, -d / 2 + 4, pillowW, pillowD);
-        ctx.strokeRect(w / 2 - 4 - pillowW, -d / 2 + 4, pillowW, pillowD);
-        // Duvet line
-        ctx.beginPath();
-        ctx.moveTo(-w / 2, d * 0.1);
-        ctx.lineTo(w / 2, d * 0.1);
-        ctx.stroke();
-      } else if (cat.includes('door') || itemName.includes('door')) {
-        // Door swing arc
-        ctx.strokeStyle = '#d97706';
-        ctx.lineWidth = 1.2;
-        ctx.setLineDash([3, 3]);
-        ctx.beginPath();
-        ctx.arc(-w / 2, d / 2, w, -Math.PI / 2, 0);
-        ctx.stroke();
-      } else if (cat.includes('light') || itemName.includes('light') || itemName.includes('lamp')) {
-        // Radial light glow
-        ctx.fillStyle = 'rgba(234, 179, 8, 0.2)';
-        ctx.beginPath();
-        ctx.arc(0, 0, Math.max(w, d), 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-
-      // Orientation marker / arrow
-      ctx.strokeStyle = isColliding ? '#ef4444' : isSelected ? '#0284c7' : '#64748b';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(0, -d / 2 + 4);
-      ctx.stroke();
-
-      // Label
-      if (scale > 0.4) {
-        ctx.font = isColliding ? 'bold 10px system-ui' : 'bold 10px system-ui, sans-serif';
-        ctx.fillStyle = isColliding ? '#991b1b' : isSelected ? '#0369a1' : '#1e293b';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(item.name, 0, 0);
-      }
-
-      // Collision Icon Badge
-      if (isColliding) {
-        ctx.fillStyle = '#dc2626';
-        ctx.beginPath();
-        ctx.arc(w / 2 - 4, -d / 2 + 4, 6, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 9px monospace';
-        ctx.fillText('!', w / 2 - 4, -d / 2 + 4);
-      }
-
-      // Tabletop Attachment Badge
-      if (isTabletopItem(item)) {
-        ctx.save();
-        const isOnTable = (item.elevation || 0) > 0;
-        ctx.fillStyle = isOnTable ? 'rgba(2, 132, 199, 0.9)' : 'rgba(220, 38, 38, 0.9)';
-        ctx.font = 'bold 8px system-ui, sans-serif';
+        // Floor Header Tag
+        ctx.setLineDash([]);
+        ctx.fillStyle = isCurActive ? '#0284c7' : '#475569';
+        ctx.font = 'bold 12px system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(
-          isOnTable ? `▲ TABLETOP (+${Math.round(item.elevation || 0)}cm)` : '⚠️ RESTRICTED (NEEDS TABLE)',
-          0,
-          d / 2 + 12
+          `LEVEL ${fl.level}: ${fl.name.toUpperCase()} (Height: ${fl.height || 250}cm)`,
+          centerScreen.x,
+          centerScreen.y - boxH / 2 - 12
         );
+
+        // Active Floor Indicator
+        if (isCurActive) {
+          ctx.fillStyle = '#0284c7';
+          ctx.font = 'bold 9px system-ui, sans-serif';
+          ctx.fillText('● ACTIVE SELECTED FLOOR', centerScreen.x, centerScreen.y - boxH / 2 + 16);
+        }
         ctx.restore();
-      }
+      });
+    }
 
-      // Lock Icon Badge
-      if (isLocked) {
-        ctx.fillStyle = '#d97706';
-        ctx.font = '10px system-ui';
-        ctx.fillText('🔒', -w / 2 + 10, -d / 2 + 10);
-      }
+    floorsToRender.forEach((currentFloorObj) => {
+      const flLevel = currentFloorObj.level;
+      const curRooms = plan.rooms.filter((r) => (r.floorLevel ?? 0) === flLevel);
+      const curWalls = plan.walls.filter((w) => (w.floorLevel ?? 0) === flLevel);
+      const curFurniture = plan.furniture.filter((f) => (f.floorLevel ?? 0) === flLevel && f.isVisible !== false);
+      const curDimensions = (plan.dimensionLines || []).filter((d) => (d.floorLevel ?? 0) === flLevel);
+      const curNotes = (plan.textNotes || []).filter((t) => (t.floorLevel ?? 0) === flLevel);
 
-      // 8 Bounding Box Resize Handles + Rotation Stem Handle
-      if (isSelected && !isLocked) {
-        const handleDist = d / 2 + 20;
-        ctx.strokeStyle = isColliding ? '#ef4444' : '#0284c7';
-        ctx.lineWidth = 1.5;
+      // 3. Draw Rooms
+      curRooms.forEach((room) => {
+        if (room.points.length < 3) return;
+        ctx.fillStyle = 'rgba(14, 165, 233, 0.06)';
+        ctx.strokeStyle = 'rgba(14, 165, 233, 0.35)';
+        ctx.lineWidth = 1.2;
+
         ctx.beginPath();
-        ctx.moveTo(0, -d / 2);
-        ctx.lineTo(0, -handleDist);
-        ctx.stroke();
-
-        // Rotation Handle Knob
-        ctx.fillStyle = isColliding ? '#ef4444' : '#0284c7';
-        ctx.beginPath();
-        ctx.arc(0, -handleDist, 6, 0, Math.PI * 2);
+        const p0 = planToScreen(room.points[0].x, room.points[0].y, flLevel);
+        ctx.moveTo(p0.x, p0.y);
+        for (let i = 1; i < room.points.length; i++) {
+          const p = planToScreen(room.points[i].x, room.points[i].y, flLevel);
+          ctx.lineTo(p.x, p.y);
+        }
+        ctx.closePath();
         ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // 8 Resize Handles: [NW, N, NE, E, SE, S, SW, W]
-        const handles: [number, number][] = [
-          [-w / 2, -d / 2], // NW
-          [0, -d / 2],      // N
-          [w / 2, -d / 2],  // NE
-          [w / 2, 0],       // E
-          [w / 2, d / 2],   // SE
-          [0, d / 2],       // S
-          [-w / 2, d / 2],  // SW
-          [-w / 2, 0],      // W
-        ];
+        const avgX = room.points.reduce((acc, p) => acc + p.x, 0) / room.points.length;
+        const avgY = room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length;
+        const screenAvg = planToScreen(avgX, avgY, flLevel);
 
-        handles.forEach(([hx, hy]) => {
+        ctx.font = '600 12px system-ui, sans-serif';
+        ctx.fillStyle = '#334155';
+        ctx.textAlign = 'center';
+        ctx.fillText(room.name, screenAvg.x, screenAvg.y - 8);
+        ctx.font = 'bold 10px monospace';
+        ctx.fillStyle = '#64748b';
+        ctx.fillText(formatArea(room.areaSquareMeters || 12.5, unit), screenAvg.x, screenAvg.y + 8);
+      });
+
+      // 4. Draw Walls
+      curWalls.forEach((wall) => {
+        const p1 = planToScreen(wall.xStart, wall.yStart, flLevel);
+        const p2 = planToScreen(wall.xEnd, wall.yEnd, flLevel);
+        const isSelected = selectedId === wall.id;
+
+        ctx.save();
+        ctx.strokeStyle = isSelected ? '#38bdf8' : wall.color || '#e2e8f0';
+        ctx.lineWidth = Math.max(3, wall.thickness * scale);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+
+        ctx.strokeStyle = isSelected ? '#0284c7' : '#94a3b8';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+        ctx.restore();
+
+        const lengthCm = Math.round(
+          Math.hypot(wall.xEnd - wall.xStart, wall.yEnd - wall.yStart)
+        );
+        const midX = (p1.x + p2.x) / 2;
+        const midY = (p1.y + p2.y) / 2;
+
+        ctx.font = 'bold 10px monospace';
+        ctx.fillStyle = isSelected ? '#38bdf8' : '#cbd5e1';
+        ctx.textAlign = 'center';
+        ctx.fillText(formatDistance(lengthCm, unit), midX, midY - 8);
+
+        if (isSelected) {
+          ctx.save();
+          ctx.fillStyle = '#38bdf8';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(p1.x, p1.y, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(p2.x, p2.y, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+      });
+
+      // 6. Draw Dimension Lines
+      curDimensions.forEach((dim) => {
+        const p1 = planToScreen(dim.xStart, dim.yStart, flLevel);
+        const p2 = planToScreen(dim.xEnd, dim.yEnd, flLevel);
+        const dist = Math.hypot(dim.xEnd - dim.xStart, dim.yEnd - dim.yStart);
+
+        ctx.save();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.fillStyle = '#38bdf8';
+        ctx.lineWidth = 1.2;
+
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(p1.x, p1.y, 3, 0, Math.PI * 2);
+        ctx.arc(p2.x, p2.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(dim.text || formatDistance(dist, unit), (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 6);
+        ctx.restore();
+      });
+
+      // 8. Draw Contractor Text Notes
+      curNotes.forEach((note) => {
+        const p = planToScreen(note.x, note.y, flLevel);
+        ctx.save();
+        ctx.font = 'bold 11px system-ui, sans-serif';
+        ctx.fillStyle = note.color || '#fef08a';
+        ctx.textAlign = 'center';
+        ctx.fillText(`📌 ${note.text}`, p.x, p.y);
+        ctx.restore();
+      });
+
+      // 9. Draw Furniture & Ceiling Items
+      curFurniture.forEach((item) => {
+        const pos = planToScreen(item.x, item.y, flLevel);
+        const isSelected = selectedId === item.id;
+        const isColliding = collidingItemIds.has(item.id);
+        const isLocked = item.isLocked;
+        const isCeiling = item.placementType === 'ceiling' || (item.category || '').toLowerCase().includes('ceiling');
+        const w = item.width * scale;
+        const d = item.depth * scale;
+        const cat = (item.category || '').toLowerCase();
+        const itemName = (item.name || '').toLowerCase();
+
+        ctx.save();
+        ctx.translate(pos.x, pos.y);
+        ctx.rotate(item.angle || 0);
+
+        if (isColliding) {
+          ctx.shadowColor = '#ef4444';
+          ctx.shadowBlur = 16;
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([4, 2]);
+        } else {
+          ctx.fillStyle = item.color
+            ? item.color + (isSelected ? 'dd' : 'ff')
+            : isSelected
+            ? 'rgba(14, 165, 233, 0.35)'
+            : isCeiling
+            ? 'rgba(245, 158, 11, 0.25)'
+            : cat.includes('door') || cat.includes('window')
+            ? 'rgba(234, 179, 8, 0.45)'
+            : '#e2e8f0';
+
+          ctx.strokeStyle = isSelected
+            ? '#0284c7'
+            : isCeiling
+            ? '#d97706'
+            : cat.includes('door') || cat.includes('window')
+            ? '#d97706'
+            : '#64748b';
+
+          ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        }
+
+        ctx.fillRect(-w / 2, -d / 2, w, d);
+        ctx.strokeRect(-w / 2, -d / 2, w, d);
+
+        ctx.save();
+        ctx.strokeStyle = isColliding ? '#ef4444' : isSelected ? '#0284c7' : '#64748b';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+
+        if (cat.includes('sofa') || cat.includes('living') || itemName.includes('sofa') || itemName.includes('chair')) {
+          const armW = Math.min(w * 0.15, 12);
+          const backD = Math.min(d * 0.2, 14);
+          ctx.strokeRect(-w / 2, -d / 2, armW, d);
+          ctx.strokeRect(w / 2 - armW, -d / 2, armW, d);
+          ctx.strokeRect(-w / 2 + armW, -d / 2, w - 2 * armW, backD);
+        } else if (cat.includes('bed') || itemName.includes('bed')) {
+          const pillowW = Math.min(w * 0.35, 24);
+          const pillowD = Math.min(d * 0.2, 16);
+          ctx.strokeRect(-w / 2 + 4, -d / 2 + 4, pillowW, pillowD);
+          ctx.strokeRect(w / 2 - 4 - pillowW, -d / 2 + 4, pillowW, pillowD);
+          ctx.beginPath();
+          ctx.moveTo(-w / 2, d * 0.1);
+          ctx.lineTo(w / 2, d * 0.1);
+          ctx.stroke();
+        } else if (cat.includes('door') || itemName.includes('door')) {
+          ctx.strokeStyle = '#d97706';
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.arc(-w / 2, d / 2, w, -Math.PI / 2, 0);
+          ctx.stroke();
+        } else if (cat.includes('light') || itemName.includes('light') || itemName.includes('lamp') || isCeiling) {
+          ctx.fillStyle = 'rgba(234, 179, 8, 0.2)';
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.max(w, d), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+
+        // Orientation marker
+        ctx.strokeStyle = isColliding ? '#ef4444' : isSelected ? '#0284c7' : '#64748b';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -d / 2 + 4);
+        ctx.stroke();
+
+        if (scale > 0.4) {
+          ctx.font = isColliding ? 'bold 10px system-ui' : 'bold 10px system-ui, sans-serif';
+          ctx.fillStyle = isColliding ? '#991b1b' : isSelected ? '#0369a1' : '#1e293b';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(item.name, 0, 0);
+        }
+
+        if (isColliding) {
+          ctx.fillStyle = '#dc2626';
+          ctx.beginPath();
+          ctx.arc(w / 2 - 4, -d / 2 + 4, 6, 0, Math.PI * 2);
+          ctx.fill();
           ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px monospace';
+          ctx.fillText('!', w / 2 - 4, -d / 2 + 4);
+        }
+
+        if (isTabletopItem(item)) {
+          ctx.save();
+          const isOnTable = (item.elevation || 0) > 0;
+          ctx.fillStyle = isOnTable ? 'rgba(2, 132, 199, 0.9)' : 'rgba(220, 38, 38, 0.9)';
+          ctx.font = 'bold 8px system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(
+            isOnTable ? `▲ TABLETOP (+${Math.round(item.elevation || 0)}cm)` : '⚠️ RESTRICTED (NEEDS TABLE)',
+            0,
+            d / 2 + 12
+          );
+          ctx.restore();
+        }
+
+        if (isCeiling) {
+          ctx.save();
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([3, 2]);
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.max(w, d) / 2 + 4, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.fillStyle = 'rgba(217, 119, 6, 0.95)';
+          ctx.font = 'bold 8px system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(
+            `▼ CEILING (${Math.round(item.elevation || 220)}cm)`,
+            0,
+            d / 2 + (isTabletopItem(item) ? 22 : 12)
+          );
+          ctx.restore();
+        }
+
+        if (isLocked) {
+          ctx.fillStyle = '#d97706';
+          ctx.font = '10px system-ui';
+          ctx.fillText('🔒', -w / 2 + 10, -d / 2 + 10);
+        }
+
+        // Handles
+        if (isSelected && !isLocked) {
+          const handleDist = d / 2 + 20;
           ctx.strokeStyle = isColliding ? '#ef4444' : '#0284c7';
           ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.rect(hx - 4, hy - 4, 8, 8);
-          ctx.fill();
+          ctx.moveTo(0, -d / 2);
+          ctx.lineTo(0, -handleDist);
           ctx.stroke();
-        });
-      }
 
-      ctx.restore();
+          ctx.fillStyle = isColliding ? '#ef4444' : '#0284c7';
+          ctx.beginPath();
+          ctx.arc(0, -handleDist, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          const handles: [number, number][] = [
+            [-w / 2, -d / 2],
+            [0, -d / 2],
+            [w / 2, -d / 2],
+            [w / 2, 0],
+            [w / 2, d / 2],
+            [0, d / 2],
+            [-w / 2, d / 2],
+            [-w / 2, 0],
+          ];
+
+          handles.forEach(([hx, hy]) => {
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = isColliding ? '#ef4444' : '#0284c7';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.rect(hx - 4, hy - 4, 8, 8);
+            ctx.fill();
+            ctx.stroke();
+          });
+        }
+
+        ctx.restore();
+      });
     });
 
     // 10. Magnetic Snap Beacon Indicator
@@ -1321,25 +1351,45 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         </button>
       </div>
 
-      {/* Floor Selector at Top Center */}
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-md">
-        {(plan.floors || [
-          { level: 0, name: 'Ground Floor' },
-          { level: 1, name: '1st Floor' },
-        ]).map((fl) => (
-          <button
-            key={fl.level}
-            onClick={() => onFloorChange && onFloorChange(fl.level)}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
-              activeFloor === fl.level
-                ? 'bg-sky-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Building className="w-3 h-3" />
-            <span>{fl.name}</span>
-          </button>
-        ))}
+      {/* Floor Selector & Multi-Floor Side-by-Side View at Top Center */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-xl border border-slate-200 shadow-md">
+        <div className="flex items-center gap-1">
+          {(plan.floors || [
+            { level: 0, name: 'Ground Floor' },
+            { level: 1, name: '1st Floor' },
+          ]).map((fl) => (
+            <button
+              key={fl.level}
+              onClick={() => onFloorChange && onFloorChange(fl.level)}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
+                activeFloor === fl.level
+                  ? 'bg-sky-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Building className="w-3 h-3" />
+              <span>{fl.name}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="w-[1px] h-4 bg-slate-200 mx-0.5" />
+
+        {/* Side-by-Side Multi-Floor Toggle Button */}
+        <button
+          onClick={() => {
+            setCanvasFloorMode(prev => (prev === 'single' ? 'sideBySide' : 'single'));
+          }}
+          className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 border ${
+            canvasFloorMode === 'sideBySide'
+              ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
+              : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200'
+          }`}
+          title="Display all floors side-by-side simultaneously for cross-floor overview"
+        >
+          <Layers className="w-3.5 h-3.5" />
+          <span>{canvasFloorMode === 'sideBySide' ? '🔲 Side-by-Side Active' : 'Side-by-Side (All Floors)'}</span>
+        </button>
       </div>
 
       {/* Collision Alert Banner */}

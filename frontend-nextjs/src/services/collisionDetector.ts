@@ -144,7 +144,7 @@ export function detectCollisions(
     wallPolygons.set(w.id, getWallPolygon(w));
   });
 
-  // 1. Tabletop Item Floor-Placement Restriction Check
+  // 1. Tabletop & Ceiling Item Placement Restriction Check
   floorFurniture.forEach((f) => {
     if (isTabletopItem(f)) {
       const host = findSupportingHost(f, floorFurniture);
@@ -152,6 +152,12 @@ export function detectCollisions(
       if (!host || (f.elevation || 0) < ((host.elevation || 0) + host.height - 5)) {
         collidingItemIds.add(f.id);
         const reason = '⚠️ Tabletop item restricted from floor. Must be placed on a table or counter.';
+        reasons.set(f.id, reasons.has(f.id) ? reasons.get(f.id) + '; ' + reason : reason);
+      }
+    } else if (f.placementType === 'ceiling') {
+      if ((f.elevation || 0) < 150) {
+        collidingItemIds.add(f.id);
+        const reason = '⚠️ Ceiling fixture should be mounted at ceiling elevation (≥200cm), not placed on the floor.';
         reasons.set(f.id, reasons.has(f.id) ? reasons.get(f.id) + '; ' + reason : reason);
       }
     }

@@ -448,6 +448,10 @@ export default function HomeStudioPage() {
         targetElevation = (nearestTable.elevation || 0) + nearestTable.height;
         hostId = nearestTable.id;
       }
+    } else if (item.placementType === 'ceiling') {
+      const activeFloorObj = plan.floors?.find((fl) => fl.level === activeFloor);
+      const floorHeight = activeFloorObj?.height || plan.preferences?.defaultWallHeight || 250;
+      targetElevation = Math.max(0, floorHeight - item.height);
     }
 
     const newItem: FurnitureItem = {
@@ -540,6 +544,10 @@ export default function HomeStudioPage() {
           targetElevation = (nearestTable.elevation || 0) + nearestTable.height;
           hostId = nearestTable.id;
         }
+      } else if (saved.placementType === 'ceiling') {
+        const activeFloorObj = plan.floors?.find((fl) => fl.level === activeFloor);
+        const floorHeight = activeFloorObj?.height || plan.preferences?.defaultWallHeight || 250;
+        targetElevation = Math.max(0, floorHeight - saved.height);
       }
 
       const placedItem: FurnitureItem = {

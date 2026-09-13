@@ -1,4 +1,4 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 
 export interface TableParams {
   shape: 'rectangular' | 'round' | 'oval' | 'hexagonal';
@@ -51,7 +51,7 @@ export interface BedParams {
 }
 
 export interface LampParams {
-  type: 'pendant_dome' | 'pendant_cone' | 'floor_arc' | 'table_lamp' | 'globe_orb';
+  type: 'pendant_dome' | 'pendant_cone' | 'floor_arc' | 'table_lamp' | 'globe_orb' | 'ceiling_fan' | 'chandelier' | 'recessed_spot' | 'flush_panel';
   shadeWidth: number;
   shadeHeight: number;
   totalHeight: number;
@@ -359,7 +359,108 @@ export function buildLampMeshGroup(params: LampParams, mat: THREE.Material): THR
   const shadeH = (params.shadeHeight || 30) * CM;
   const totalH = (params.totalHeight || 60) * CM;
 
-  if (params.type === 'pendant_dome') {
+  if (params.type === 'ceiling_fan') {
+    // 1. Motor Hub & Downrod
+    const hubGeom = new THREE.CylinderGeometry(0.12, 0.12, 0.08, 24);
+    const hubMesh = new THREE.Mesh(hubGeom, mat);
+    hubMesh.position.set(0, totalH - 0.15, 0);
+    hubMesh.castShadow = true;
+    group.add(hubMesh);
+
+    const rodGeom = new THREE.CylinderGeometry(0.012, 0.012, 0.15, 12);
+    const rodMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.9, roughness: 0.2 });
+    const rodMesh = new THREE.Mesh(rodGeom, rodMat);
+    rodMesh.position.set(0, totalH - 0.075, 0);
+    group.add(rodMesh);
+
+    // 2. Light Dome underneath
+    const lightGeom = new THREE.SphereGeometry(0.09, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    lightGeom.rotateX(Math.PI);
+    const lightMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xfef08a, emissiveIntensity: 0.6, roughness: 0.2 });
+    const lightMesh = new THREE.Mesh(lightGeom, lightMat);
+    lightMesh.position.set(0, totalH - 0.19, 0);
+    group.add(lightMesh);
+
+    // 3. Aerodynamic Fan Blades (5 blades)
+    const bladeSpan = Math.max(0.3, shadeR * 0.9);
+    const bladeGeom = new THREE.BoxGeometry(bladeSpan, 0.008, 0.12);
+    for (let b = 0; b < 5; b++) {
+      const angle = (b / 5) * Math.PI * 2;
+      const bladeMesh = new THREE.Mesh(bladeGeom, mat);
+      bladeMesh.position.set(Math.cos(angle) * (bladeSpan / 2 + 0.1), totalH - 0.15, Math.sin(angle) * (bladeSpan / 2 + 0.1));
+      bladeMesh.rotation.y = -angle;
+      bladeMesh.rotation.z = 0.1; // blade tilt angle
+      bladeMesh.castShadow = true;
+      group.add(bladeMesh);
+    }
+  } else if (params.type === 'chandelier') {
+    // Crystal Tiered Chandelier
+    const canopyGeom = new THREE.CylinderGeometry(0.06, 0.06, 0.03, 16);
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.9, roughness: 0.15 });
+    const canopy = new THREE.Mesh(canopyGeom, goldMat);
+    canopy.position.set(0, totalH - 0.015, 0);
+    group.add(canopy);
+
+    const chainGeom = new THREE.CylinderGeometry(0.006, 0.006, totalH * 0.35, 8);
+    const chain = new THREE.Mesh(chainGeom, goldMat);
+    chain.position.set(0, totalH - totalH * 0.175, 0);
+    group.add(chain);
+
+    // 3 Crystal Tiers
+    [
+      { r: shadeR * 0.85, y: totalH * 0.65, count: 12 },
+      { r: shadeR * 0.6, y: totalH * 0.45, count: 8 },
+      { r: shadeR * 0.35, y: totalH * 0.25, count: 6 },
+    ].forEach((tier) => {
+      const ringGeom = new THREE.TorusGeometry(tier.r, 0.01, 8, 24);
+      ringGeom.rotateX(Math.PI / 2);
+      const ring = new THREE.Mesh(ringGeom, goldMat);
+      ring.position.set(0, tier.y, 0);
+      group.add(ring);
+
+      const crystalGeom = new THREE.OctahedronGeometry(0.025, 0);
+      const crystalMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.85 });
+      for (let i = 0; i < tier.count; i++) {
+        const theta = (i / tier.count) * Math.PI * 2;
+        const crystal = new THREE.Mesh(crystalGeom, crystalMat);
+        crystal.position.set(Math.cos(theta) * tier.r, tier.y - 0.04, Math.sin(theta) * tier.r);
+        group.add(crystal);
+      }
+    });
+
+    const bulbGeom = new THREE.SphereGeometry(0.05, 16, 16);
+    const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfffbeb, emissive: 0xffedd5, emissiveIntensity: 0.9 });
+    const bulb = new THREE.Mesh(bulbGeom, bulbMat);
+    bulb.position.set(0, totalH * 0.45, 0);
+    group.add(bulb);
+  } else if (params.type === 'recessed_spot') {
+    // Recessed Ceiling Downlight
+    const rimGeom = new THREE.RingGeometry(shadeR * 0.6, shadeR, 24);
+    rimGeom.rotateX(-Math.PI / 2);
+    const rimMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.8, roughness: 0.2 });
+    const rim = new THREE.Mesh(rimGeom, rimMat);
+    rim.position.set(0, totalH - 0.005, 0);
+    group.add(rim);
+
+    const lensGeom = new THREE.CircleGeometry(shadeR * 0.6, 24);
+    lensGeom.rotateX(-Math.PI / 2);
+    const lensMat = new THREE.MeshStandardMaterial({ color: 0xffedd5, emissive: 0xffedd5, emissiveIntensity: 1.0 });
+    const lens = new THREE.Mesh(lensGeom, lensMat);
+    lens.position.set(0, totalH - 0.008, 0);
+    group.add(lens);
+  } else if (params.type === 'flush_panel') {
+    // Modern Square/Circular Flush Light Panel
+    const frameGeom = new THREE.BoxGeometry(shadeR * 2, 0.02, shadeR * 2);
+    const frameMesh = new THREE.Mesh(frameGeom, mat);
+    frameMesh.position.set(0, totalH - 0.01, 0);
+    group.add(frameMesh);
+
+    const diffuserGeom = new THREE.BoxGeometry(shadeR * 1.8, 0.01, shadeR * 1.8);
+    const diffMat = new THREE.MeshStandardMaterial({ color: 0xfffbeb, emissive: 0xfffbeb, emissiveIntensity: 0.8 });
+    const diffuser = new THREE.Mesh(diffuserGeom, diffMat);
+    diffuser.position.set(0, totalH - 0.015, 0);
+    group.add(diffuser);
+  } else if (params.type === 'pendant_dome') {
     const domeGeom = new THREE.SphereGeometry(shadeR, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
     domeGeom.rotateX(Math.PI);
     const domeMesh = new THREE.Mesh(domeGeom, mat);
