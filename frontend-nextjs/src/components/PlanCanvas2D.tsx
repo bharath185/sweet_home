@@ -3,6 +3,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   MousePointer,
+  Hand,
   Square,
   Maximize2,
   Trash2,
@@ -102,6 +103,43 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   const [scale, setScale] = useState<number>(0.8);
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+
+  // Global Keyboard Shortcuts (Space for Pan, H for Hand, V for Select, W for Wall, D for Dim, T for Text)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      if (e.code === 'Space' && !e.repeat) {
+        setIsSpacePressed(true);
+      } else if (e.code === 'KeyH') {
+        setToolMode('pan');
+        onSelectId(null);
+        setWallStart(null);
+        setDimStart(null);
+      } else if (e.code === 'KeyV') {
+        setToolMode('select');
+      } else if (e.code === 'KeyW') {
+        setToolMode('drawWall');
+      } else if (e.code === 'KeyD') {
+        setToolMode('dimension');
+      } else if (e.code === 'KeyT') {
+        setToolMode('text');
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpacePressed(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [onSelectId]);
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Drawing state
@@ -916,9 +954,12 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
   // Handle Mouse Down
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (e.button === 1 || toolMode === 'pan' || e.altKey) {
+    // Hand / Pan Tool or Middle Mouse or Spacebar or Alt: Strictly adjust position, NEVER select items
+    if (e.button === 1 || toolMode === 'pan' || isSpacePressed || e.altKey) {
       setIsPanning(true);
       setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+      // Deselect to keep view clean during pan
+      if (selectedId) onSelectId(null);
       return;
     }
 
@@ -1401,6 +1442,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
           <button
             onClick={() => {
               setToolMode('pan');
+              onSelectId(null);
               setWallStart(null);
               setDimStart(null);
             }}
@@ -1409,9 +1451,9 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
                 ? 'bg-sky-600 text-white shadow-2xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
-            title="Pan Hand Tool (H)"
+            title="Free Hand / Pan View Tool (H or Hold Space) - Move canvas without selecting items"
           >
-            <Move className="w-3.5 h-3.5" />
+            <Hand className="w-3.5 h-3.5" />
           </button>
 
           <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
@@ -1527,7 +1569,15 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       {/* CAD Canvas */}
       <canvas
         ref={canvasRef}
-        className="w-full h-full cursor-crosshair block"
+        className={`w-full h-full block ${
+          isPanning
+            ? 'cursor-grabbing'
+            : toolMode === 'pan' || isSpacePressed
+            ? 'cursor-grab'
+            : toolMode === 'select'
+            ? 'cursor-default'
+            : 'cursor-crosshair'
+        }`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
