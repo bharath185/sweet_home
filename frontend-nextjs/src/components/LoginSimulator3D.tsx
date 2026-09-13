@@ -292,42 +292,41 @@ export const LoginSimulator3D: React.FC = () => {
     const furnitureGroup = new THREE.Group();
     roomRoot.add(furnitureGroup);
 
-    // A. Corner Sofa from inventory (/models/cornerSofa.obj)
-    loadInventoryItem('/models/cornerSofa.obj', 2.2, 1.6, 0.82, sofaMat).then((sofaMesh) => {
-      sofaMesh.rotation.y = -Math.PI / 2;
-      sofaMesh.position.set(-0.2, 0, 0.45);
+    // A. Luxury Sofa from inventory (/models/sofa.obj)
+    loadInventoryItem('/models/sofa.obj', 2.1, 0.85, 0.82, sofaMat).then((sofaMesh) => {
+      sofaMesh.position.set(-0.1, 0, 0.78);
       furnitureGroup.add(sofaMesh);
     });
 
     // B. Armchair from inventory (/models/armchair.obj)
-    loadInventoryItem('/models/armchair.obj', 0.85, 0.85, 0.8, armchairMat).then((chairMesh) => {
-      chairMesh.rotation.y = -Math.PI / 3.4;
-      chairMesh.position.set(1.35, 0, 0.35);
+    loadInventoryItem('/models/armchair.obj', 0.8, 0.8, 0.8, armchairMat).then((chairMesh) => {
+      chairMesh.rotation.y = -Math.PI / 3.2;
+      chairMesh.position.set(1.28, 0, 0.18);
       furnitureGroup.add(chairMesh);
     });
 
-    // C. Coffee Table from inventory (/models/roundTable.obj)
-    loadInventoryItem('/models/roundTable.obj', 0.85, 0.85, 0.44, tableMat).then((tableMesh) => {
-      tableMesh.position.set(-0.05, 0, -0.35);
+    // C. Coffee Table from inventory (/models/roundTable.obj) with zero overlap
+    loadInventoryItem('/models/roundTable.obj', 0.75, 0.75, 0.42, tableMat).then((tableMesh) => {
+      tableMesh.position.set(-0.1, 0, -0.05);
       furnitureGroup.add(tableMesh);
     });
 
     // D. TV Media Console from inventory (/models/tvUnit.obj)
-    loadInventoryItem('/models/tvUnit.obj', 1.7, 0.45, 0.5, tvUnitMat).then((tvMesh) => {
-      tvMesh.position.set(-0.95, 0, -1.6);
+    loadInventoryItem('/models/tvUnit.obj', 1.6, 0.45, 0.5, tvUnitMat).then((tvMesh) => {
+      tvMesh.position.set(-0.1, 0, -1.6);
       furnitureGroup.add(tvMesh);
     });
 
     // E. Bookcase Shelf from inventory (/models/bookcase.obj)
-    loadInventoryItem('/models/bookcase.obj', 0.85, 0.35, 1.75, bookcaseMat).then((shelfMesh) => {
+    loadInventoryItem('/models/bookcase.obj', 0.8, 0.35, 1.75, bookcaseMat).then((shelfMesh) => {
       shelfMesh.rotation.y = Math.PI / 2;
-      shelfMesh.position.set(-2.02, 0, -1.0);
+      shelfMesh.position.set(-2.02, 0, -0.6);
       furnitureGroup.add(shelfMesh);
     });
 
     // F. Botanical Plant from inventory (/models/plant.obj)
-    loadInventoryItem('/models/plant.obj', 0.6, 0.6, 1.35, plantMat).then((plantMesh) => {
-      plantMesh.position.set(-1.65, 0, -1.35);
+    loadInventoryItem('/models/plant.obj', 0.55, 0.55, 1.35, plantMat).then((plantMesh) => {
+      plantMesh.position.set(-1.65, 0, -1.4);
       furnitureGroup.add(plantMesh);
     });
 
