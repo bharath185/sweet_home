@@ -264,6 +264,16 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   const selectedWall = plan.walls.find((w) => w.id === selectedId);
   const selectedRoom = plan.rooms.find((r) => r.id === selectedId);
 
+  // Compute screen coordinates of the selected room's center label
+  const selectedRoomCenterScreen =
+    selectedRoom && selectedRoom.points.length >= 3
+      ? (() => {
+          const avgX = selectedRoom.points.reduce((acc, p) => acc + p.x, 0) / selectedRoom.points.length;
+          const avgY = selectedRoom.points.reduce((acc, p) => acc + p.y, 0) / selectedRoom.points.length;
+          return planToScreen(avgX, avgY, selectedRoom.floorLevel ?? activeFloor);
+        })()
+      : null;
+
   // Delete selected entity (Room, Wall, Furniture, Dimension, Note)
   const handleDeleteSelected = useCallback(() => {
     if (!selectedId) return;
@@ -1821,26 +1831,6 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
           </button>
         </div>
 
-        {/* Center/Context: Selected Item Actions (Delete / Backspace) */}
-        {selectedId && (
-          <div className="flex items-center gap-2 bg-slate-900/95 backdrop-blur-md text-white px-3 py-1 rounded-xl shadow-md border border-slate-700/80 pointer-events-auto text-xs animate-in fade-in zoom-in duration-150">
-            <span className="font-medium text-slate-300 text-[11px] truncate max-w-[140px]">
-              {selectedRoom ? `Room: ${selectedRoom.name || 'Room'}` :
-               selectedWall ? `Wall (${Math.round(Math.hypot(selectedWall.xEnd - selectedWall.xStart, selectedWall.yEnd - selectedWall.yStart))}cm)` :
-               selectedFurniture ? selectedFurniture.name :
-               'Selected Item'}
-            </span>
-            <button
-              onClick={handleDeleteSelected}
-              className="flex items-center gap-1 px-2 py-0.5 bg-rose-600 hover:bg-rose-500 text-white rounded-md text-[11px] font-bold transition shadow-xs cursor-pointer"
-              title="Delete Selected Item (Delete or Backspace key)"
-            >
-              <Trash2 className="w-3 h-3" />
-              <span>Delete</span>
-            </button>
-          </div>
-        )}
-
         {/* Right: Layers & Professional Export Actions */}
         <div className="flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-xl border border-slate-200/90 shadow-md pointer-events-auto">
           {/* CAD Layers Dropdown */}
@@ -1920,6 +1910,31 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         onWheel={handleWheel}
         className="w-full h-full flex-1 cursor-crosshair touch-none"
       />
+
+      {/* Interactive Delete Button anchored directly near the Selected Room's Label */}
+      {selectedRoom && selectedRoomCenterScreen && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${selectedRoomCenterScreen.x + 76}px`,
+            top: `${selectedRoomCenterScreen.y}px`,
+            transform: 'translateY(-50%)',
+          }}
+          className="z-30 pointer-events-auto animate-in fade-in zoom-in duration-150"
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteSelected();
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-lg text-xs font-bold shadow-xl transition-all border border-rose-400/80 cursor-pointer"
+            title="Delete this Room (or press Delete key)"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete</span>
+          </button>
+        </div>
+      )}
 
       {/* Zoom Controls Overlay */}
       <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1 bg-white/95 backdrop-blur-md p-1 rounded-lg border border-slate-200 shadow-md text-xs text-slate-700">
