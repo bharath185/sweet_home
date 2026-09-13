@@ -5,7 +5,6 @@ import {
   Users,
   Box,
   Building,
-  Activity,
   Plus,
   Trash2,
   CheckCircle2,
@@ -17,13 +16,10 @@ import {
   UserPlus,
   Eye,
   FolderKanban,
-  Zap,
-  ArrowUpRight,
-  ShieldCheck,
-  Compass,
-  UploadCloud
+  Edit3
 } from 'lucide-react';
-import { User, CatalogItem, FloorTemplate, HomePlan, UserRole } from '../types/plan';
+import { User, CatalogItem, FloorTemplate, HomePlan } from '../types/plan';
+import { ALL_CLIENT_PLANS } from '../services/api';
 
 interface AdminDashboardProps {
   users: User[];
@@ -33,6 +29,7 @@ interface AdminDashboardProps {
   setAdminTab: (t: 'overview' | 'users' | 'catalog' | 'floors') => void;
   onOpenStudioWithTemplate: (templateId: string) => void;
   onOpenClientPlan?: (planId: string) => void;
+  onStartNewDesignForClient?: (client: User, templateId?: string) => void;
   onToggleUserStatus: (userId: string) => void;
   onDeleteUser: (userId: string) => void;
   onDeleteCatalogItem: (itemId: string) => void;
@@ -50,6 +47,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   setAdminTab,
   onOpenStudioWithTemplate,
   onOpenClientPlan,
+  onStartNewDesignForClient,
   onToggleUserStatus,
   onDeleteUser,
   onDeleteCatalogItem,
@@ -60,7 +58,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const [userSearch, setUserSearch] = useState('');
   const [catalogSearch, setCatalogSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'ALL' | UserRole>('ALL');
   const [catalogCategory, setCatalogCategory] = useState<string>('ALL');
 
   const onlineUsersCount = users.filter((u) => u.isOnline).length;
@@ -68,16 +65,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const designerCount = users.filter((u) => u.role === 'DESIGNER').length;
   const clientCount = users.filter((u) => u.role === 'CLIENT').length;
 
-  const filteredUsers = users.filter((u) => {
-    const matchesSearch =
+  // Filter clients and users for the Client Projects hub
+  const filteredClients = users.filter((u) => {
+    return (
       u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.email.toLowerCase().includes(userSearch.toLowerCase());
-    const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
-    return matchesSearch && matchesRole;
+      u.email.toLowerCase().includes(userSearch.toLowerCase())
+    );
   });
 
-  const allCategories = ['ALL', ...Array.from(new Set(catalog.map((i) => i.category)))];
-
+  // Filter 3D Catalog
   const filteredCatalog = catalog.filter((item) => {
     const matchesSearch =
       item.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
@@ -103,7 +99,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
     <div className="flex-1 bg-slate-50/70 flex flex-col overflow-y-auto p-4 sm:p-5 lg:p-6 select-none space-y-4 custom-scrollbar">
-      {/* 1. COMPACT HERO BANNER & EASY ACCESS BAR */}
+      {/* 1. HERO BANNER */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-sky-950 to-indigo-950 p-4 lg:p-5 text-white shadow-md border border-slate-800">
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -128,7 +124,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold backdrop-blur-md border border-white/15 transition flex items-center gap-1.5 active:scale-95 shadow-2xs"
             >
               <UserPlus className="w-3.5 h-3.5 text-sky-400" />
-              <span>New Client</span>
+              <span>+ Onboard Client</span>
             </button>
 
             <button
@@ -150,19 +146,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-[11px] font-bold shadow-sm shadow-sky-500/20 border border-sky-400/30 transition flex items-center gap-1.5 active:scale-95"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Open 2D/3D Studio</span>
+              <span>Select Client & Open Studio</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* 2. COMPACT EXECUTIVE STATS STRIP */}
+      {/* 2. STATS STRIP */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Metric 1 */}
         <div className="bg-white rounded-2xl p-3.5 shadow-2xs border border-slate-200/90 flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-              Active Users
+              Registered Clients & Users
             </span>
             <div className="text-base sm:text-lg font-black text-slate-900 mt-0.5">
               {onlineUsersCount} Online <span className="text-[11px] font-normal text-slate-400">({users.length} total)</span>
@@ -178,7 +173,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
 
-        {/* Metric 2 */}
         <div className="bg-white rounded-2xl p-3.5 shadow-2xs border border-slate-200/90 flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
@@ -196,7 +190,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
 
-        {/* Metric 3 */}
         <div className="bg-white rounded-2xl p-3.5 shadow-2xs border border-slate-200/90 flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
@@ -214,7 +207,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
 
-        {/* Metric 4 */}
         <div className="bg-white rounded-2xl p-3.5 shadow-2xs border border-slate-200/90 flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
@@ -233,82 +225,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       </div>
 
-      {/* 3. COMPACT EASY-ACCESS LAUNCHPAD */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-        <button
-          onClick={() => {
-            if (onOpenClientSelectModal) {
-              onOpenClientSelectModal();
-            } else {
-              onOpenStudioWithTemplate('duplex_2floor');
-            }
-          }}
-          className="p-3 bg-white hover:bg-sky-50 border border-slate-200 hover:border-sky-300 rounded-2xl transition flex flex-col items-start gap-1 text-left shadow-2xs group"
-        >
-          <div className="w-7 h-7 rounded-lg bg-sky-50 group-hover:bg-sky-600 text-sky-600 group-hover:text-white flex items-center justify-center transition">
-            <Layers className="w-3.5 h-3.5" />
-          </div>
-          <span className="text-xs font-bold text-slate-900 group-hover:text-sky-700 transition">CAD Studio</span>
-          <span className="text-[10px] text-slate-400">2D/3D Workspace</span>
-        </button>
-
-        <button
-          onClick={() => onOpenStudioWithTemplate('duplex_2floor')}
-          className="p-3 bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 rounded-2xl transition flex flex-col items-start gap-1 text-left shadow-2xs group"
-        >
-          <div className="w-7 h-7 rounded-lg bg-emerald-50 group-hover:bg-emerald-600 text-emerald-600 group-hover:text-white flex items-center justify-center transition">
-            <Sparkles className="w-3.5 h-3.5" />
-          </div>
-          <span className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 transition">3D Virtual Tour</span>
-          <span className="text-[10px] text-slate-400">Human Eye-Level</span>
-        </button>
-
-        <button
-          onClick={() => onOpenStudioWithTemplate('duplex_2floor')}
-          className="p-3 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-2xl transition flex flex-col items-start gap-1 text-left shadow-2xs group"
-        >
-          <div className="w-7 h-7 rounded-lg bg-indigo-50 group-hover:bg-indigo-600 text-indigo-600 group-hover:text-white flex items-center justify-center transition">
-            <Building className="w-3.5 h-3.5" />
-          </div>
-          <span className="text-xs font-bold text-slate-900 group-hover:text-indigo-700 transition">Duplex 2-Floor</span>
-          <span className="text-[10px] text-slate-400">Living + Terrace</span>
-        </button>
-
-        <button
-          onClick={() => onOpenStudioWithTemplate('studio_apt')}
-          className="p-3 bg-white hover:bg-purple-50 border border-slate-200 hover:border-purple-300 rounded-2xl transition flex flex-col items-start gap-1 text-left shadow-2xs group"
-        >
-          <div className="w-7 h-7 rounded-lg bg-purple-50 group-hover:bg-purple-600 text-purple-600 group-hover:text-white flex items-center justify-center transition">
-            <Home className="w-3.5 h-3.5" />
-          </div>
-          <span className="text-xs font-bold text-slate-900 group-hover:text-purple-700 transition">Studio 1-Floor</span>
-          <span className="text-[10px] text-slate-400">Open Concept</span>
-        </button>
-
-        <button
-          onClick={onOpenAddItemModal}
-          className="p-3 bg-white hover:bg-amber-50 border border-slate-200 hover:border-amber-300 rounded-2xl transition flex flex-col items-start gap-1 text-left shadow-2xs group"
-        >
-          <div className="w-7 h-7 rounded-lg bg-amber-50 group-hover:bg-amber-600 text-amber-600 group-hover:text-white flex items-center justify-center transition">
-            <Plus className="w-3.5 h-3.5" />
-          </div>
-          <span className="text-xs font-bold text-slate-900 group-hover:text-amber-700 transition">Add 3D Model</span>
-          <span className="text-[10px] text-slate-400">Ceiling/Floor item</span>
-        </button>
-
-        <button
-          onClick={onOpenAddUserModal}
-          className="p-3 bg-white hover:bg-sky-50 border border-slate-200 hover:border-sky-300 rounded-2xl transition flex flex-col items-start gap-1 text-left shadow-2xs group"
-        >
-          <div className="w-7 h-7 rounded-lg bg-sky-50 group-hover:bg-sky-600 text-sky-600 group-hover:text-white flex items-center justify-center transition">
-            <UserPlus className="w-3.5 h-3.5" />
-          </div>
-          <span className="text-xs font-bold text-slate-900 group-hover:text-sky-700 transition">New Client</span>
-          <span className="text-[10px] text-slate-400">Access Control</span>
-        </button>
-      </div>
-
-      {/* 4. TABS NAVIGATION */}
+      {/* 3. TABS NAVIGATION */}
       <div className="flex items-center gap-1 border-b border-slate-200/80 pt-1">
         <button
           onClick={() => setAdminTab('overview')}
@@ -319,7 +236,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           }`}
         >
           <FolderKanban className="w-3.5 h-3.5" />
-          <span>Overview & Templates</span>
+          <span>Client Projects & Overview</span>
         </button>
 
         <button
@@ -365,10 +282,176 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </button>
       </div>
 
-      {/* 5. TAB 1: OVERVIEW & TEMPLATES */}
+      {/* 4. TAB 1: CLIENT PROJECTS & OVERVIEW */}
       {adminTab === 'overview' && (
         <div className="space-y-4">
-          {/* Architectural Templates Grid */}
+          {/* CLIENT PROJECTS WORKSPACE HUB */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <span>🏡 Client Architectural Projects</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                    {filteredClients.length} Clients
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Select any client below to modify their existing blueprint or start a new 3D design.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative min-w-[200px]">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Search client..."
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white transition"
+                  />
+                </div>
+                <button
+                  onClick={onOpenAddUserModal}
+                  className="px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 text-xs font-bold transition flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>New Client</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Client Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {filteredClients.map((client) => {
+                const planId = client.assignedPlan || `plan-${client.id}`;
+                const clientPlan = ALL_CLIENT_PLANS[planId];
+                const planName = clientPlan?.name || `${client.name}'s Custom Suite`;
+                const floorCount = clientPlan?.floors?.length || 2;
+                const roomCount = clientPlan?.rooms?.length || 6;
+                const itemCount = clientPlan?.furniture?.length || 10;
+                const isCurrentActive = plan.id === planId;
+
+                return (
+                  <div
+                    key={client.id}
+                    className={`rounded-2xl p-4 border transition-all flex flex-col justify-between group ${
+                      isCurrentActive
+                        ? 'bg-sky-50/50 border-sky-300 ring-2 ring-sky-500/20 shadow-sm'
+                        : 'bg-white hover:bg-slate-50/70 border-slate-200/90 shadow-2xs hover:shadow-sm'
+                    }`}
+                  >
+                    <div>
+                      {/* Client Header */}
+                      <div className="flex items-center justify-between gap-2 mb-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="relative">
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold ${
+                              client.role === 'ADMIN'
+                                ? 'bg-gradient-to-tr from-sky-600 to-indigo-600'
+                                : client.role === 'DESIGNER'
+                                ? 'bg-gradient-to-tr from-indigo-600 to-purple-600'
+                                : 'bg-gradient-to-tr from-emerald-600 to-teal-600'
+                            }`}>
+                              {client.name.substring(0, 2).toUpperCase()}
+                            </div>
+                            <span
+                              className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${
+                                client.isOnline ? 'bg-emerald-500' : 'bg-slate-300'
+                              }`}
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <h4 className="text-xs font-bold text-slate-900 truncate max-w-[130px]">
+                                {client.name}
+                              </h4>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full uppercase ${
+                                client.role === 'ADMIN'
+                                  ? 'bg-sky-100 text-sky-700'
+                                  : client.role === 'DESIGNER'
+                                  ? 'bg-indigo-100 text-indigo-700'
+                                  : 'bg-emerald-100 text-emerald-700'
+                              }`}>
+                                {client.role}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 truncate max-w-[150px]">
+                              {client.email}
+                            </p>
+                          </div>
+                        </div>
+
+                        {isCurrentActive && (
+                          <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-600 text-white shadow-2xs">
+                            Active in Studio
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Project Stats Pill */}
+                      <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 mb-3">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 truncate mb-1">
+                          <span className="text-sky-600 font-bold">🏡</span>
+                          <span className="truncate">{planName}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                          <span>{floorCount} Floors</span>
+                          <span>•</span>
+                          <span>{roomCount} Rooms</span>
+                          <span>•</span>
+                          <span>{itemCount} Items</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="space-y-1.5">
+                      <button
+                        onClick={() => {
+                          if (onOpenClientPlan) {
+                            onOpenClientPlan(planId);
+                          }
+                        }}
+                        className="w-full py-1.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Open & Modify in Studio</span>
+                      </button>
+
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          onClick={() => {
+                            if (onStartNewDesignForClient) {
+                              onStartNewDesignForClient(client, 'duplex_2floor');
+                            }
+                          }}
+                          className="py-1 px-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-semibold transition text-center truncate"
+                          title="Start fresh 2-Floor Duplex for this client"
+                        >
+                          + New Duplex
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (onStartNewDesignForClient) {
+                              onStartNewDesignForClient(client, 'studio_apt');
+                            }
+                          }}
+                          className="py-1 px-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-semibold transition text-center truncate"
+                          title="Start fresh Studio Loft for this client"
+                        >
+                          + New Studio
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Baseline Architectural Templates */}
           <div>
             <div className="flex items-center justify-between mb-2.5">
               <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-600">
@@ -400,281 +483,194 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                   <button
                     onClick={() => onOpenStudioWithTemplate(tpl.id)}
-                    className="w-full py-1.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
+                    className="w-full py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-sky-600 hover:text-white text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
                   >
-                    <span>Open in Studio</span>
+                    <span>Open Template in Studio</span>
                     <ArrowRight className="w-3 h-3" />
                   </button>
                 </div>
               ))}
             </div>
           </div>
-
-          {/* Active Client Sessions Feed */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-600">
-                Online Client Collaborations
-              </h3>
-              <button
-                onClick={onOpenAddUserModal}
-                className="px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-[11px] font-bold border border-sky-200 transition flex items-center gap-1"
-              >
-                <Plus className="w-3 h-3" />
-                <span>Add User</span>
-              </button>
-            </div>
-
-            <div className="divide-y divide-slate-100">
-              {users.map((u) => (
-                <div key={u.id} className="py-2.5 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-[11px] font-bold text-slate-700">
-                        {u.name.substring(0, 2).toUpperCase()}
-                      </div>
-                      <span
-                        className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-white ${
-                          u.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
-                        }`}
-                      />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-900">{u.name}</div>
-                      <div className="text-[10px] text-slate-400">{u.email}</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                        u.role === 'ADMIN'
-                          ? 'bg-sky-50 text-sky-700 border border-sky-200'
-                          : u.role === 'DESIGNER'
-                          ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                      }`}
-                    >
-                      {u.role}
-                    </span>
-
-                    {onOpenClientPlan && u.assignedPlan && (
-                      <button
-                        onClick={() => onOpenClientPlan(u.assignedPlan!)}
-                        className="text-[10px] px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-600 text-sky-700 hover:text-white font-semibold transition flex items-center gap-1 border border-sky-200"
-                      >
-                        <Sparkles className="w-3 h-3" />
-                        <span>Open Design</span>
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => onToggleUserStatus(u.id)}
-                      className="text-[10px] px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 transition"
-                    >
-                      {u.isOnline ? 'Offline' : 'Online'}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       )}
 
-      {/* 6. TAB 2: USER DIRECTORY */}
+      {/* 5. TAB 2: USER DIRECTORY */}
       {adminTab === 'users' && (
-        <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-            <div className="relative flex-1 max-w-xs">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900">
+                User & Client Access Directory
+              </h3>
+              <p className="text-xs text-slate-500">
+                Manage access roles, permissions, and assigned client floor plans.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
               <input
                 type="text"
-                placeholder="Search name or email..."
+                placeholder="Filter users..."
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 shadow-2xs"
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500"
               />
-            </div>
-
-            <div className="flex items-center gap-1 bg-white p-0.5 rounded-xl border border-slate-200 text-xs shadow-2xs">
-              {(['ALL', 'ADMIN', 'DESIGNER', 'CLIENT'] as const).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setRoleFilter(r)}
-                  className={`px-2.5 py-1 rounded-lg transition font-semibold text-[11px] ${
-                    roleFilter === r
-                      ? 'bg-sky-600 text-white font-bold shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  {r}
-                </button>
-              ))}
+              <button
+                onClick={onOpenAddUserModal}
+                className="px-3 py-1.5 rounded-xl bg-sky-600 text-white text-xs font-bold transition flex items-center gap-1.5 hover:bg-sky-500 active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add User</span>
+              </button>
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
-            <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 text-slate-600 uppercase text-[9px] font-extrabold tracking-wider border-b border-slate-200">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 uppercase font-semibold text-[10px] tracking-wider">
                 <tr>
-                  <th className="py-2.5 px-4">User</th>
+                  <th className="py-2.5 px-3">User</th>
                   <th className="py-2.5 px-3">Role</th>
-                  <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3">Assigned Plan</th>
-                  <th className="py-2.5 px-4 text-right">Actions</th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3 text-right">Studio Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-[11px]">
-                {filteredUsers.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50 transition">
-                    <td className="py-2.5 px-4">
-                      <div className="font-bold text-slate-900">{u.name}</div>
-                      <div className="text-[10px] text-slate-400">{u.email}</div>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <span
-                        className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+              <tbody className="divide-y divide-slate-100">
+                {filteredClients.map((u) => {
+                  const planId = u.assignedPlan || `plan-${u.id}`;
+                  const planName = ALL_CLIENT_PLANS[planId]?.name || 'Standard Suite';
+
+                  return (
+                    <tr key={u.id} className="hover:bg-slate-50/80 transition">
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-700">
+                            {u.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="font-bold text-slate-900">{u.name}</div>
+                            <div className="text-[10px] text-slate-400">{u.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
                           u.role === 'ADMIN'
-                            ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                            ? 'bg-sky-100 text-sky-700'
                             : u.role === 'DESIGNER'
-                            ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        }`}
-                      >
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            u.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
-                          }`}
-                        />
-                        <span className={u.isOnline ? 'text-emerald-700 font-semibold' : 'text-slate-400'}>
-                          {u.isOnline ? 'Online' : 'Offline'}
+                            ? 'bg-indigo-100 text-indigo-700'
+                            : 'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {u.role}
                         </span>
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-3 font-mono text-[10px] text-slate-600">
-                      {u.assignedPlan || 'Default'}
-                    </td>
-                    <td className="py-2.5 px-4 text-right space-x-1.5">
-                      {onOpenClientPlan && u.assignedPlan && (
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="font-medium text-slate-700">{planName}</span>
+                      </td>
+                      <td className="py-3 px-3">
                         <button
-                          onClick={() => onOpenClientPlan(u.assignedPlan!)}
-                          className="px-2 py-0.5 rounded-lg bg-sky-50 hover:bg-sky-600 text-sky-700 hover:text-white text-[10px] font-semibold transition inline-flex items-center gap-1 border border-sky-200"
+                          onClick={() => onToggleUserStatus(u.id)}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition flex items-center gap-1 ${
+                            u.isOnline
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-slate-100 text-slate-500 border border-slate-200'
+                          }`}
                         >
-                          <Sparkles className="w-2.5 h-2.5" />
-                          <span>Open</span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${u.isOnline ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                          <span>{u.isOnline ? 'ONLINE' : 'OFFLINE'}</span>
                         </button>
-                      )}
-                      <button
-                        onClick={() => onToggleUserStatus(u.id)}
-                        className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] border border-slate-200 transition"
-                      >
-                        Toggle
-                      </button>
-                      <button
-                        onClick={() => onDeleteUser(u.id)}
-                        className="p-1 rounded text-rose-500 hover:bg-rose-50 transition"
-                        title="Delete User"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => {
+                              if (onOpenClientPlan) {
+                                onOpenClientPlan(planId);
+                              }
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold text-[11px] border border-sky-200 transition"
+                          >
+                            Open in Studio
+                          </button>
+                          {u.role !== 'ADMIN' && (
+                            <button
+                              onClick={() => onDeleteUser(u.id)}
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                              title="Remove User"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* 7. TAB 3: 3D CATALOG */}
+      {/* 6. TAB 3: 3D CATALOG */}
       {adminTab === 'catalog' && (
-        <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-            <div className="relative flex-1 max-w-xs">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900">
+                3D CAD Catalog & Custom Elements
+              </h3>
+              <p className="text-xs text-slate-500">
+                Manage all 3D furniture, ceiling lamps, tables, and architectural items.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
               <input
                 type="text"
-                placeholder="Search 3D catalog..."
+                placeholder="Search catalog..."
                 value={catalogSearch}
                 onChange={(e) => setCatalogSearch(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 shadow-2xs"
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500"
               />
-            </div>
-
-            <button
-              onClick={onOpenAddItemModal}
-              className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-2xs transition flex items-center gap-1.5 active:scale-95"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add 3D Model</span>
-            </button>
-          </div>
-
-          {/* Category Filter Pills */}
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 custom-scrollbar">
-            {allCategories.map((cat) => (
               <button
-                key={cat}
-                onClick={() => setCatalogCategory(cat)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition border ${
-                  catalogCategory === cat
-                    ? 'bg-sky-600 text-white border-sky-700 shadow-2xs'
-                    : 'bg-white text-slate-600 hover:text-slate-900 border-slate-200'
-                }`}
+                onClick={onOpenAddItemModal}
+                className="px-3 py-1.5 rounded-xl bg-sky-600 text-white text-xs font-bold transition flex items-center gap-1.5 hover:bg-sky-500 active:scale-95"
               >
-                {cat}
+                <Plus className="w-3.5 h-3.5" />
+                <span>New 3D Item</span>
               </button>
-            ))}
+            </div>
           </div>
 
-          {/* Compact Catalog Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {filteredCatalog.map((item) => (
               <div
                 key={item.id}
-                className="bg-white hover:border-sky-300 rounded-2xl p-2.5 flex flex-col justify-between transition group relative border border-slate-200/90 shadow-2xs"
+                className="border border-slate-200 rounded-xl p-2.5 bg-slate-50/60 hover:bg-white transition flex flex-col justify-between group"
               >
-                <div className="w-full h-18 bg-slate-50 rounded-xl flex items-center justify-center p-1.5 mb-1.5 relative border border-slate-100 group-hover:border-sky-200 transition">
-                  {item.icon ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.icon} alt={item.name} className="max-w-full max-h-full object-contain" />
-                  ) : (
-                    <Box className="w-7 h-7 text-slate-400 group-hover:text-sky-500 transition" />
-                  )}
-
-                  {item.placementType === 'ceiling' && (
-                    <span className="absolute top-1 left-1 text-[8px] px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-bold">
-                      Ceiling
-                    </span>
-                  )}
-                </div>
-
                 <div>
-                  <div className="text-[11px] font-bold text-slate-900 truncate group-hover:text-sky-600 transition">
-                    {item.name}
+                  <div className="w-full h-20 bg-white rounded-lg border border-slate-100 flex items-center justify-center p-2 mb-2 relative">
+                    <Box className="w-8 h-8 text-slate-400 group-hover:text-sky-600 transition" />
+                    {item.isCustom && (
+                      <span className="absolute top-1 left-1 text-[8px] font-bold px-1 rounded bg-sky-100 text-sky-700">
+                        Custom
+                      </span>
+                    )}
                   </div>
-                  <div className="text-[9px] text-slate-400 font-mono">
-                    {Math.round(item.width)}×{Math.round(item.depth)}×{Math.round(item.height)} cm
-                  </div>
+                  <h4 className="text-xs font-bold text-slate-900 truncate">{item.name}</h4>
+                  <p className="text-[10px] text-slate-400 uppercase">{item.category}</p>
                 </div>
-
-                <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
-                    {item.category}
-                  </span>
-                  <button
-                    onClick={() => onDeleteCatalogItem(item.id)}
-                    className="p-0.5 rounded text-rose-500 hover:bg-rose-50 transition"
-                    title="Remove from Catalog"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
+                <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500">
+                  <span>{item.width}×{item.depth}cm</span>
+                  {item.isCustom && (
+                    <button
+                      onClick={() => onDeleteCatalogItem(item.id)}
+                      className="text-slate-400 hover:text-rose-600 transition"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -682,41 +678,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* 8. TAB 4: MULTI-FLOOR ARCHITECTURE */}
+      {/* 7. TAB 4: MULTI-FLOOR LEVELS */}
       {adminTab === 'floors' && (
-        <div className="space-y-3">
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs">
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-600 mb-2">
-              Building Levels Configuration
-            </h3>
-
-            <div className="space-y-2">
-              {(plan.floors || [
-                { level: 0, name: 'Ground Floor', elevation: 0, height: 250 },
-                { level: 1, name: '1st Floor', elevation: 250, height: 250 }
-              ]).map((fl) => (
-                <div
-                  key={fl.level}
-                  className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
-                      L{fl.level}
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-900">{fl.name}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">
-                        Elevation: {fl.elevation || fl.level * 250}cm • Ceiling Height: {fl.height || 250}cm
-                      </div>
-                    </div>
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs space-y-3">
+          <h3 className="text-sm font-extrabold text-slate-900">
+            Multi-Floor Architecture & Elevation Management
+          </h3>
+          <p className="text-xs text-slate-500">
+            Current project multi-floor structural configuration.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+            {(plan.floors || [
+              { level: 0, name: 'Ground Floor', height: 250, elevation: 0 },
+              { level: 1, name: '1st Floor', height: 250, elevation: 250 },
+            ]).map((fl) => (
+              <div key={fl.level} className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-900">{fl.name}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-bold">
+                      Level {fl.level}
+                    </span>
                   </div>
-
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Side-by-Side 3D Enabled
-                  </span>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Elevation: {fl.elevation}cm • Ceiling Height: {fl.height}cm
+                  </p>
                 </div>
-              ))}
-            </div>
+                <Building className="w-5 h-5 text-slate-400" />
+              </div>
+            ))}
           </div>
         </div>
       )}

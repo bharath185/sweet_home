@@ -816,6 +816,7 @@ export default function HomeStudioPage() {
               handleSelectClientProject(planId);
               setActiveView('split');
             }}
+            onStartNewDesignForClient={handleStartNewDesignForClient}
             onToggleUserStatus={handleToggleUserStatus}
             onDeleteUser={handleDeleteUser}
             onDeleteCatalogItem={handleDeleteCatalogItem}

@@ -1427,89 +1427,91 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       {/* Three.js Canvas Mount - Isolated */}
       <div ref={canvasMountRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
-      {/* Top 3D Viewport Controls */}
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-        {/* 3D Floor Mode: Side-by-Side vs Stacked vs Isolated */}
-        <div className="flex items-center bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-md text-xs font-semibold">
+      {/* Top 3D Viewport Controls (Compact & Cleanly aligned) */}
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-sm text-xs font-semibold">
+        {/* Floor Mode Selector */}
+        <div className="flex items-center gap-0.5">
           <button
             onClick={() => setFloor3DMode('sideBySide')}
-            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+            className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
               floor3DMode === 'sideBySide'
-                ? 'bg-emerald-600 text-white shadow-xs font-bold'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-emerald-600 text-white font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
-            title="Side-by-Side Multi-Floor View (Show Floor 1 & Floor 2 side-by-side horizontally with floor placards)"
+            title="Side-by-Side Multi-Floor View (Show Floor 1 & Floor 2 side-by-side horizontally)"
           >
-            <Layers className="w-3.5 h-3.5" />
-            <span>🔲 Side-by-Side (All Floors)</span>
+            <Layers className="w-3 h-3" />
+            <span>🔲 Side-by-Side</span>
           </button>
           <button
             onClick={() => setFloor3DMode('isolated')}
-            className={`px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 ${
+            className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
               floor3DMode === 'isolated'
-                ? 'bg-sky-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
-            title="Focus on Active Floor Only (Isolate & Hide Other Floors)"
+            title={`Floor ${activeFloor} Only`}
           >
-            <span>Floor {activeFloor} Only</span>
+            <span>F{activeFloor} Only</span>
           </button>
           <button
             onClick={() => setFloor3DMode('stacked')}
-            className={`px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 ${
+            className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
               floor3DMode === 'stacked'
-                ? 'bg-sky-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
-            title="Stack All Floors at Standard Building Height (2.5m per floor)"
+            title="Stack Floors Vertically"
           >
             <span>Stacked</span>
           </button>
         </div>
 
-        {/* Aerial Orbit vs Virtual Visitor Toggle */}
-        <div className="flex items-center bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-md text-xs font-semibold">
+        <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
+
+        {/* Camera Mode */}
+        <div className="flex items-center gap-0.5">
           <button
             onClick={() => setCameraMode('aerial')}
-            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+            className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
               cameraMode === 'aerial'
-                ? 'bg-sky-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
-            title="Aerial Bird's Eye View"
+            title="Aerial Orbit View"
           >
-            <Rotate3d className="w-3.5 h-3.5" />
-            <span>Aerial Orbit</span>
+            <Rotate3d className="w-3 h-3" />
+            <span>Orbit</span>
           </button>
-
           <button
             onClick={handleSwitchToVisitor}
-            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+            className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
               cameraMode === 'visitor'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-emerald-600 text-white font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
-            title="Virtual Visitor Human Eye Level (160cm)"
+            title="Virtual Visitor Walking Mode (1.6m)"
           >
-            <User className="w-3.5 h-3.5" />
-            <span>Virtual Visitor (1.6m)</span>
+            <User className="w-3 h-3" />
+            <span>Walk (1.6m)</span>
           </button>
         </div>
 
-        {/* Photo Snapshot Render Button */}
+        <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
+
+        {/* Snapshot Photo */}
         <button
           onClick={handleTakePhotoSnapshot}
           disabled={isCapturing}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 hover:bg-slate-50 text-sky-700 border border-slate-200 rounded-xl text-xs font-semibold backdrop-blur-md shadow-md transition active:scale-95"
-          title="Take Photo-Realistic 3D Snapshot (PNG)"
+          className="p-1.5 hover:bg-slate-100 text-sky-700 rounded-lg transition"
+          title="Take Photo Render (PNG)"
         >
-          <Camera className="w-3.5 h-3.5 text-sky-600" />
-          <span>{isCapturing ? 'Rendering...' : 'Render Photo'}</span>
+          <Camera className="w-3.5 h-3.5" />
         </button>
 
-        {/* Time of Day Slider */}
-        <div className="flex items-center gap-1.5 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-md">
-          <Sun className="w-3.5 h-3.5 text-amber-500" />
+        {/* Time of Day */}
+        <div className="flex items-center gap-1 pl-1 pr-1" title={`Sun Time: ${Math.floor(timeOfDay)}:${timeOfDay % 1 !== 0 ? '30' : '00'}`}>
+          <Sun className="w-3 h-3 text-amber-500" />
           <input
             type="range"
             min="6"
@@ -1517,19 +1519,15 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             step="0.5"
             value={timeOfDay}
             onChange={(e) => setTimeOfDay(parseFloat(e.target.value))}
-            className="w-16 accent-sky-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-            title={`Sunlight Time: ${Math.floor(timeOfDay)}:${timeOfDay % 1 !== 0 ? '30' : '00'}`}
+            className="w-12 accent-sky-600 h-1 bg-slate-200 rounded cursor-pointer"
           />
-          <span className="text-[10px] font-mono font-bold text-slate-700 min-w-[34px]">
-            {Math.floor(timeOfDay)}:{timeOfDay % 1 !== 0 ? '30' : '00'}
-          </span>
         </div>
 
-        {/* Reset View */}
+        {/* Reset Camera */}
         <button
           onClick={handleResetCamera}
-          className="p-2 text-slate-500 hover:text-slate-900 bg-white/95 hover:bg-slate-50 rounded-xl border border-slate-200 shadow-md transition"
-          title="Reset Camera"
+          className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-900 rounded-lg transition"
+          title="Reset Camera View"
         >
           <Maximize2 className="w-3.5 h-3.5" />
         </button>
@@ -1537,12 +1535,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       {/* Room Jump Pills in Visitor Mode */}
       {cameraMode === 'visitor' && plan.rooms.length > 0 && (
-        <div className="absolute top-16 right-3 z-10 flex flex-wrap gap-1 max-w-xs justify-end">
+        <div className="absolute top-14 right-3 z-10 flex flex-wrap gap-1 max-w-xs justify-end">
           {plan.rooms.map((room) => (
             <button
               key={room.id}
               onClick={() => handleTeleportToRoom(room)}
-              className="px-2.5 py-1 rounded-lg bg-white/95 hover:bg-emerald-600 text-slate-700 hover:text-white text-[11px] font-medium border border-slate-200 shadow-md backdrop-blur-md transition flex items-center gap-1"
+              className="px-2.5 py-1 rounded-lg bg-white/95 hover:bg-emerald-600 text-slate-700 hover:text-white text-[11px] font-medium border border-slate-200 shadow-sm backdrop-blur-md transition flex items-center gap-1"
             >
               <MapPin className="w-3 h-3 text-emerald-600" />
               <span>{room.name}</span>
@@ -1551,14 +1549,13 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         </div>
       )}
 
-      {/* Collision Warning in 3D */}
+      {/* Collision Alert Banner (Non-overlapping at Bottom Left) */}
       {collidingItemIds.size > 0 && (
-        <div className="absolute top-3 left-3 z-10 flex items-center gap-2 bg-rose-600 text-white backdrop-blur-md px-3 py-1.5 rounded-xl shadow-lg border border-rose-500 text-xs font-bold animate-pulse">
-          <AlertTriangle className="w-4 h-4" />
-          <span>{collidingItemIds.size} Colliding Items (Glowing Red)</span>
+        <div className="absolute bottom-12 left-3 z-10 flex items-center gap-1.5 bg-rose-600 text-white backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-rose-500 text-xs font-bold animate-pulse">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          <span>{collidingItemIds.size} Colliding (Red)</span>
         </div>
       )}
-
 
 
       {/* Virtual Visitor On-Screen D-Pad / Walk Controller */}
