@@ -1500,51 +1500,6 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             <Magnet className="w-3.5 h-3.5" />
           </button>
         </div>
-
-        {/* Right: Floor Selector & Side-by-Side (Compact & Concise) */}
-        <div className="flex items-center gap-0.5 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200/90 shadow-sm pointer-events-auto text-xs">
-          {(plan.floors || [
-            { level: 0, name: 'Ground' },
-            { level: 1, name: '1st Floor' },
-          ]).map((fl) => {
-            const shortName = fl.level === 0 ? 'Ground' : (fl.level === 1 ? '1st Floor' : `Floor ${fl.level}`);
-            return (
-              <button
-                key={fl.level}
-                onClick={() => {
-                  if (onFloorChange) onFloorChange(fl.level);
-                  setCanvasFloorMode('single');
-                }}
-                className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition flex items-center gap-1 ${
-                  canvasFloorMode !== 'sideBySide' && activeFloor === fl.level
-                    ? 'bg-sky-600 text-white shadow-2xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-                title={`Switch to ${fl.name}`}
-              >
-                <Building className="w-3 h-3" />
-                <span>{shortName}</span>
-              </button>
-            );
-          })}
-
-          <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
-
-          <button
-            onClick={() => {
-              setCanvasFloorMode((prev) => (prev === 'sideBySide' ? 'single' : 'sideBySide'));
-            }}
-            className={`px-2 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 border ${
-              canvasFloorMode === 'sideBySide'
-                ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
-                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200'
-            }`}
-            title="Display all floors side-by-side simultaneously"
-          >
-            <Layers className="w-3 h-3" />
-            <span>🔲 Both</span>
-          </button>
-        </div>
       </div>
 
       {/* Collision Alert Banner (Non-overlapping at Bottom Left) */}
