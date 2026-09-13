@@ -111,6 +111,10 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const hoveredIdRef = useRef<string | null>(null);
   hoveredIdRef.current = hoveredId;
+
+  const pendingClickedItemRef = useRef<{ id: string; type: 'furniture' | 'wall' } | null>(null);
+  const canDragSelectedItemRef = useRef(false);
+  const hasMovedPastThresholdRef = useRef(false);
   const [isDraggingObjectState, setIsDraggingObjectState] = useState(false);
   const [isDragOverCatalog, setIsDragOverCatalog] = useState(false);
 
@@ -1061,7 +1065,52 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       group.add(itemGroup);
     });
-  }, [plan, selectedId, hoveredId, collidingItemIds, activeFloor, floor3DMode]);
+  }, [plan, collidingItemIds, activeFloor, floor3DMode]);
+
+  // Update Selection & Hover highlights smoothly in 3D without tearing down the scene graph
+  useEffect(() => {
+    const group = meshesGroupRef.current;
+    if (!group) return;
+
+    group.traverse((child) => {
+      let current: THREE.Object3D | null = child;
+      let targetId: string | null = null;
+      let targetType: string | null = null;
+
+      while (current && current !== group) {
+        if (current.userData && current.userData.id) {
+          targetId = current.userData.id;
+          targetType = current.userData.type;
+          break;
+        }
+        current = current.parent;
+      }
+
+      if (targetId && (child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        if (mesh.material && (mesh.material as THREE.MeshStandardMaterial).emissive) {
+          const mat = mesh.material as THREE.MeshStandardMaterial;
+          const isSelected = selectedId === targetId;
+          const isHovered = hoveredId === targetId;
+          const isColliding = current?.userData?.isColliding;
+
+          if (isColliding) {
+            mat.emissive.setHex(0xff0000);
+            mat.emissiveIntensity = 0.8;
+          } else if (isSelected) {
+            mat.emissive.setHex(0x4f46e5); // Indigo selection highlight
+            mat.emissiveIntensity = 0.45;
+          } else if (isHovered) {
+            mat.emissive.setHex(0x38bdf8); // Sky blue hover highlight
+            mat.emissiveIntensity = 0.35;
+          } else {
+            mat.emissive.setHex(0x000000);
+            mat.emissiveIntensity = 0;
+          }
+        }
+      }
+    });
+  }, [selectedId, hoveredId]);
 
 
   // Capture Photo Snapshot (from Section 10 & 12 of guide)
@@ -1085,10 +1134,10 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const mouseDownPosRef = useRef({ x: 0, y: 0 });
 
   // 3D Pick-and-Drag / Orbit / Pan / Visitor Look
-  // Robust helper to find 3D furniture or wall mesh under pointer
-  const findItemAtPointer = (clientX: number, clientY: number): { furnitureId: string | null; wallId: string | null } => {
+  // Accurate helper to find the front-most interactive 3D furniture or wall mesh under pointer
+  const findItemAtPointer = (clientX: number, clientY: number): { id: string | null; type: 'furniture' | 'wall' | null } => {
     if (!cameraRef.current || !meshesGroupRef.current || !canvasMountRef.current) {
-      return { furnitureId: null, wallId: null };
+      return { id: null, type: null };
     }
     const rect = canvasMountRef.current.getBoundingClientRect();
     const mouse = new THREE.Vector2(
@@ -1099,32 +1148,32 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     raycaster.setFromCamera(mouse, cameraRef.current);
     const intersects = raycaster.intersectObjects(meshesGroupRef.current.children, true);
 
-    let foundFurnitureId: string | null = null;
-    let foundWallId: string | null = null;
-
     for (const hit of intersects) {
+      if (!hit.object.visible) continue;
+
       let current: THREE.Object3D | null = hit.object;
       while (current && current !== meshesGroupRef.current) {
-        if (current.userData) {
-          if (current.userData.type === 'furniture' && current.userData.id) {
-            foundFurnitureId = current.userData.id;
-            break;
+        if (current.userData && current.userData.id) {
+          if (current.userData.type === 'furniture') {
+            return { id: current.userData.id, type: 'furniture' };
           }
-          if (current.userData.type === 'wall' && current.userData.id && !foundWallId) {
-            foundWallId = current.userData.id;
+          if (current.userData.type === 'wall') {
+            return { id: current.userData.id, type: 'wall' };
           }
         }
         current = current.parent;
       }
-      if (foundFurnitureId) break;
     }
 
-    return { furnitureId: foundFurnitureId, wallId: foundWallId };
+    return { id: null, type: null };
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
     prevMouseRef.current = { x: e.clientX, y: e.clientY };
+    hasMovedPastThresholdRef.current = false;
+    canDragSelectedItemRef.current = false;
+    pendingClickedItemRef.current = null;
 
     const isFreeHand = toolModeRef.current === 'pan' || isSpacePressedRef.current;
 
@@ -1135,59 +1184,35 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       return;
     }
 
-    // Check if user clicked a 3D furniture or wall item (Active in Aerial / Orbit mode ONLY)
+    // Check if user pressed on 3D furniture or wall item
     if (
       cameraModeRef.current === 'aerial' &&
       toolModeRef.current === 'select' &&
       !isSpacePressedRef.current &&
       e.button === 0
     ) {
-      const { furnitureId, wallId } = findItemAtPointer(e.clientX, e.clientY);
-      const targetId = furnitureId || wallId;
+      const hit = findItemAtPointer(e.clientX, e.clientY);
+      if (hit.id && hit.type) {
+        pendingClickedItemRef.current = { id: hit.id, type: hit.type };
 
-      if (targetId) {
-        onSelectId(targetId);
+        // If user pressed on the ALREADY selected furniture item, prepare for possible 3D translation drag
+        if (hit.type === 'furniture' && selectedIdRef.current === hit.id) {
+          const item = planRef.current.furniture.find((f) => f.id === hit.id);
+          if (item && !item.isLocked) {
+            canDragSelectedItemRef.current = true;
+            draggedItemIdRef.current = item.id;
 
-        if (furnitureId) {
-          const item = planRef.current.furniture.find((f) => f.id === furnitureId);
-          if (item?.isLocked) {
-            return;
-          }
-
-          // Start 3D Dragging in Orbit mode
-          draggedItemIdRef.current = furnitureId;
-          isDraggingObjectRef.current = true;
-          setIsDraggingObjectState(true);
-
-          const allFloors = planRef.current.floors && planRef.current.floors.length > 0 ? planRef.current.floors : [
-            { level: 0, name: 'Ground Floor' },
-            { level: 1, name: '1st Floor' },
-          ];
-          const getFloor3DOffset = (level: number = 0) => {
-            if (floor3DMode === 'isolated') {
-              return { x: 0, y: 0, z: 0 };
-            } else if (floor3DMode === 'sideBySide') {
-              const floorIdx = allFloors.findIndex((fl) => fl.level === level);
-              const validIdx = floorIdx >= 0 ? floorIdx : 0;
-              const mid = (allFloors.length - 1) / 2;
-              return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
-            } else {
-              return { x: 0, y: level * 2.5, z: 0 };
-            }
-          };
-
-          const offset = getFloor3DOffset(item?.floorLevel || 0);
-          const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -offset.y);
-          const hitPoint = new THREE.Vector3();
-          const rect = canvasMountRef.current!.getBoundingClientRect();
-          const mouse = new THREE.Vector2(
-            ((e.clientX - rect.left) / rect.width) * 2 - 1,
-            -((e.clientY - rect.top) / rect.height) * 2 + 1
-          );
-          const raycaster = new THREE.Raycaster();
-          raycaster.setFromCamera(mouse, cameraRef.current!);
-          if (raycaster.ray.intersectPlane(floorPlane, hitPoint)) {
-            if (item) {
+            const offset = getFloor3DOffset(item.floorLevel || 0);
+            const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -offset.y);
+            const hitPoint = new THREE.Vector3();
+            const rect = canvasMountRef.current!.getBoundingClientRect();
+            const mouse = new THREE.Vector2(
+              ((e.clientX - rect.left) / rect.width) * 2 - 1,
+              -((e.clientY - rect.top) / rect.height) * 2 + 1
+            );
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, cameraRef.current!);
+            if (raycaster.ray.intersectPlane(floorPlane, hitPoint)) {
               dragOffsetRef.current = {
                 x: hitPoint.x - (item.x * 0.01 + offset.x),
                 z: hitPoint.z - (item.y * 0.01 + offset.z),
@@ -1195,11 +1220,10 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             }
           }
         }
-        return; // Don't initiate camera orbit
       }
     }
 
-    // Default: Camera Orbit / Pan
+    // Default: Smooth Camera Orbit / Pan on drag
     if (e.button === 0) {
       isDraggingRef.current = true;
     } else if (e.button === 2 || e.button === 1) {
@@ -1212,17 +1236,32 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const dy = e.clientY - prevMouseRef.current.y;
     prevMouseRef.current = { x: e.clientX, y: e.clientY };
 
+    const moveDist = Math.hypot(
+      e.clientX - mouseDownPosRef.current.x,
+      e.clientY - mouseDownPosRef.current.y
+    );
+    if (moveDist > 4) {
+      hasMovedPastThresholdRef.current = true;
+    }
+
     const isFreeHand = toolModeRef.current === 'pan' || isSpacePressedRef.current;
 
-    // 1. ACTIVE 3D FURNITURE DRAGGING & PLACEMENT
+    // 1. ACTIVE 3D FURNITURE DRAGGING & PLACEMENT (Only when dragging an already selected item past threshold)
     if (
       !isFreeHand &&
-      isDraggingObjectRef.current &&
+      hasMovedPastThresholdRef.current &&
+      canDragSelectedItemRef.current &&
       draggedItemIdRef.current &&
       cameraRef.current &&
       canvasMountRef.current &&
       onUpdatePlanRef.current
     ) {
+      isDraggingRef.current = false; // Cancel camera orbit
+      if (!isDraggingObjectRef.current) {
+        isDraggingObjectRef.current = true;
+        setIsDraggingObjectState(true);
+      }
+
       const rect = canvasMountRef.current.getBoundingClientRect();
       const mouse = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -1234,22 +1273,6 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const currentItem = planRef.current.furniture.find(
         (f) => f.id === draggedItemIdRef.current
       );
-      const allFloors = planRef.current.floors && planRef.current.floors.length > 0 ? planRef.current.floors : [
-        { level: 0, name: 'Ground Floor' },
-        { level: 1, name: '1st Floor' },
-      ];
-      const getFloor3DOffset = (level: number = 0) => {
-        if (floor3DMode === 'isolated') {
-          return { x: 0, y: 0, z: 0 };
-        } else if (floor3DMode === 'sideBySide') {
-          const floorIdx = allFloors.findIndex((fl) => fl.level === level);
-          const validIdx = floorIdx >= 0 ? floorIdx : 0;
-          const mid = (allFloors.length - 1) / 2;
-          return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
-        } else {
-          return { x: 0, y: level * 2.5, z: 0 };
-        }
-      };
 
       const offset = getFloor3DOffset(currentItem?.floorLevel || 0);
       const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -offset.y);
@@ -1265,9 +1288,6 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         const snappedX = Math.round(rawPlanX / 5) * 5;
         const snappedY = Math.round(rawPlanY / 5) * 5;
 
-        const currentItem = planRef.current.furniture.find(
-          (f) => f.id === draggedItemIdRef.current
-        );
         if (currentItem && (currentItem.x !== snappedX || currentItem.y !== snappedY)) {
           let updatedItem: FurnitureItem = { ...currentItem, x: snappedX, y: snappedY };
 
@@ -1293,20 +1313,20 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       return;
     }
 
-    // 2. HOVER DETECTION & HIGHLIGHT (Check if hovering over interactive 3D furniture or wall)
+    // 2. HOVER DETECTION & HIGHLIGHT (Instant 60fps, non-blocking)
     if (
       cameraModeRef.current === 'aerial' &&
       !isDraggingRef.current &&
       !isPanningRef.current &&
       !isDraggingObjectRef.current
     ) {
-      const { furnitureId, wallId } = findItemAtPointer(e.clientX, e.clientY);
-      const nextHoverId = furnitureId || wallId;
+      const hit = findItemAtPointer(e.clientX, e.clientY);
+      const nextHoverId = hit.id;
       if (nextHoverId !== hoveredIdRef.current) {
         setHoveredId(nextHoverId);
         setIsHoveringObject(!!nextHoverId);
       }
-    } else if (hoveredIdRef.current !== null) {
+    } else if (hoveredIdRef.current !== null && (isDraggingRef.current || isPanningRef.current)) {
       setHoveredId(null);
       setIsHoveringObject(false);
     }
@@ -1359,41 +1379,30 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   };
 
   const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    const wasDraggingObject = isDraggingObjectRef.current;
     const wasPanning = isPanningRef.current;
     const isFreeHand = toolModeRef.current === 'pan' || isSpacePressedRef.current;
 
-    // Finish 3D Dragging
-    if (isDraggingObjectRef.current) {
-      isDraggingObjectRef.current = false;
-      setIsDraggingObjectState(false);
-      draggedItemIdRef.current = null;
-      return;
-    }
-
+    isDraggingObjectRef.current = false;
+    setIsDraggingObjectState(false);
+    canDragSelectedItemRef.current = false;
+    draggedItemIdRef.current = null;
     isDraggingRef.current = false;
     isPanningRef.current = false;
     setIsPanningState(false);
 
-    // If we were using the Free Hand tool or panning, do not trigger selection
-    if (isFreeHand || wasPanning) {
+    // If we were using the Free Hand tool, panning, or finishing a 3D drag, do not alter selection
+    if (wasDraggingObject || isFreeHand || wasPanning) {
       return;
     }
 
-    // Click to select/deselect
-    const dragDist = Math.hypot(
-      e.clientX - mouseDownPosRef.current.x,
-      e.clientY - mouseDownPosRef.current.y
-    );
-
-    // ONLY perform click selection in Aerial / Orbit mode!
-    // In Walk / Visitor mode, item selection is completely disabled so clicking looks around and walks.
-    if (cameraModeRef.current === 'aerial' && dragDist < 10 && !isDraggingObjectRef.current) {
-      const { furnitureId, wallId } = findItemAtPointer(e.clientX, e.clientY);
-      const targetId = furnitureId || wallId;
-      if (targetId) {
-        onSelectId(targetId);
+    // Clean Click Selection (User clicked without dragging): Instant, 100% Accurate Selection
+    if (cameraModeRef.current === 'aerial' && !hasMovedPastThresholdRef.current) {
+      const hit = findItemAtPointer(e.clientX, e.clientY);
+      if (hit.id) {
+        onSelectId(hit.id);
       } else {
-        onSelectId(null);
+        onSelectId(null); // Clicked on empty floor or sky -> deselect cleanly
       }
     }
   };
