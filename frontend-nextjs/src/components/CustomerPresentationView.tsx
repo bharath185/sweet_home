@@ -172,11 +172,12 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
     updateSelected({ angle: newAngle });
   };
 
-  // Adjust dimension
-  const adjustDimension = (prop: 'width' | 'depth' | 'height', delta: number) => {
+  // Adjust dimension or elevation
+  const adjustDimension = (prop: 'width' | 'depth' | 'height' | 'elevation', delta: number) => {
     if (!selectedFurniture) return;
-    const current = selectedFurniture[prop];
-    const updated = Math.max(10, Math.round(current + delta));
+    const current = selectedFurniture[prop] || 0;
+    const minVal = prop === 'elevation' ? 0 : 10;
+    const updated = Math.max(minVal, Math.round(current + delta));
     updateSelected({ [prop]: updated });
   };
 
@@ -215,11 +216,28 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
     let targetElevation = item.elevation || item.defaultElevation || 0;
     let hostId: string | undefined = undefined;
 
+    const isWindow = (item.category || '').toLowerCase().includes('window') ||
+                     (item.name || '').toLowerCase().includes('window') ||
+                     (item.id || '').toLowerCase().includes('window');
+    const isPanoramic = (item.name || '').toLowerCase().includes('panoramic') ||
+                        (item.id || '').toLowerCase().includes('panoramic');
+
+    // Windows should not touch floor - set default architectural sill height of 85cm
+    if (isWindow && !isPanoramic && targetElevation === 0) {
+      targetElevation = 85;
+    }
+
     if (selectedRoom && selectedRoom.points.length > 0) {
       const xs = selectedRoom.points.map((p) => p.x);
       const ys = selectedRoom.points.map((p) => p.y);
       targetX = Math.round((Math.min(...xs) + Math.max(...xs)) / 2);
-      targetY = Math.round((Math.min(...ys) + Math.max(...ys)) / 2);
+      
+      // If window, door, or wall design, place along wall perimeter line
+      if (isWindow || (item.category || '').toLowerCase().includes('wall') || (item.category || '').toLowerCase().includes('door')) {
+        targetY = Math.min(...ys) + Math.round(item.depth / 2);
+      } else {
+        targetY = Math.round((Math.min(...ys) + Math.max(...ys)) / 2);
+      }
     }
 
     if (item.placementType === 'tabletop' || item.placeOnTable || isTabletopItem(item)) {
@@ -759,6 +777,41 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
               <span>Overlapping obstacle! Glowing red in 3D.</span>
             </div>
           )}
+
+          {/* Elevation & Sill Height Control */}
+          <div className="bg-slate-50 border border-slate-200/80 p-2.5 rounded-xl shadow-xs">
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-800 mb-1.5">
+              <span>Elevation / Sill Height</span>
+              <span className="font-mono text-sky-700 font-bold bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200 text-[10px]">
+                {Math.round(selectedFurniture.elevation || 0)} cm above floor
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => adjustDimension('elevation', -10)}
+                className="py-1 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200 shadow-2xs"
+                title="Lower (-10cm)"
+              >
+                -10cm
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="260"
+                step="5"
+                value={selectedFurniture.elevation || 0}
+                onChange={(e) => updateSelected({ elevation: parseFloat(e.target.value) })}
+                className="flex-1 accent-sky-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+              />
+              <button
+                onClick={() => adjustDimension('elevation', 10)}
+                className="py-1 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200 shadow-2xs"
+                title="Raise (+10cm)"
+              >
+                +10cm
+              </button>
+            </div>
+          </div>
 
           {/* Size & Scale Controls */}
           <div className="bg-slate-50 border border-slate-200/80 p-2.5 rounded-xl shadow-xs">

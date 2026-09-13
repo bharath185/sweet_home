@@ -440,6 +440,17 @@ export default function HomeStudioPage() {
     let targetElevation = item.elevation || item.defaultElevation || 0;
     let hostId: string | undefined = undefined;
 
+    const isWindow = (item.category || '').toLowerCase().includes('window') ||
+                     (item.name || '').toLowerCase().includes('window') ||
+                     (item.id || '').toLowerCase().includes('window');
+    const isPanoramic = (item.name || '').toLowerCase().includes('panoramic') ||
+                        (item.id || '').toLowerCase().includes('panoramic');
+
+    // Windows should not touch floor - set default architectural sill height of 85cm
+    if (isWindow && !isPanoramic && targetElevation === 0) {
+      targetElevation = 85;
+    }
+
     if (item.placementType === 'tabletop' || item.placeOnTable || isTabletopItem(item)) {
       const nearestTable = findNearestSupportingSurface(
         { x: 0, y: 0, floorLevel: activeFloor, id: 'temp' } as any,
