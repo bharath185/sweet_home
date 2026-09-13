@@ -287,16 +287,17 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
   const normalizedDeg = currentAngleDeg < 0 ? currentAngleDeg + 360 : currentAngleDeg;
 
   return (
-    <div className="flex h-full select-none shrink-0 font-sans z-20">
+    <div className="relative flex h-full select-none shrink-0 font-sans z-30">
       {/* =========================================================================
-          1. FOCUSED DRAWER PANE: Rendered ONLY when an icon is active
+          1. FOCUSED DRAWER PANE: Absolute Overlay with high z-index (z-40)
+          Floating smoothly over the canvas without resizing/disturbing the design viewport
           ========================================================================= */}
       {activeTab !== null && (
         <aside
-          className={`w-80 border-l flex flex-col h-full shrink-0 transition-all ${
+          className={`absolute right-10 top-0 bottom-0 w-80 border-l border-r-0 shadow-2xl flex flex-col h-full z-40 transition-all animate-in slide-in-from-right-3 duration-150 ${
             isDark
-              ? 'bg-[#0a1120] border-slate-800 text-slate-200'
-              : 'bg-[#f8fafc] border-slate-200 text-slate-800'
+              ? 'bg-[#0a1120]/95 backdrop-blur-xl border-slate-800 text-slate-200'
+              : 'bg-white/95 backdrop-blur-xl border-slate-200 text-slate-800'
           }`}
         >
           {/* Top Focused Header with Title & Close [X] */}
