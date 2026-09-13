@@ -184,3 +184,11 @@ export interface CollisionReport {
   reasons: Map<string, string>;
   totalCollisions: number;
 }
+
+export interface VisitorCameraState {
+  x: number; // in cm
+  y: number; // in cm
+  yaw: number; // in radians
+  elevation?: number; // in cm
+  floorLevel?: number;
+}

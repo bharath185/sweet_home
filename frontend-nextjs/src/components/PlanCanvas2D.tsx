@@ -33,7 +33,7 @@ import {
   Undo2,
   Redo2
 } from 'lucide-react';
-import { HomePlan, Wall, FurnitureItem, Room, DimensionLine, TextNote } from '../types/plan';
+import { HomePlan, Wall, FurnitureItem, Room, DimensionLine, TextNote, VisitorCameraState } from '../types/plan';
 import { formatDistance, formatArea } from '../services/unitConverter';
 import { isTabletopItem, autoAttachToTabletop } from '../services/tabletopAttachment';
 
@@ -53,6 +53,8 @@ interface PlanCanvas2DProps {
   onRedo?: () => void;
   floorMode?: 'single' | 'sideBySide' | 'stacked';
   onFloorModeChange?: (mode: 'single' | 'sideBySide' | 'stacked') => void;
+  visitorCamera?: VisitorCameraState;
+  onUpdateVisitorCamera?: (state: Partial<VisitorCameraState>) => void;
 }
 
 type ToolMode = 'select' | 'drawWall' | 'dimension' | 'text' | 'pan';
@@ -93,8 +95,10 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   canRedo = false,
   onUndo,
   onRedo,
-  floorMode,
+  floorMode = 'single',
   onFloorModeChange,
+  visitorCamera,
+  onUpdateVisitorCamera,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const blueprintImgRef = useRef<HTMLImageElement | null>(null);
@@ -102,6 +106,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   const [toolMode, setToolMode] = useState<ToolMode>('select');
   const [scale, setScale] = useState<number>(0.8);
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDraggingVisitor, setIsDraggingVisitor] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
 
@@ -861,6 +866,97 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       });
     });
 
+    // 10.5. Real-Time Virtual Visitor Person Position & FOV Vision Cone
+    if (visitorCamera && (visitorCamera.floorLevel === undefined || visitorCamera.floorLevel === activeFloor || canvasFloorMode === 'stacked')) {
+      const vPos = planToScreen(visitorCamera.x, visitorCamera.y);
+      const vAngle = visitorCamera.yaw || 0;
+
+      ctx.save();
+      ctx.translate(vPos.x, vPos.y);
+
+      // Vision / FOV Conical Frustum (Flashlight cone in look direction)
+      const fovRad = (65 * Math.PI) / 180; // 65 deg FOV
+      const coneDistPx = 180 * scale; // 180cm distance in screen pixels
+
+      // In 3D: visitor yaw = 0 points towards -Z (up on 2D screen, y negative)
+      // forward = (sin(yaw), 0, -cos(yaw)) => 2D screen angle = -yaw - Math.PI / 2
+      const screenLookAngle = -vAngle - Math.PI / 2;
+
+      const gradient = ctx.createRadialGradient(0, 0, 8, 0, 0, Math.max(25, coneDistPx));
+      gradient.addColorStop(0, 'rgba(16, 185, 129, 0.45)');
+      gradient.addColorStop(0.5, 'rgba(16, 185, 129, 0.18)');
+      gradient.addColorStop(1, 'rgba(16, 185, 129, 0.0)');
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(
+        0,
+        0,
+        Math.max(25, coneDistPx),
+        screenLookAngle - fovRad / 2,
+        screenLookAngle + fovRad / 2
+      );
+      ctx.closePath();
+      ctx.fill();
+
+      // Vision cone outer boundary dashed lines
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.7)';
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(
+        Math.cos(screenLookAngle - fovRad / 2) * Math.max(25, coneDistPx),
+        Math.sin(screenLookAngle - fovRad / 2) * Math.max(25, coneDistPx)
+      );
+      ctx.moveTo(0, 0);
+      ctx.lineTo(
+        Math.cos(screenLookAngle + fovRad / 2) * Math.max(25, coneDistPx),
+        Math.sin(screenLookAngle + fovRad / 2) * Math.max(25, coneDistPx)
+      );
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Outer animated radar pulse ring
+      ctx.strokeStyle = '#10b981';
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Person Body (Sweet Home 3D style Avatar Head & Shoulders)
+      ctx.fillStyle = '#059669';
+      ctx.beginPath();
+      ctx.arc(0, 0, 8.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Direction Pointer Arrow on the head
+      ctx.save();
+      ctx.rotate(screenLookAngle);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(6.5, 0);
+      ctx.lineTo(1.5, -3.5);
+      ctx.lineTo(1.5, 3.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // Text Badge
+      ctx.font = 'bold 9px system-ui, sans-serif';
+      ctx.fillStyle = '#065f46';
+      ctx.textAlign = 'center';
+      ctx.fillText('🚶 Walk View', 0, 22);
+
+      ctx.restore();
+    }
+
     // 10. Magnetic Snap Beacon Indicator
     if (magneticSnapPoint) {
       const snapScreen = planToScreen(magneticSnapPoint.x, magneticSnapPoint.y);
@@ -971,6 +1067,15 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     }
 
     const clickPlan = screenToPlan(e.clientX, e.clientY);
+
+    // 2D Virtual Visitor Drag Interaction
+    if (visitorCamera && toolMode === 'select') {
+      const vDist = Math.hypot(clickPlan.x - visitorCamera.x, clickPlan.y - visitorCamera.y);
+      if (vDist < 25) {
+        setIsDraggingVisitor(true);
+        return;
+      }
+    }
 
     // Wall Tool
     if (toolMode === 'drawWall') {
@@ -1298,6 +1403,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   };
 
   const handleMouseUp = () => {
+    setIsDraggingVisitor(false);
     const hadDrag = activeFurnitureHandle !== null || activeWallHandle !== null;
     setIsPanning(false);
     setActiveFurnitureHandle(null);

@@ -16,7 +16,7 @@ import { AddItemModal } from '../components/AddItemModal';
 import { BlueprintImportModal } from '../components/BlueprintImportModal';
 import { PreferencesModal } from '../components/PreferencesModal';
 import { ClientProjectSelectModal } from '../components/ClientProjectSelectModal';
-import { HomePlan, CatalogItem, FurnitureItem, User, UserRole, FloorTemplate, BlueprintImage, ProjectPreferences } from '../types/plan';
+import { HomePlan, CatalogItem, FurnitureItem, User, UserRole, FloorTemplate, BlueprintImage, ProjectPreferences, VisitorCameraState } from '../types/plan';
 import { detectCollisions } from '../services/collisionDetector';
 import { isTabletopItem, findNearestSupportingSurface, autoAttachToTabletop } from '../services/tabletopAttachment';
 import {
@@ -104,6 +104,17 @@ export default function HomeStudioPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false);
   const [cameraMode3D, setCameraMode3D] = useState<'aerial' | 'visitor'>('aerial');
+  const [visitorCamera, setVisitorCamera] = useState<VisitorCameraState>({
+    x: 0,
+    y: 0,
+    yaw: 0,
+    elevation: 160,
+    floorLevel: 0,
+  });
+
+  const handleUpdateVisitorCamera = useCallback((partial: Partial<VisitorCameraState>) => {
+    setVisitorCamera((prev) => ({ ...prev, ...partial }));
+  }, []);
 
   const [isFurnitureListOpen, setIsFurnitureListOpen] = useState<boolean>(false);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
@@ -808,6 +819,8 @@ export default function HomeStudioPage() {
                         canRedo={canRedo}
                         onUndo={handleUndo}
                         onRedo={handleRedo}
+                        visitorCamera={visitorCamera}
+                        onUpdateVisitorCamera={handleUpdateVisitorCamera}
                       />
                     </div>
                     <div className="w-1/2 h-full relative">
@@ -824,6 +837,8 @@ export default function HomeStudioPage() {
                         isSplitMode={true}
                         cameraModeProp={cameraMode3D}
                         onCameraModeChangeProp={setCameraMode3D}
+                        visitorCameraProp={visitorCamera}
+                        onVisitorCameraChange={setVisitorCamera}
                       />
                     </div>
                   </>
@@ -848,6 +863,8 @@ export default function HomeStudioPage() {
                       canRedo={canRedo}
                       onUndo={handleUndo}
                       onRedo={handleRedo}
+                      visitorCamera={visitorCamera}
+                      onUpdateVisitorCamera={handleUpdateVisitorCamera}
                     />
                   </div>
                 )}

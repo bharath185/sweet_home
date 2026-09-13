@@ -29,7 +29,7 @@ import {
   Hand,
   MousePointer
 } from 'lucide-react';
-import { HomePlan, FurnitureItem, Wall, Room, CatalogItem } from '../types/plan';
+import { HomePlan, FurnitureItem, Wall, Room, CatalogItem, VisitorCameraState } from '../types/plan';
 import { isTabletopItem, autoAttachToTabletop } from '../services/tabletopAttachment';
 import { loadObjGeometry } from '../services/objParser';
 import {
@@ -64,6 +64,8 @@ interface Viewport3DProps {
   targetRoomToFocus?: Room | null;
   toolModeProp?: 'select' | 'pan';
   onToolModeChangeProp?: (mode: 'select' | 'pan') => void;
+  visitorCameraProp?: VisitorCameraState;
+  onVisitorCameraChange?: (state: VisitorCameraState) => void;
 }
 
 export const Viewport3D: React.FC<Viewport3DProps> = ({
@@ -83,6 +85,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   targetRoomToFocus,
   toolModeProp,
   onToolModeChangeProp,
+  visitorCameraProp,
+  onVisitorCameraChange,
 }) => {
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -148,6 +152,24 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     }
     if (onCameraModeChangeProp) onCameraModeChangeProp(m);
   };
+  // Sync external 2D visitor camera position into 3D
+  useEffect(() => {
+    if (visitorCameraProp && cameraMode === 'visitor') {
+      const newX = (visitorCameraProp.x || 0) * 0.01;
+      const newZ = (visitorCameraProp.y || 0) * 0.01;
+      if (
+        Math.abs(newX - visitorPosRef.current.x) > 0.03 ||
+        Math.abs(newZ - visitorPosRef.current.z) > 0.03
+      ) {
+        visitorPosRef.current.x = newX;
+        visitorPosRef.current.z = newZ;
+      }
+      if (visitorCameraProp.yaw !== undefined && Math.abs(visitorCameraProp.yaw - visitorYawRef.current) > 0.03) {
+        visitorYawRef.current = visitorCameraProp.yaw;
+      }
+    }
+  }, [visitorCameraProp, cameraMode]);
+
   const cameraModeRef = useRef<'aerial' | 'visitor'>('aerial');
   cameraModeRef.current = cameraMode;
 
@@ -170,6 +192,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   // Virtual Visitor State (Human eye level 1.6m above active floor)
   const visitorPosRef = useRef(new THREE.Vector3(0, 1.6, 0));
   const visitorYawRef = useRef(0);
+  const lastSentPosRef = useRef<{ x: number; y: number; yaw: number }>({ x: 0, y: 0, yaw: 0 });
   const visitorPitchRef = useRef(0);
   const keysPressedRef = useRef<{ [key: string]: boolean }>({});
 
@@ -451,6 +474,27 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           -Math.cos(visitorYawRef.current) * Math.cos(visitorPitchRef.current)
         );
         camera.lookAt(camera.position.clone().add(lookDir));
+
+        // Real-time synchronization to 2D Floorplan view
+        if (onVisitorCameraChange) {
+          const cmX = Math.round(vp.x * 100);
+          const cmY = Math.round(vp.z * 100);
+          const curYaw = visitorYawRef.current;
+          if (
+            Math.abs(cmX - lastSentPosRef.current.x) >= 1 ||
+            Math.abs(cmY - lastSentPosRef.current.y) >= 1 ||
+            Math.abs(curYaw - lastSentPosRef.current.yaw) >= 0.015
+          ) {
+            lastSentPosRef.current = { x: cmX, y: cmY, yaw: curYaw };
+            onVisitorCameraChange({
+              x: cmX,
+              y: cmY,
+              yaw: curYaw,
+              elevation: 160,
+              floorLevel: activeFloor,
+            });
+          }
+        }
       } else {
         // Apply Aerial Orbit Camera Position
         const s = sphericalRef.current;
