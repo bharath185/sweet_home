@@ -434,8 +434,6 @@ export default function HomeStudioPage() {
         lastSyncedAt={lastSyncedAt}
         currentUser={currentUser}
         onLogout={handleLogout}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
       />
 
       {/* Main Workspace Body */}
