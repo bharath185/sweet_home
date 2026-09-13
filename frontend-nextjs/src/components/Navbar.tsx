@@ -255,10 +255,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           }`}
           title={
             cloudSyncStatus === 'saving'
-              ? 'Saving changes to PostgreSQL database...'
+              ? 'Saving changes to cloud...'
               : cloudSyncStatus === 'offline'
               ? 'Database offline - saving to local cache'
-              : `Live PostgreSQL connection active${lastSyncedAt ? ' (Synced at ' + lastSyncedAt + ')' : ''}`
+              : `Cloud sync active${lastSyncedAt ? ' (Synced at ' + lastSyncedAt + ')' : ''}`
           }
         >
           <span className={`w-2 h-2 rounded-full ${
@@ -270,10 +270,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           }`} />
           <span>
             {cloudSyncStatus === 'saving'
-              ? '💾 Auto-saving to PostgreSQL...'
+              ? '💾 Auto-saving to Cloud...'
               : cloudSyncStatus === 'offline'
               ? '⚠️ Local Cache'
-              : '☁️ PostgreSQL Synced'}
+              : '☁️ Cloud Synced'}
           </span>
         </div>
 

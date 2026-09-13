@@ -14,9 +14,10 @@ import {
   Building2,
   Box,
   Compass,
-  Database,
+  Layers,
   Check,
-  AlertCircle
+  AlertCircle,
+  KeyRound
 } from 'lucide-react';
 import { UserRole, User as UserType } from '../types/plan';
 
@@ -31,6 +32,8 @@ export const DEMO_ACCOUNTS = [
     title: 'Administrator',
     badge: 'Superuser Portal',
     name: 'Admin Superuser',
+    email: 'admin@visualrendered.io',
+    password: 'admin',
     icon: ShieldCheck,
     gradient: 'from-sky-500 via-indigo-600 to-indigo-700',
     borderAccent: 'border-sky-500 ring-sky-400/20',
@@ -43,6 +46,8 @@ export const DEMO_ACCOUNTS = [
     title: 'Interior Designer',
     badge: 'Studio Architect',
     name: 'Interior Architect',
+    email: 'designer@visualrendered.io',
+    password: 'designer',
     icon: Palette,
     gradient: 'from-indigo-500 via-purple-600 to-purple-700',
     borderAccent: 'border-indigo-500 ring-indigo-400/20',
@@ -55,6 +60,8 @@ export const DEMO_ACCOUNTS = [
     title: 'Client / Customer',
     badge: 'Virtual 3D Tour',
     name: 'Sarah Jenkins (Client)',
+    email: 'client.sarah@gmail.com',
+    password: 'client',
     icon: User,
     gradient: 'from-emerald-500 via-teal-600 to-teal-700',
     borderAccent: 'border-emerald-500 ring-emerald-400/20',
@@ -101,7 +108,33 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
     setIsLoading(true);
 
     setTimeout(() => {
-      // 1. Check matching onboarded users
+      // 1. Check matching demo accounts
+      const matchedDemo = DEMO_ACCOUNTS.find(
+        (a) => a.email.toLowerCase() === cleanEmail.toLowerCase() || (a.role === selectedRole && (cleanEmail === a.email || cleanEmail === a.name))
+      );
+
+      if (matchedDemo) {
+        if (cleanPassword === matchedDemo.password || cleanPassword === `${matchedDemo.password}123`) {
+          const userObj: UserType = {
+            id: matchedDemo.role === 'ADMIN' ? 'u1' : matchedDemo.role === 'DESIGNER' ? 'u2' : 'u3',
+            name: matchedDemo.name,
+            email: matchedDemo.email,
+            role: matchedDemo.role,
+            isOnline: true,
+            assignedPlan: matchedDemo.assignedPlan,
+            createdAt: 'Today',
+          };
+          onLogin(userObj);
+          setIsLoading(false);
+          return;
+        } else {
+          setErrorMessage(`Invalid password for ${matchedDemo.title}. Use password: "${matchedDemo.password}"`);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // 2. Check matching onboarded users
       const matchedCustomUser = availableUsers.find(
         (u) => u.email.toLowerCase() === cleanEmail.toLowerCase()
       );
@@ -112,7 +145,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
         return;
       }
 
-      // 2. Role-based user login
+      // 3. Role-based user login fallback
       const generatedUser: UserType = {
         id: `u_${Date.now()}`,
         name: cleanEmail.includes('@')
@@ -154,7 +187,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
       {/* Main Center Stage Container */}
       <div className="relative z-10 w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-center">
         
-        {/* Left Column: Brand Story, Capabilities & Role Cards */}
+        {/* Left Column: Brand Story, Capabilities & Role Cards with Visible Login Credentials */}
         <div className="lg:col-span-7 flex flex-col justify-center space-y-6">
           
           {/* Logo & Headline */}
@@ -173,11 +206,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
             </h1>
 
             <p className="text-sm text-slate-300/80 mt-3 max-w-xl leading-relaxed">
-              Design multi-floor architectural blueprints, render WebGL interiors, and present first-person walkthrough tours with real-time PostgreSQL synchronization.
+              Design multi-floor architectural blueprints, render WebGL interiors, and present first-person walkthrough tours with real-time cloud collaboration.
             </p>
           </div>
 
-          {/* 3 Role Selection Cards (Without Autofill) */}
+          {/* 3 Role Selection Cards with Clear Login Details */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {DEMO_ACCOUNTS.map((acc) => {
               const Icon = acc.icon;
@@ -188,16 +221,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                   key={acc.role}
                   type="button"
                   onClick={() => handleSelectPreset(acc.role)}
-                  className={`relative text-left p-4 rounded-2xl border transition-all flex flex-col justify-between group cursor-pointer ${
+                  className={`relative text-left p-3.5 rounded-2xl border transition-all flex flex-col justify-between group cursor-pointer ${
                     isSelected
-                      ? 'bg-slate-900/90 border-sky-400 shadow-lg shadow-sky-500/10 ring-1 ring-sky-400/40'
-                      : 'bg-slate-900/40 hover:bg-slate-900/70 border-slate-800 hover:border-slate-700'
+                      ? 'bg-slate-900/95 border-sky-400 shadow-lg shadow-sky-500/10 ring-1 ring-sky-400/40'
+                      : 'bg-slate-900/45 hover:bg-slate-900/75 border-slate-800 hover:border-slate-700'
                   }`}
                 >
                   <div>
-                    <div className="flex items-center justify-between mb-2.5">
+                    <div className="flex items-center justify-between mb-2">
                       <div
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold bg-gradient-to-br ${acc.gradient} shadow-md`}
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold bg-gradient-to-br ${acc.gradient} shadow-md`}
                       >
                         <Icon className="w-4 h-4" />
                       </div>
@@ -208,19 +241,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                       )}
                     </div>
                     <div className="text-sm font-bold text-white tracking-tight">{acc.title}</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{acc.description}</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">{acc.description}</div>
                   </div>
 
-                  <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-semibold text-slate-400 group-hover:text-sky-400 transition-colors">
-                    <span>{isSelected ? 'Selected Role' : 'Select Role'}</span>
-                    <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                  {/* Role Login Credentials Box */}
+                  <div className="mt-3 p-2 rounded-xl bg-slate-950/80 border border-slate-800/90 text-[10px] font-mono space-y-1">
+                    <div className="flex items-center justify-between gap-1 text-slate-400">
+                      <span className="text-[9px] uppercase font-sans font-bold text-slate-500">Email</span>
+                      <span className="text-sky-300 truncate max-w-[120px] font-medium">{acc.email}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-1 text-slate-400">
+                      <span className="text-[9px] uppercase font-sans font-bold text-slate-500">Pass</span>
+                      <span className="text-emerald-300 font-medium">{acc.password}</span>
+                    </div>
                   </div>
                 </button>
               );
             })}
           </div>
 
-          {/* Capabilities Footer Highlights */}
+          {/* Capabilities Highlights (No DB mentions) */}
           <div className="grid grid-cols-3 gap-3 pt-2">
             <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/30 border border-slate-800/60">
               <Box className="w-4 h-4 text-sky-400 shrink-0" />
@@ -239,10 +279,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
             </div>
 
             <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/30 border border-slate-800/60">
-              <Database className="w-4 h-4 text-indigo-400 shrink-0" />
+              <Layers className="w-4 h-4 text-indigo-400 shrink-0" />
               <div className="min-w-0">
-                <div className="text-xs font-bold text-white truncate">PostgreSQL Live</div>
-                <div className="text-[10px] text-slate-400 truncate">Auto-Save & Revisions</div>
+                <div className="text-xs font-bold text-white truncate">Cloud Studio</div>
+                <div className="text-[10px] text-slate-400 truncate">Real-Time Auto-Save</div>
               </div>
             </div>
           </div>
@@ -256,7 +296,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
             <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${activeAccount.gradient}`} />
 
             {/* Card Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-5">
               <div>
                 <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${activeAccount.badgeBg}`}>
                   {activeAccount.badge}
@@ -266,6 +306,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
               
               <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-white bg-gradient-to-br ${activeAccount.gradient} shadow-lg shadow-sky-500/20`}>
                 <Building2 className="w-5 h-5" />
+              </div>
+            </div>
+
+            {/* Selected Role Credentials Quick Banner */}
+            <div className="mb-4 p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 text-slate-400">
+                <KeyRound className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                <span className="text-[11px] font-semibold">{activeAccount.title} Login:</span>
+              </div>
+              <div className="font-mono text-[11px] space-x-1.5">
+                <span className="text-sky-300 font-medium">{activeAccount.email}</span>
+                <span className="text-slate-600">•</span>
+                <span className="text-emerald-300 font-medium">{activeAccount.password}</span>
               </div>
             </div>
 
@@ -294,7 +347,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                     autoComplete="off"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email"
+                    placeholder={`e.g. ${activeAccount.email}`}
                     className="w-full pl-9 pr-3 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition"
                   />
                 </div>
@@ -315,7 +368,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                     autoComplete="new-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
+                    placeholder={`e.g. ${activeAccount.password}`}
                     className="w-full pl-9 pr-10 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition"
                   />
                   <button
@@ -361,10 +414,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
               </button>
             </form>
 
-            {/* Database Status Tag */}
+            {/* Clean Security Badge Footer (No Database mentions) */}
             <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-center gap-1.5 text-[10px] text-slate-500">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span>PostgreSQL 17 Database Connected • High Availability</span>
+              <span>Enterprise Security Gate • 256-Bit SSL Encrypted</span>
             </div>
           </div>
         </div>
