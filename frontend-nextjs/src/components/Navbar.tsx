@@ -5,6 +5,8 @@ import {
   Layers,
   Sparkles,
   LayoutDashboard,
+  Box,
+  Eye,
   Save,
   Share2,
   Undo2,
@@ -64,11 +66,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
 }) => {
   return (
-    <header className="h-14 bg-white/95 backdrop-blur-xl border-b border-slate-200/90 px-4 sm:px-6 flex items-center justify-between select-none z-30 shadow-2xs relative">
-      {/* 1. Left Brand & Active Plan Title (Clean & uncluttered) */}
-      <div className="flex items-center gap-3 min-w-[200px]">
+    <header className="h-14 bg-white/95 backdrop-blur-xl border-b border-slate-200/90 px-3 sm:px-5 flex items-center justify-between select-none z-30 shadow-2xs relative">
+      {/* 1. Left Brand & Active Plan Title */}
+      <div className="flex items-center gap-2.5 min-w-[170px]">
         <div
-          className={`flex items-center justify-center w-8 h-8 rounded-xl text-white font-bold shadow-sm ${
+          className={`flex items-center justify-center w-8 h-8 rounded-xl text-white font-bold shadow-sm shrink-0 ${
             userRole === 'ADMIN'
               ? 'bg-gradient-to-tr from-sky-500 to-indigo-600 shadow-sky-500/20'
               : userRole === 'DESIGNER'
@@ -79,13 +81,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Layers className="w-4 h-4" />
         </div>
 
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <span className="font-extrabold text-slate-900 text-sm tracking-tight">
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="font-extrabold text-slate-900 text-sm tracking-tight truncate">
               SweetHome
             </span>
             <span
-              className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full border ${
+              className={`text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded-full border shrink-0 ${
                 userRole === 'ADMIN'
                   ? 'bg-sky-50 text-sky-700 border-sky-200'
                   : userRole === 'DESIGNER'
@@ -97,55 +99,87 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
           </div>
 
-          <span className="text-[11px] font-semibold text-slate-500 truncate max-w-[220px]">
+          <span className="text-[10px] font-semibold text-slate-500 truncate max-w-[160px]">
             {plan.name || 'Untitled Plan'}
           </span>
         </div>
       </div>
 
-      {/* 2. Center View Switches (Compact & Beautifully Aligned) */}
-      <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 shadow-inner">
+      {/* 2. Center View Switches (Dashboard | 2D Plan | 3D Plan | 2D/3D Plan | Client Tour) */}
+      <div className="flex items-center bg-slate-100 p-0.5 sm:p-1 rounded-2xl border border-slate-200 shadow-inner">
         {/* Dashboard button for ADMIN */}
         {userRole === 'ADMIN' && (
           <button
             onClick={() => setActiveView('dashboard')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
               activeView === 'dashboard'
                 ? 'bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
             }`}
-            title="Dashboard & Client Projects Directory"
+            title="Admin Dashboard & Client Projects Directory"
           >
             <LayoutDashboard className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Dashboard</span>
+            <span className="hidden md:inline">Dashboard</span>
           </button>
         )}
 
-        {/* Studio CAD view for ADMIN & DESIGNER */}
+        {/* 2D Plan Mode */}
         {userRole !== 'CLIENT' && (
           <button
-            onClick={() => setActiveView('split')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeView === 'split' || activeView === '2d' || activeView === '3d'
+            onClick={() => setActiveView('2d')}
+            className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeView === '2d'
                 ? 'bg-white text-sky-700 shadow-xs border border-slate-200 font-bold'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
             }`}
-            title="2D CAD & 3D Interactive Studio"
+            title="Full 2D CAD Floor Plan Workspace"
           >
-            <Layers className="w-3.5 h-3.5 text-sky-600" />
-            <span>2D / 3D Studio</span>
+            <Box className="w-3.5 h-3.5 text-sky-600" />
+            <span>2D Plan</span>
           </button>
         )}
 
-        {/* Client Tour for All */}
+        {/* 3D Plan Mode */}
+        {userRole !== 'CLIENT' && (
+          <button
+            onClick={() => setActiveView('3d')}
+            className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeView === '3d'
+                ? 'bg-white text-sky-700 shadow-xs border border-slate-200 font-bold'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+            title="Full 3D WebGL Render Scene"
+          >
+            <Eye className="w-3.5 h-3.5 text-sky-600" />
+            <span>3D Plan</span>
+          </button>
+        )}
+
+        {/* 2D/3D Plan Mode */}
+        {userRole !== 'CLIENT' && (
+          <button
+            onClick={() => setActiveView('split')}
+            className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeView === 'split'
+                ? 'bg-white text-sky-700 shadow-xs border border-slate-200 font-bold'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+            title="Side-by-Side 2D CAD + 3D Studio"
+          >
+            <Layers className="w-3.5 h-3.5 text-sky-600" />
+            <span>2D/3D Plan</span>
+          </button>
+        )}
+
+        {/* Client Tour */}
         <button
           onClick={() => setActiveView('customer')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+          className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
             activeView === 'customer'
               ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-xs font-bold'
               : 'text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50'
           }`}
-          title="Client Presentation & 3D Virtual Tour"
+          title="Client Presentation & 3D Interactive Walkthrough"
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span>Client Tour</span>
@@ -153,7 +187,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* 3. Right Side Actions (Cleanly aligned without clutter) */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2">
         {/* Undo & Redo (for Admin & Designer) */}
         {userRole !== 'CLIENT' && (
           <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 shadow-2xs">
@@ -188,7 +222,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {userRole !== 'CLIENT' && (
           <button
             onClick={onOpenPreferences}
-            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition border border-slate-200 bg-slate-50 shadow-2xs"
+            className="p-1.5 sm:p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition border border-slate-200 bg-slate-50 shadow-2xs"
             title="Project Preferences & Grid Settings"
           >
             <Settings className="w-3.5 h-3.5" />
@@ -198,7 +232,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Collision Warning indicator if any */}
         {collidingCount > 0 && (
           <div
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse"
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse"
             title={`${collidingCount} overlapping item(s)`}
           >
             <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
@@ -211,7 +245,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             onClick={onSave}
             disabled={isSaving}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold shadow-2xs transition active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold shadow-2xs transition active:scale-95 disabled:opacity-50"
             title="Save plan to backend"
           >
             <Save className="w-3.5 h-3.5 text-sky-600" />
@@ -222,7 +256,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Share 3D Link */}
         <button
           onClick={onOpenShare}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-bold shadow-sm shadow-sky-600/20 transition active:scale-95"
+          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-bold shadow-sm shadow-sky-600/20 transition active:scale-95"
           title="Share 3D Client Presentation Link"
         >
           <Share2 className="w-3.5 h-3.5" />
@@ -231,7 +265,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* User profile & Logout */}
         {currentUser && (
-          <div className="flex items-center gap-1.5 pl-1.5 border-l border-slate-200">
+          <div className="flex items-center gap-1.5 pl-1 border-l border-slate-200">
             <div
               className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-slate-50 border border-slate-200"
               title={`Logged in as ${currentUser.name} (${currentUser.role})`}
@@ -247,7 +281,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 {currentUser.name.charAt(0).toUpperCase()}
               </div>
-              <span className="text-xs font-bold text-slate-700 truncate max-w-[80px]">
+              <span className="hidden sm:inline text-xs font-bold text-slate-700 truncate max-w-[75px]">
                 {currentUser.name}
               </span>
             </div>
