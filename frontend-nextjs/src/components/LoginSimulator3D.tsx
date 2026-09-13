@@ -7,12 +7,17 @@ import { loadObjGeometry } from '../services/objParser';
 export const LoginSimulator3D: React.FC = () => {
   const mountRef = useRef<HTMLDivElement | null>(null);
 
-  // User interactive camera state: orbit angle, distance, and pan target
+  // User interactive camera state
   const isDraggingRef = useRef(false);
-  const dragModeRef = useRef<'rotate' | 'pan'>('rotate');
+  const dragModeRef = useRef<'rotate' | 'pan' | 'move_item'>('rotate');
   const prevMouseRef = useRef({ x: 0, y: 0 });
   const cameraAngleRef = useRef({ theta: Math.PI / 4.2, phi: Math.PI / 3.0, radius: 12.0 });
   const cameraTargetRef = useRef(new THREE.Vector3(0, 0.45, 0));
+
+  // Selected item manipulation state
+  const selectedItemRef = useRef<THREE.Object3D | null>(null);
+  const planeIntersectPointRef = useRef(new THREE.Vector3());
+  const dragOffsetRef = useRef(new THREE.Vector3());
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -174,13 +179,22 @@ export const LoginSimulator3D: React.FC = () => {
       metalness: 0.1,
     });
 
+    // Selection ring / highlight helper
+    const selectionRingGeom = new THREE.RingGeometry(0.5, 0.56, 32);
+    const selectionRingMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0 });
+    const selectionRing = new THREE.Mesh(selectionRingGeom, selectionRingMat);
+    selectionRing.rotation.x = -Math.PI / 2;
+    selectionRing.position.y = 0.012;
+    roomRoot.add(selectionRing);
+
     // Helper to load inventory OBJ model and scale to target meters
     const loadInventoryItem = async (
       objPath: string,
       targetW: number,
       targetD: number,
       targetH: number,
-      material: THREE.Material
+      material: THREE.Material,
+      itemName: string
     ): Promise<THREE.Mesh> => {
       const geom = await loadObjGeometry(objPath);
       geom.computeBoundingBox();
@@ -201,6 +215,7 @@ export const LoginSimulator3D: React.FC = () => {
       mesh.scale.set(scaleX, scaleY, scaleZ);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      mesh.userData = { isDraggable: true, itemName, targetW, targetD };
       return mesh;
     };
 
@@ -264,13 +279,13 @@ export const LoginSimulator3D: React.FC = () => {
     roomRoot.add(architecturalFittingsGroup);
 
     // Window from inventory (/models/doubleWindow126x123.obj)
-    loadInventoryItem('/models/doubleWindow126x123.obj', 1.4, 0.16, 1.25, windowMat).then((winMesh) => {
+    loadInventoryItem('/models/doubleWindow126x123.obj', 1.4, 0.16, 1.25, windowMat, 'window').then((winMesh) => {
       winMesh.position.set(0.95, 0.7, -1.82);
       architecturalFittingsGroup.add(winMesh);
     });
 
     // Door from inventory (/models/door.obj)
-    loadInventoryItem('/models/door.obj', 0.9, 0.12, 2.1, doorMat).then((doorMesh) => {
+    loadInventoryItem('/models/door.obj', 0.9, 0.12, 2.1, doorMat, 'door').then((doorMesh) => {
       doorMesh.rotation.y = Math.PI / 2;
       doorMesh.position.set(-2.12, 0, 0.6);
       architecturalFittingsGroup.add(doorMesh);
@@ -283,58 +298,66 @@ export const LoginSimulator3D: React.FC = () => {
     roomRoot.add(lightingGroup);
 
     // Pendant Lamp from inventory (/models/pendantLamp.obj)
-    loadInventoryItem('/models/pendantLamp.obj', 0.55, 0.55, 0.65, lampMat).then((lampMesh) => {
+    loadInventoryItem('/models/pendantLamp.obj', 0.55, 0.55, 0.65, lampMat, 'lamp').then((lampMesh) => {
       lampMesh.position.set(0, 1.75, 0);
       lightingGroup.add(lampMesh);
     });
 
     // ==========================================
-    // 9. STAGE 4 & 5: INVENTORY FURNITURE SUITE
+    // 9. STAGE 4 & 5: INVENTORY FURNITURE SUITE (INTERACTIVE & ADJUSTABLE)
     // ==========================================
     const furnitureGroup = new THREE.Group();
     roomRoot.add(furnitureGroup);
 
-    // A. Luxury Sofa from inventory (/models/sofa.obj) - Rotated Math.PI (180 deg) so cushions face directly toward coffee table and TV
-    loadInventoryItem('/models/sofa.obj', 2.1, 0.85, 0.82, sofaMat).then((sofaMesh) => {
+    const interactiveItems: THREE.Object3D[] = [];
+
+    // A. Luxury Sofa from inventory (/models/sofa.obj)
+    loadInventoryItem('/models/sofa.obj', 2.1, 0.85, 0.82, sofaMat, 'sofa').then((sofaMesh) => {
       sofaMesh.rotation.y = Math.PI;
       sofaMesh.position.set(-0.1, 0, 0.82);
       furnitureGroup.add(sofaMesh);
+      interactiveItems.push(sofaMesh);
     });
 
-    // B. Coffee Table from inventory (/models/roundTable.obj) - Centered neatly between sofa and TV
-    loadInventoryItem('/models/roundTable.obj', 0.75, 0.75, 0.42, tableMat).then((tableMesh) => {
+    // B. Coffee Table from inventory (/models/roundTable.obj)
+    loadInventoryItem('/models/roundTable.obj', 0.75, 0.75, 0.42, tableMat, 'coffeeTable').then((tableMesh) => {
       tableMesh.position.set(-0.1, 0, 0.02);
       furnitureGroup.add(tableMesh);
+      interactiveItems.push(tableMesh);
     });
 
-    // C. Single Seater Armchair from inventory (/models/armchair.obj) - Angled correctly to face inward directly toward the coffee table
-    loadInventoryItem('/models/armchair.obj', 0.8, 0.8, 0.8, armchairMat).then((chairMesh) => {
+    // C. Single Seater Armchair from inventory (/models/armchair.obj)
+    loadInventoryItem('/models/armchair.obj', 0.8, 0.8, 0.8, armchairMat, 'armchair').then((chairMesh) => {
       chairMesh.rotation.y = -Math.PI * 0.70;
       chairMesh.position.set(1.15, 0, 0.1);
       furnitureGroup.add(chairMesh);
+      interactiveItems.push(chairMesh);
     });
 
-    // D. TV Media Console from inventory (/models/tvUnit.obj) - Rotated Math.PI to face into the room (+Z) towards sofa
-    loadInventoryItem('/models/tvUnit.obj', 1.6, 0.45, 0.5, tvUnitMat).then((tvMesh) => {
+    // D. TV Media Console from inventory (/models/tvUnit.obj)
+    loadInventoryItem('/models/tvUnit.obj', 1.6, 0.45, 0.5, tvUnitMat, 'tvUnit').then((tvMesh) => {
       tvMesh.rotation.y = Math.PI;
       tvMesh.position.set(-0.1, 0, -1.62);
       furnitureGroup.add(tvMesh);
+      interactiveItems.push(tvMesh);
     });
 
-    // E. Bookcase Shelf from inventory (/models/bookcase.obj) - Flush against left wall, shelves facing into room (+X)
-    loadInventoryItem('/models/bookcase.obj', 0.8, 0.35, 1.75, bookcaseMat).then((shelfMesh) => {
+    // E. Bookcase Shelf from inventory (/models/bookcase.obj)
+    loadInventoryItem('/models/bookcase.obj', 0.8, 0.35, 1.75, bookcaseMat, 'bookcase').then((shelfMesh) => {
       shelfMesh.rotation.y = Math.PI / 2;
       shelfMesh.position.set(-2.0, 0, -0.6);
       furnitureGroup.add(shelfMesh);
+      interactiveItems.push(shelfMesh);
     });
 
-    // F. Botanical Plant from inventory (/models/plant.obj) - Perfectly placed in rear corner
-    loadInventoryItem('/models/plant.obj', 0.55, 0.55, 1.35, plantMat).then((plantMesh) => {
+    // F. Botanical Plant from inventory (/models/plant.obj)
+    loadInventoryItem('/models/plant.obj', 0.55, 0.55, 1.35, plantMat, 'plant').then((plantMesh) => {
       plantMesh.position.set(-1.65, 0, -1.45);
       furnitureGroup.add(plantMesh);
+      interactiveItems.push(plantMesh);
     });
 
-    // G. Plush Woven Floor Rug - Centered under seating zone
+    // G. Plush Woven Floor Rug
     const rugMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.98 });
     const rugMesh = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.015, 2.3), rugMat);
     rugMesh.position.set(0.0, 0.008, 0.15);
@@ -402,7 +425,18 @@ export const LoginSimulator3D: React.FC = () => {
         furnitureGroup.visible = false;
       }
 
-      // Camera position based on user's manual adjustments (No automatic camera spinning)
+      // Update selection indicator ring position
+      if (selectedItemRef.current) {
+        selectionRing.position.x = selectedItemRef.current.position.x;
+        selectionRing.position.z = selectedItemRef.current.position.z;
+        const ringScale = (selectedItemRef.current.userData.targetW || 0.9) * 0.75;
+        selectionRing.scale.set(ringScale, ringScale, ringScale);
+        selectionRingMat.opacity = 0.85;
+      } else {
+        selectionRingMat.opacity = 0;
+      }
+
+      // Camera position based on user's manual adjustments
       const target = cameraTargetRef.current;
       const s = cameraAngleRef.current;
 
@@ -418,49 +452,149 @@ export const LoginSimulator3D: React.FC = () => {
     animate();
 
     // ==========================================
-    // 11. USER ADJUSTMENTS: ROTATION + PANNING + ZOOM
+    // 11. INTERACTIVE ITEM POSITION DRAG & ROTATION
     // ==========================================
+    const raycaster = new THREE.Raycaster();
+    const mouseNorm = new THREE.Vector2();
+    const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+    const getPointerPos = (e: MouseEvent) => {
+      const rect = dom.getBoundingClientRect();
+      mouseNorm.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouseNorm.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    };
+
     const handleMouseDown = (e: MouseEvent) => {
+      getPointerPos(e);
       isDraggingRef.current = true;
       prevMouseRef.current = { x: e.clientX, y: e.clientY };
-      // Right click, Middle click, or Shift+Left click enables Panning / Position adjustment
+
+      raycaster.setFromCamera(mouseNorm, camera);
+
+      // Check if user clicked on an interactive furniture item
+      const intersects = raycaster.intersectObjects(interactiveItems, true);
+
+      if (e.button === 0 && intersects.length > 0 && !e.shiftKey) {
+        // User clicked on a furniture item -> Start moving it
+        let topItem: THREE.Object3D | null = intersects[0].object;
+        while (topItem && topItem.parent !== furnitureGroup && topItem.parent !== roomRoot) {
+          topItem = topItem.parent;
+        }
+
+        if (topItem && topItem.userData.isDraggable) {
+          dragModeRef.current = 'move_item';
+          selectedItemRef.current = topItem;
+
+          // Find intersection with floor plane in room coordinates
+          const ray = raycaster.ray.clone();
+          ray.applyMatrix4(roomRoot.matrixWorld.clone().invert());
+          const intersectPt = new THREE.Vector3();
+          if (ray.intersectPlane(floorPlane, intersectPt)) {
+            dragOffsetRef.current.copy(intersectPt).sub(topItem.position);
+          }
+          return;
+        }
+      }
+
+      // If user right-clicked on an item, rotate it by 45 degrees
+      if (e.button === 2 && intersects.length > 0) {
+        let topItem: THREE.Object3D | null = intersects[0].object;
+        while (topItem && topItem.parent !== furnitureGroup && topItem.parent !== roomRoot) {
+          topItem = topItem.parent;
+        }
+        if (topItem && topItem.userData.isDraggable) {
+          topItem.rotation.y += Math.PI / 4;
+          selectedItemRef.current = topItem;
+          return;
+        }
+      }
+
+      // Otherwise camera pan or rotate
       if (e.button === 2 || e.button === 1 || e.shiftKey) {
         dragModeRef.current = 'pan';
       } else {
         dragModeRef.current = 'rotate';
+        selectedItemRef.current = null;
       }
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDraggingRef.current) return;
-      const dx = e.clientX - prevMouseRef.current.x;
-      const dy = e.clientY - prevMouseRef.current.y;
-      prevMouseRef.current = { x: e.clientX, y: e.clientY };
+      getPointerPos(e);
 
-      if (dragModeRef.current === 'pan') {
-        // Adjust camera target position
-        const target = cameraTargetRef.current;
-        const s = cameraAngleRef.current;
-        const rightX = Math.cos(s.theta);
-        const rightZ = -Math.sin(s.theta);
+      if (isDraggingRef.current) {
+        const dx = e.clientX - prevMouseRef.current.x;
+        const dy = e.clientY - prevMouseRef.current.y;
+        prevMouseRef.current = { x: e.clientX, y: e.clientY };
 
-        target.x -= rightX * dx * 0.006;
-        target.z -= rightZ * dx * 0.006;
-        target.y += dy * 0.006;
+        if (dragModeRef.current === 'move_item' && selectedItemRef.current) {
+          // Move the selected furniture item across the floor
+          raycaster.setFromCamera(mouseNorm, camera);
+          const ray = raycaster.ray.clone();
+          ray.applyMatrix4(roomRoot.matrixWorld.clone().invert());
+          const intersectPt = new THREE.Vector3();
+          if (ray.intersectPlane(floorPlane, intersectPt)) {
+            const newPos = intersectPt.sub(dragOffsetRef.current);
+            // Clamp within room boundaries
+            const halfW = (selectedItemRef.current.userData.targetW || 0.8) / 2;
+            const halfD = (selectedItemRef.current.userData.targetD || 0.8) / 2;
+            selectedItemRef.current.position.x = Math.max(-2.0 + halfW, Math.min(2.0 - halfW, newPos.x));
+            selectedItemRef.current.position.z = Math.max(-1.7 + halfD, Math.min(1.7 - halfD, newPos.z));
+          }
+        } else if (dragModeRef.current === 'pan') {
+          // Camera pan
+          const target = cameraTargetRef.current;
+          const s = cameraAngleRef.current;
+          const rightX = Math.cos(s.theta);
+          const rightZ = -Math.sin(s.theta);
 
-        target.x = Math.max(-2.5, Math.min(2.5, target.x));
-        target.y = Math.max(-1.5, Math.min(2.5, target.y));
-        target.z = Math.max(-2.5, Math.min(2.5, target.z));
+          target.x -= rightX * dx * 0.006;
+          target.z -= rightZ * dx * 0.006;
+          target.y += dy * 0.006;
+
+          target.x = Math.max(-2.5, Math.min(2.5, target.x));
+          target.y = Math.max(-1.5, Math.min(2.5, target.y));
+          target.z = Math.max(-2.5, Math.min(2.5, target.z));
+        } else {
+          // Camera rotate
+          const s = cameraAngleRef.current;
+          s.theta -= dx * 0.008;
+          s.phi = Math.max(0.35, Math.min(1.4, s.phi - dy * 0.008));
+        }
       } else {
-        // Adjust camera rotation angle
-        const s = cameraAngleRef.current;
-        s.theta -= dx * 0.008;
-        s.phi = Math.max(0.35, Math.min(1.4, s.phi - dy * 0.008));
+        // Hover raycasting to highlight cursor
+        raycaster.setFromCamera(mouseNorm, camera);
+        const intersects = raycaster.intersectObjects(interactiveItems, true);
+        dom.style.cursor = intersects.length > 0 ? 'move' : 'grab';
       }
     };
 
     const handleMouseUp = () => {
       isDraggingRef.current = false;
+      dom.style.cursor = 'grab';
+    };
+
+    const handleDblClick = (e: MouseEvent) => {
+      getPointerPos(e);
+      raycaster.setFromCamera(mouseNorm, camera);
+      const intersects = raycaster.intersectObjects(interactiveItems, true);
+      if (intersects.length > 0) {
+        let topItem: THREE.Object3D | null = intersects[0].object;
+        while (topItem && topItem.parent !== furnitureGroup && topItem.parent !== roomRoot) {
+          topItem = topItem.parent;
+        }
+        if (topItem && topItem.userData.isDraggable) {
+          // Rotate item by 45 degrees on double-click
+          topItem.rotation.y += Math.PI / 4;
+          selectedItemRef.current = topItem;
+        }
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 'R' key rotates currently selected furniture item
+      if (e.code === 'KeyR' && selectedItemRef.current) {
+        selectedItemRef.current.rotation.y += e.shiftKey ? -Math.PI / 4 : Math.PI / 4;
+      }
     };
 
     const handleWheel = (e: WheelEvent) => {
@@ -477,8 +611,10 @@ export const LoginSimulator3D: React.FC = () => {
     dom.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
+    dom.addEventListener('dblclick', handleDblClick);
     dom.addEventListener('wheel', handleWheel, { passive: false });
     dom.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('keydown', handleKeyDown);
 
     const handleResize = () => {
       if (!mount || !renderer || !camera) return;
@@ -495,8 +631,10 @@ export const LoginSimulator3D: React.FC = () => {
       dom.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      dom.removeEventListener('dblclick', handleDblClick);
       dom.removeEventListener('wheel', handleWheel);
       dom.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('resize', handleResize);
       if (mount.contains(renderer.domElement)) {
         mount.removeChild(renderer.domElement);
@@ -506,7 +644,7 @@ export const LoginSimulator3D: React.FC = () => {
   }, []);
 
   return (
-    <div className="relative w-full h-[520px] sm:h-[580px] lg:h-[660px] flex items-center justify-center select-none overflow-visible touch-none cursor-grab active:cursor-grabbing">
+    <div className="relative w-full h-[520px] sm:h-[580px] lg:h-[660px] flex items-center justify-center select-none overflow-visible touch-none">
       <div ref={mountRef} className="w-full h-full" />
     </div>
   );
