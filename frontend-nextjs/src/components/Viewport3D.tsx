@@ -1443,7 +1443,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       {/* Three.js Canvas Mount - Isolated */}
       <div ref={canvasMountRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
-      {/* Top 3D Viewport Controls (Compact & Cleanly aligned) */}
+      {/* Top 3D Viewport Controls (Hidden in Customer Presentation Tour) */}
+      {!isCustomerMode && (
       <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-sm text-xs font-semibold">
         {/* Floor Mode Selector (Only shown in Full 3D mode; hidden in 2D/3D split to avoid duplicate menus) */}
         {!isSplitMode && (
@@ -1563,9 +1564,10 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           <Maximize2 className="w-3.5 h-3.5" />
         </button>
       </div>
+      )}
 
-      {/* Room Jump Pills in Visitor Mode */}
-      {cameraMode === 'visitor' && plan.rooms.length > 0 && (
+      {/* Room Jump Pills in Visitor Mode (CAD studio only) */}
+      {!isCustomerMode && cameraMode === 'visitor' && plan.rooms.length > 0 && (
         <div className="absolute top-12 right-2.5 z-10 flex flex-wrap gap-1 max-w-xs justify-end">
           {plan.rooms.map((room) => (
             <button
@@ -1645,14 +1647,16 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       )}
 
       {/* Floating 3D Pick & Drag / Visitor Instructions Banner */}
-      <div className="absolute bottom-4 left-4 z-10 flex items-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 text-[11px] text-slate-600 pointer-events-none shadow-md">
-        <Sparkles className="w-3.5 h-3.5 text-sky-600" />
-        <span>
-          {cameraMode === 'visitor'
-            ? 'Virtual Visitor: Use W/A/S/D or D-Pad to walk • Drag to look 360° • Click & drag furniture to reposition'
-            : '3D Drag & Drop: Click and drag any furniture piece on the floor • Press R to rotate • Drag empty space to orbit'}
-        </span>
-      </div>
+      {!isCustomerMode && (
+        <div className="absolute bottom-4 left-4 z-10 flex items-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 text-[11px] text-slate-600 pointer-events-none shadow-md">
+          <Sparkles className="w-3.5 h-3.5 text-sky-600" />
+          <span>
+            {cameraMode === 'visitor'
+              ? 'Virtual Visitor: Use W/A/S/D or D-Pad to walk • Drag to look 360° • Click & drag furniture to reposition'
+              : '3D Drag & Drop: Click and drag any furniture piece on the floor • Press R to rotate • Drag empty space to orbit'}
+          </span>
+        </div>
+      )}
     </div>
   );
 };

@@ -271,9 +271,9 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
         </div>
       </header>
 
-      {/* Collision Alert Pill */}
+      {/* Collision Alert Pill (Non-overlapping at bottom-left) */}
       {collidingItemIds.size > 0 && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-rose-600 text-white backdrop-blur-xl px-4 py-1.5 rounded-full shadow-lg border border-rose-500 text-xs font-bold animate-pulse">
+        <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 bg-rose-600 text-white backdrop-blur-xl px-4 py-1.5 rounded-full shadow-lg border border-rose-500 text-xs font-bold animate-pulse">
           <AlertTriangle className="w-4 h-4" />
           <span>
             {collidingItemIds.size} {collidingItemIds.size === 1 ? 'Item' : 'Items'} in Collision & Glowing Red
@@ -282,7 +282,7 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
       )}
 
       {/* Floor & Room Selector at Top Center */}
-      <div className="absolute top-24 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-white/95 p-1.5 rounded-full border border-slate-200 shadow-md backdrop-blur-xl">
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-white/95 p-1.5 rounded-full border border-slate-200 shadow-md backdrop-blur-xl text-xs">
         {(plan.floors || [
           { level: 0, name: 'Ground Floor' },
           { level: 1, name: '1st Floor' }
