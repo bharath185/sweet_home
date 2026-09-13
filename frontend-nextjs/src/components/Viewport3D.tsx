@@ -55,6 +55,9 @@ interface Viewport3DProps {
   onFloorModeChange?: (mode: 'single' | 'sideBySide' | 'stacked') => void;
   onFloorChange?: (floor: number) => void;
   isSplitMode?: boolean;
+  cameraModeProp?: 'aerial' | 'visitor';
+  onCameraModeChangeProp?: (mode: 'aerial' | 'visitor') => void;
+  targetRoomToFocus?: Room | null;
 }
 
 export const Viewport3D: React.FC<Viewport3DProps> = ({
@@ -69,6 +72,9 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   onFloorModeChange,
   onFloorChange,
   isSplitMode = false,
+  cameraModeProp,
+  onCameraModeChangeProp,
+  targetRoomToFocus,
 }) => {
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -105,7 +111,14 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   };
 
   // Camera Mode: 'aerial' (orbit) or 'visitor' (human eye level walkthrough at 160cm)
-  const [cameraMode, setCameraMode] = useState<'aerial' | 'visitor'>('aerial');
+  const [localCameraMode, setLocalCameraMode] = useState<'aerial' | 'visitor'>(
+    cameraModeProp || (isCustomerMode ? 'visitor' : 'aerial')
+  );
+  const cameraMode = cameraModeProp !== undefined ? cameraModeProp : localCameraMode;
+  const setCameraMode = (m: 'aerial' | 'visitor') => {
+    setLocalCameraMode(m);
+    if (onCameraModeChangeProp) onCameraModeChangeProp(m);
+  };
   const cameraModeRef = useRef<'aerial' | 'visitor'>('aerial');
   cameraModeRef.current = cameraMode;
 
@@ -1302,6 +1315,13 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   };
 
   // Teleport visitor to a specific room
+  // React to parent targetRoomToFocus
+  useEffect(() => {
+    if (targetRoomToFocus) {
+      handleTeleportToRoom(targetRoomToFocus);
+    }
+  }, [targetRoomToFocus]);
+
   const handleTeleportToRoom = (room: Room) => {
     setCameraMode('visitor');
     const allFloors = plan.floors && plan.floors.length > 0 ? plan.floors : [

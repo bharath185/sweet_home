@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
+  User,
+  Eye,
   ChevronLeft,
   Check,
   Sparkles,
@@ -72,6 +74,7 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
   onFloorModeChange,
 }) => {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(plan.rooms[0] || null);
+  const [tourCameraMode, setTourCameraMode] = useState<'visitor' | 'aerial'>('visitor');
   const [showSpecDrawer, setShowSpecDrawer] = useState<boolean>(false);
   const [showAddCatalogDrawer, setShowAddCatalogDrawer] = useState<boolean>(false);
   const [consultationBooked, setConsultationBooked] = useState<boolean>(false);
@@ -337,6 +340,9 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
           floorMode={floorMode}
           onFloorModeChange={onFloorModeChange}
           onFloorChange={onFloorChange}
+          cameraModeProp={tourCameraMode}
+          onCameraModeChangeProp={setTourCameraMode}
+          targetRoomToFocus={selectedRoom}
         />
       </div>
 
@@ -354,12 +360,38 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
               <h1 className="text-xs font-black text-slate-900 tracking-tight truncate max-w-[170px]">
                 {plan.name}
               </h1>
-              <span className="text-[9px] font-bold uppercase px-2 py-0.2 rounded-full bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
-                🚶 3D Tour
-              </span>
+              {/* Tour Camera Mode Switcher */}
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-full border border-slate-200">
+                <button
+                  onClick={() => setTourCameraMode('visitor')}
+                  className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold transition ${
+                    tourCameraMode === 'visitor'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="First-Person Human Walking View (1.6m)"
+                >
+                  <User className="w-3 h-3" />
+                  <span>🚶 Walk Tour (1.6m)</span>
+                </button>
+                <button
+                  onClick={() => setTourCameraMode('aerial')}
+                  className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold transition ${
+                    tourCameraMode === 'aerial'
+                      ? 'bg-sky-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="3D Aerial Orbit View"
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>🌐 Aerial View</span>
+                </button>
+              </div>
             </div>
             <p className="text-[10px] text-slate-500">
-              WASD or Arrow Keys to walk • Click items to move, recolor, or add pieces
+              {tourCameraMode === 'visitor'
+                ? '🚶 Use WASD, Arrow Keys, or on-screen D-Pad to walk • Doors auto-open when approaching!'
+                : '🌐 Left-click + drag to orbit • Scroll to zoom'}
             </p>
           </div>
         </div>
