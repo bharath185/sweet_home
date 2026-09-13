@@ -113,8 +113,36 @@ export default function HomeStudioPage() {
   });
 
   const handleUpdateVisitorCamera = useCallback((partial: Partial<VisitorCameraState>) => {
-    setVisitorCamera((prev) => ({ ...prev, ...partial }));
-  }, []);
+    setVisitorCamera((prev) => {
+      const next = { ...prev, ...partial };
+      if (next.floorLevel !== undefined && next.floorLevel !== activeFloor) {
+        setActiveFloor(next.floorLevel);
+      }
+      return next;
+    });
+  }, [activeFloor]);
+
+  // When activeFloor changes from top navbar or floor clicks, sync visitor camera to that floor
+  useEffect(() => {
+    setVisitorCamera((prev) => {
+      if (prev.floorLevel !== activeFloor) {
+        const targetRoom = plan.rooms.find((r) => (r.floorLevel ?? 0) === activeFloor) || plan.rooms[0];
+        let initX = 0;
+        let initY = 0;
+        if (targetRoom && targetRoom.points.length > 0) {
+          initX = Math.round(targetRoom.points.reduce((acc, p) => acc + p.x, 0) / targetRoom.points.length);
+          initY = Math.round(targetRoom.points.reduce((acc, p) => acc + p.y, 0) / targetRoom.points.length);
+        }
+        return {
+          ...prev,
+          x: initX,
+          y: initY,
+          floorLevel: activeFloor,
+        };
+      }
+      return prev;
+    });
+  }, [activeFloor, plan.rooms]);
 
   const [isFurnitureListOpen, setIsFurnitureListOpen] = useState<boolean>(false);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
@@ -839,7 +867,7 @@ export default function HomeStudioPage() {
                         cameraModeProp={cameraMode3D}
                         onCameraModeChangeProp={setCameraMode3D}
                         visitorCameraProp={visitorCamera}
-                        onVisitorCameraChange={setVisitorCamera}
+                        onVisitorCameraChange={handleUpdateVisitorCamera}
                       />
                     </div>
                   </>
@@ -888,7 +916,7 @@ export default function HomeStudioPage() {
                       cameraModeProp={cameraMode3D}
                       onCameraModeChangeProp={setCameraMode3D}
                       visitorCameraProp={visitorCamera}
-                      onVisitorCameraChange={setVisitorCamera}
+                      onVisitorCameraChange={handleUpdateVisitorCamera}
                     />
                   </div>
                 )}

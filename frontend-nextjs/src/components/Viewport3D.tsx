@@ -508,7 +508,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
         // Apply Visitor Camera Position & Look Direction with exact 3D Floor Offset
         const vp = visitorPosRef.current;
-        const curOffset = getFloor3DOffset(activeFloorRef.current || 0);
+        const curLevel = visitorCameraProp?.floorLevel !== undefined ? visitorCameraProp.floorLevel : (activeFloorRef.current || 0);
+        const curOffset = getFloor3DOffset(curLevel);
         camera.position.set(
           vp.x + curOffset.x,
           curOffset.y + 1.6,
@@ -538,7 +539,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
               y: cmY,
               yaw: curYaw,
               elevation: 160,
-              floorLevel: activeFloorRef.current,
+              floorLevel: curLevel,
             });
           }
         }
