@@ -9,8 +9,7 @@ import {
   ArrowRight,
   AlertCircle,
   Building2,
-  ShieldCheck,
-  Sparkles
+  ShieldCheck
 } from 'lucide-react';
 import { UserRole, User as UserType } from '../types/plan';
 import { LoginSimulator3D } from './LoginSimulator3D';
@@ -136,26 +135,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-gradient-to-br from-[#060913] via-[#0b1428] to-[#050811] text-slate-100 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-x-hidden selection:bg-sky-500 selection:text-white">
+    <div className="relative min-h-screen w-full bg-gradient-to-br from-[#f8fafc] via-[#f0f7ff] to-[#eef2ff] text-slate-800 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-x-hidden selection:bg-sky-500 selection:text-white">
       
-      {/* Ambient Graded Background Lighting Accents */}
+      {/* Light Theme Graded Ambient Lighting Spheres */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-32 -left-32 w-[600px] h-[600px] bg-gradient-to-br from-sky-500/18 to-indigo-600/10 rounded-full blur-[130px]" />
-        <div className="absolute -bottom-32 -right-32 w-[650px] h-[650px] bg-gradient-to-tl from-indigo-600/15 via-sky-600/10 to-transparent rounded-full blur-[140px]" />
-        <div className="absolute top-1/2 left-1/3 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-sky-900/10 rounded-full blur-[150px]" />
+        <div className="absolute -top-32 -left-32 w-[600px] h-[600px] bg-gradient-to-br from-sky-300/30 to-indigo-300/20 rounded-full blur-[130px]" />
+        <div className="absolute -bottom-32 -right-32 w-[650px] h-[650px] bg-gradient-to-tl from-indigo-200/40 via-sky-200/30 to-transparent rounded-full blur-[140px]" />
+        <div className="absolute top-1/2 left-1/3 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-blue-100/40 rounded-full blur-[160px]" />
         
-        {/* Subtle Architectural Matrix Texture */}
+        {/* Subtle Architectural Light Dot Matrix Texture */}
         <div
-          className="absolute inset-0 opacity-[0.025]"
+          className="absolute inset-0 opacity-[0.035]"
           style={{
-            backgroundImage: `radial-gradient(#38bdf8 1px, transparent 1px), radial-gradient(#6366f1 1px, transparent 1px)`,
+            backgroundImage: `radial-gradient(#0284c7 1.5px, transparent 1.5px), radial-gradient(#6366f1 1.5px, transparent 1.5px)`,
             backgroundSize: '36px 36px',
             backgroundPosition: '0 0, 18px 18px',
           }}
         />
       </div>
 
-      {/* 2-Column Balanced Container: 3D Design on Left, Premium Login Card on Right */}
+      {/* 2-Column Balanced Container: 3D Design on Left, Premium Light Login Card on Right */}
       <div className="relative z-10 w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-center">
         
         {/* LEFT COLUMN: Pure 3D Interactive Construction Design */}
@@ -163,32 +162,32 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
           <LoginSimulator3D />
         </div>
 
-        {/* RIGHT COLUMN: Attractive Graded Premium Login Card */}
+        {/* RIGHT COLUMN: Attractive Light-Theme Login Card */}
         <div className="lg:col-span-5 flex flex-col justify-center max-w-md mx-auto w-full">
-          <div className="relative bg-gradient-to-b from-[#0e172d]/95 to-[#090e1c]/95 border border-slate-700/60 rounded-3xl p-8 sm:p-10 shadow-2xl shadow-sky-950/50 backdrop-blur-xl overflow-hidden">
+          <div className="relative bg-white/95 border border-slate-200/80 rounded-3xl p-8 sm:p-10 shadow-2xl shadow-sky-900/10 backdrop-blur-xl overflow-hidden">
             
-            {/* Top Glowing Gradient Highlight Line */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-400 via-indigo-500 to-purple-500 shadow-md shadow-sky-400/40" />
+            {/* Top Glowing Gradient Accent Line */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-500 via-indigo-600 to-blue-600 shadow-sm" />
 
             {/* Header with Floating Logo Badge */}
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Visual Rendered</h1>
-                <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5 font-medium">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50" />
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Visual Rendered</h1>
+                <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-sm shadow-emerald-500/50" />
                   <span>Architectural 3D Design Studio</span>
                 </p>
               </div>
               
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-500 via-indigo-600 to-purple-600 shadow-lg shadow-sky-500/30 flex items-center justify-center text-white border border-white/20">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-500 via-indigo-600 to-blue-700 shadow-lg shadow-sky-500/25 flex items-center justify-center text-white border border-white/40">
                 <Building2 className="w-6 h-6" />
               </div>
             </div>
 
             {/* Error Notification Badge */}
             {errorMessage && (
-              <div className="mb-6 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-medium flex items-center gap-2.5 animate-in fade-in">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <div className="mb-6 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-medium flex items-center gap-2.5 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
                 <span>{errorMessage}</span>
               </div>
             )}
@@ -197,11 +196,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
             <form onSubmit={handleFormSubmit} autoComplete="off" className="space-y-5">
               {/* Email Address */}
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-2 tracking-wide uppercase text-[11px]">
+                <label className="block text-xs font-bold text-slate-700 mb-2 tracking-wide uppercase text-[11px]">
                   Email Address
                 </label>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500 group-focus-within:text-sky-400 transition-colors">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-sky-600 transition-colors">
                     <Mail className="w-4 h-4" />
                   </div>
                   <input
@@ -211,7 +210,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@company.com"
-                    className="w-full pl-10 pr-3.5 py-3 bg-[#060b17]/80 border border-slate-700/70 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-all shadow-inner"
+                    className="w-full pl-10 pr-3.5 py-3 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all shadow-inner"
                   />
                 </div>
               </div>
@@ -219,12 +218,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
               {/* Password */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs font-bold text-slate-300 tracking-wide uppercase text-[11px]">
+                  <label className="block text-xs font-bold text-slate-700 tracking-wide uppercase text-[11px]">
                     Password
                   </label>
                 </div>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500 group-focus-within:text-sky-400 transition-colors">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-sky-600 transition-colors">
                     <Lock className="w-4 h-4" />
                   </div>
                   <input
@@ -234,12 +233,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your security password"
-                    className="w-full pl-10 pr-10 py-3 bg-[#060b17]/80 border border-slate-700/70 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-all shadow-inner"
+                    className="w-full pl-10 pr-10 py-3 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all shadow-inner"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -248,12 +247,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
 
               {/* Remember Me Toggle */}
               <div className="flex items-center justify-between text-xs pt-1">
-                <label className="flex items-center gap-2.5 cursor-pointer text-slate-400 hover:text-slate-200 select-none transition-colors">
+                <label className="flex items-center gap-2.5 cursor-pointer text-slate-600 hover:text-slate-900 select-none transition-colors">
                   <input
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="rounded bg-[#060b17] border-slate-700 text-sky-500 focus:ring-0 focus:ring-offset-0 cursor-pointer w-4 h-4"
+                    className="rounded bg-slate-100 border-slate-300 text-sky-600 focus:ring-0 focus:ring-offset-0 cursor-pointer w-4 h-4"
                   />
                   <span className="text-[11px] font-medium">Keep me signed in</span>
                 </label>
@@ -263,7 +262,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3.5 rounded-xl text-xs font-bold text-white shadow-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98] bg-gradient-to-r from-sky-500 via-indigo-600 to-indigo-700 hover:from-sky-400 hover:via-indigo-500 hover:to-indigo-600 shadow-sky-500/25 hover:shadow-sky-500/40 cursor-pointer disabled:opacity-50 border border-sky-400/20 mt-2"
+                className="w-full py-3.5 rounded-xl text-xs font-bold text-white shadow-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98] bg-gradient-to-r from-sky-500 via-indigo-600 to-indigo-700 hover:from-sky-600 hover:via-indigo-700 hover:to-indigo-800 shadow-sky-500/25 hover:shadow-sky-500/35 cursor-pointer disabled:opacity-50 mt-2"
               >
                 {isLoading ? (
                   <>
@@ -280,8 +279,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
             </form>
 
             {/* Security Badge Footer */}
-            <div className="mt-8 pt-4 border-t border-slate-800/80 flex items-center justify-center gap-2 text-[10px] text-slate-500 font-medium">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <div className="mt-8 pt-4 border-t border-slate-100 flex items-center justify-center gap-2 text-[10px] text-slate-400 font-medium">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
               <span>Enterprise 256-Bit SSL Encrypted Connection</span>
             </div>
 
