@@ -461,18 +461,34 @@ export function buildLampMeshGroup(params: LampParams, mat: THREE.Material): THR
     diffuser.position.set(0, totalH - 0.015, 0);
     group.add(diffuser);
   } else if (params.type === 'pendant_dome') {
+    // Ceiling canopy mount
+    const canopyGeom = new THREE.CylinderGeometry(0.05, 0.05, 0.02, 16);
+    const canopyMesh = new THREE.Mesh(canopyGeom, mat);
+    canopyMesh.position.set(0, totalH - 0.01, 0);
+    group.add(canopyMesh);
+
+    // Downrod / suspension cable
+    const cordLen = Math.max(0.05, totalH - shadeH);
+    const cordGeom = new THREE.CylinderGeometry(0.004, 0.004, cordLen, 8);
+    const cordMat = new THREE.MeshStandardMaterial({ color: 0x18181b, metalness: 0.8 });
+    const cordMesh = new THREE.Mesh(cordGeom, cordMat);
+    cordMesh.position.set(0, totalH - cordLen / 2, 0);
+    group.add(cordMesh);
+
+    // Lamp dome shade hanging at bottom
     const domeGeom = new THREE.SphereGeometry(shadeR, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
     domeGeom.rotateX(Math.PI);
     const domeMesh = new THREE.Mesh(domeGeom, mat);
-    domeMesh.position.set(0, totalH - 0.05, 0);
+    domeMesh.position.set(0, shadeH, 0);
     domeMesh.castShadow = true;
     group.add(domeMesh);
 
-    const cordGeom = new THREE.CylinderGeometry(0.005, 0.005, totalH, 8);
-    const cordMat = new THREE.MeshStandardMaterial({ color: 0x18181b, metalness: 0.8 });
-    const cordMesh = new THREE.Mesh(cordGeom, cordMat);
-    cordMesh.position.set(0, totalH / 2, 0);
-    group.add(cordMesh);
+    // Glowing bulb inside dome
+    const bulbGeom = new THREE.SphereGeometry(0.04, 16, 16);
+    const bulbMat = new THREE.MeshStandardMaterial({ color: 0xffedd5, emissive: 0xfef08a, emissiveIntensity: 1.4 });
+    const bulbMesh = new THREE.Mesh(bulbGeom, bulbMat);
+    bulbMesh.position.set(0, shadeH - 0.02, 0);
+    group.add(bulbMesh);
   } else if (params.type === 'globe_orb') {
     const orbGeom = new THREE.SphereGeometry(shadeR, 32, 24);
     const orbMesh = new THREE.Mesh(orbGeom, mat);

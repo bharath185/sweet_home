@@ -760,12 +760,48 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const isColliding = collidingItemIds.has(item.id);
       const offset = getFloor3DOffset(item.floorLevel ?? 0);
 
+      const isCeiling =
+        item.placementType === 'ceiling' ||
+        (item.category || '').toLowerCase().includes('ceiling') ||
+        (item.name || '').toLowerCase().includes('pendant') ||
+        (item.name || '').toLowerCase().includes('chandelier') ||
+        (item.name || '').toLowerCase().includes('ceiling fan') ||
+        (item.name || '').toLowerCase().includes('downlight') ||
+        (item.name || '').toLowerCase().includes('flush light') ||
+        (item.name || '').toLowerCase().includes('flush panel');
+
+      const floorHeightCm = 250; // standard floor ceiling height
+      let effectiveElevation = item.elevation !== undefined ? item.elevation : 0;
+      if (isCeiling && (!item.elevation || item.elevation < 50)) {
+        // Automatically mount ceiling fixtures to ceiling height (250cm - height)
+        effectiveElevation = Math.max(120, floorHeightCm - (item.height || 50));
+      }
+
       const itemGroup = new THREE.Group();
       itemGroup.position.set(
         item.x * CM + offset.x,
-        offset.y + (item.elevation || 0) * CM,
+        offset.y + effectiveElevation * CM,
         item.y * CM + offset.z
       );
+
+      // If ceiling fixture and hanging with gap to ceiling, render suspension wire & ceiling mount plate
+      if (isCeiling) {
+        const topOfItemCm = effectiveElevation + (item.height || 50);
+        const gapToCeilingCm = Math.max(0, floorHeightCm - topOfItemCm);
+        if (gapToCeilingCm > 2) {
+          const cableH = gapToCeilingCm * CM;
+          const cableGeom = new THREE.CylinderGeometry(0.003, 0.003, cableH, 8);
+          const cableMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.3 });
+          const cableMesh = new THREE.Mesh(cableGeom, cableMat);
+          cableMesh.position.set(0, (item.height * CM) + cableH / 2, 0);
+          itemGroup.add(cableMesh);
+
+          const canopyGeom = new THREE.CylinderGeometry(0.05, 0.05, 0.015, 16);
+          const canopyMesh = new THREE.Mesh(canopyGeom, cableMat);
+          canopyMesh.position.set(0, (item.height * CM) + cableH, 0);
+          itemGroup.add(canopyMesh);
+        }
+      }
       itemGroup.rotation.y = -(item.angle || 0);
       itemGroup.userData = { id: item.id, type: 'furniture', isColliding };
 
@@ -890,7 +926,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         const lightColorHex = item.lightColor || '#fef08a';
         const lightIntensityVal = item.lightIntensity !== undefined ? item.lightIntensity : 1.2;
         const spot = new THREE.PointLight(new THREE.Color(lightColorHex), lightIntensityVal, 8);
-        spot.position.y = item.height * CM + 0.2;
+        // Ceiling lights shine downwards from the bottom of the fixture
+        spot.position.y = isCeiling ? Math.max(0.08, (item.height * CM) * 0.25) : item.height * CM + 0.15;
         spot.castShadow = true;
         itemGroup.add(spot);
       }
@@ -1294,6 +1331,17 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const snappedY = Math.round((targetWorldZ * 100) / 5) * 5;
 
       const currentPlan = planRef.current;
+      const isDroppedCeiling =
+        itemData.placementType === 'ceiling' ||
+        (itemData.category || '').toLowerCase().includes('ceiling') ||
+        (itemData.name || '').toLowerCase().includes('pendant') ||
+        (itemData.name || '').toLowerCase().includes('chandelier') ||
+        (itemData.name || '').toLowerCase().includes('ceiling fan') ||
+        (itemData.name || '').toLowerCase().includes('downlight') ||
+        (itemData.name || '').toLowerCase().includes('flush');
+
+      const droppedElevation = isDroppedCeiling ? Math.max(120, 250 - (itemData.height || 50)) : 0;
+
       let newItem: FurnitureItem = {
         id: `f_${Date.now()}`,
         catalogId: itemData.id,
@@ -1301,7 +1349,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         category: itemData.category,
         x: snappedX,
         y: snappedY,
-        elevation: 0,
+        elevation: droppedElevation,
         width: itemData.width,
         depth: itemData.depth,
         height: itemData.height,

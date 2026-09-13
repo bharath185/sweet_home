@@ -238,12 +238,24 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
     const isPanoramic = (item.name || '').toLowerCase().includes('panoramic') ||
                         (item.id || '').toLowerCase().includes('panoramic');
 
+    const isCeiling =
+      item.placementType === 'ceiling' ||
+      (item.category || '').toLowerCase().includes('ceiling') ||
+      (item.name || '').toLowerCase().includes('pendant') ||
+      (item.name || '').toLowerCase().includes('chandelier') ||
+      (item.name || '').toLowerCase().includes('ceiling fan') ||
+      (item.name || '').toLowerCase().includes('downlight') ||
+      (item.name || '').toLowerCase().includes('flush');
+
     // DOORS: Must stay grounded at floor level (elevation = 0)
     if (isDoor) {
       targetElevation = 0;
     } else if (isWindow && !isPanoramic && targetElevation === 0) {
       // WINDOWS: Standard architectural sill height (85cm above floor)
       targetElevation = item.elevation || item.defaultElevation || 85;
+    } else if (isCeiling && (targetElevation === 0 || targetElevation < 100)) {
+      // CEILING FIXTURES: Mount to room ceiling height (250cm - height)
+      targetElevation = Math.max(120, 250 - (item.height || 50));
     }
 
     if (selectedRoom && selectedRoom.points.length > 0) {

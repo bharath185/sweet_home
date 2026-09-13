@@ -592,7 +592,14 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         const isSelected = selectedId === item.id;
         const isColliding = collidingItemIds.has(item.id);
         const isLocked = item.isLocked;
-        const isCeiling = item.placementType === 'ceiling' || (item.category || '').toLowerCase().includes('ceiling');
+        const isCeiling =
+    item.placementType === 'ceiling' ||
+    (item.category || '').toLowerCase().includes('ceiling') ||
+    (item.name || '').toLowerCase().includes('pendant') ||
+    (item.name || '').toLowerCase().includes('chandelier') ||
+    (item.name || '').toLowerCase().includes('ceiling fan') ||
+    (item.name || '').toLowerCase().includes('downlight') ||
+    (item.name || '').toLowerCase().includes('flush');
         const w = item.width * scale;
         const d = item.depth * scale;
         const cat = (item.category || '').toLowerCase();

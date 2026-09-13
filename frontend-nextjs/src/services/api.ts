@@ -490,7 +490,7 @@ export const fallbackCatalog: CatalogItem[] = [
   },
 
   // --- LIGHTING ---
-  { id: 'pendantLamp', name: 'Ceiling Pendant Lamp', category: 'Lighting', width: 40, depth: 40, height: 60, model: '/models/pendantLamp.obj', icon: '/models/pendantLamp.png', placementType: 'ceiling', lightIntensity: 1.2, defaultColor: '#fbbf24' },
+  { id: 'pendantLamp', name: 'Ceiling Pendant Lamp', category: 'Lighting', width: 40, depth: 40, height: 60, model: 'procedural:lamp:{"type":"pendant_dome","shadeWidth":40,"shadeHeight":25,"totalHeight":60}', icon: '/models/pendantLamp.png', placementType: 'ceiling', lightIntensity: 1.4, defaultColor: '#38bdf8' },
   { id: 'ceilingFan', name: 'Ceiling Fan with Integrated Light', category: 'Lighting', width: 120, depth: 120, height: 40, model: 'procedural:lamp:{"type":"ceiling_fan","shadeWidth":120,"shadeHeight":30,"totalHeight":40}', icon: '/models/pendantLamp.png', placementType: 'ceiling', lightIntensity: 1.1, defaultColor: '#334155' },
   { id: 'chandelier', name: 'Luxury Crystal Chandelier', category: 'Lighting', width: 80, depth: 80, height: 75, model: 'procedural:lamp:{"type":"chandelier","shadeWidth":75,"shadeHeight":60,"totalHeight":75}', icon: '/models/pendantLamp.png', placementType: 'ceiling', lightIntensity: 1.8, defaultColor: '#eab308' },
   { id: 'recessedSpot', name: 'Recessed Ceiling LED Downlight', category: 'Lighting', width: 25, depth: 25, height: 8, model: 'procedural:lamp:{"type":"recessed_spot","shadeWidth":22,"shadeHeight":6,"totalHeight":8}', icon: '/models/pendantLamp.png', placementType: 'ceiling', lightIntensity: 1.5, defaultColor: '#ffffff' },
