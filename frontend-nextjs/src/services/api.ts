@@ -575,6 +575,35 @@ export async function addCustomCatalogItem(item: CatalogItem): Promise<CatalogIt
   return customItem;
 }
 
+export async function updateCatalogItem(item: CatalogItem): Promise<CatalogItem> {
+  const updatedItem = { ...item };
+  if (typeof window !== 'undefined') {
+    try {
+      const cached = localStorage.getItem('sweethome_custom_catalog');
+      const list: CatalogItem[] = cached ? JSON.parse(cached) : [];
+      const updated = list.map((i) => (i.id === item.id ? updatedItem : i));
+      if (!list.some((i) => i.id === item.id)) {
+        updated.unshift(updatedItem);
+      }
+      localStorage.setItem('sweethome_custom_catalog', JSON.stringify(updated));
+    } catch {}
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/catalog/furniture`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedItem),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('Could not update item on backend, saved locally.', err);
+  }
+  return updatedItem;
+}
+
 export async function deleteCatalogItem(id: string): Promise<boolean> {
   if (typeof window !== 'undefined') {
     try {

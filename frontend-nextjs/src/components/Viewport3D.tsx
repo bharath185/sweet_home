@@ -68,6 +68,151 @@ interface Viewport3DProps {
   onVisitorCameraChange?: (state: VisitorCameraState) => void;
 }
 
+const CM = 0.01;
+
+function buildSmartArchetypeFallback(
+  item: FurnitureItem,
+  itemMat: THREE.Material
+): THREE.Group {
+  const lowerName = (item.name || '').toLowerCase();
+  const lowerCat = (item.category || '').toLowerCase();
+  const lowerCatId = (item.catalogId || '').toLowerCase();
+
+  try {
+    if (lowerName.includes('chair') || lowerName.includes('armchair') || lowerCatId.includes('chair')) {
+      return buildChairMeshGroup(
+        {
+          seatType: 'cushioned',
+          backrestStyle: lowerName.includes('armchair') ? 'wingback' : 'solid_panel',
+          legStyle: 'straight_4',
+          width: item.width,
+          depth: item.depth,
+          height: item.height,
+          seatHeight: Math.min(45, item.height * 0.5),
+        },
+        itemMat
+      );
+    }
+
+    if (lowerName.includes('sofa') || lowerName.includes('couch') || lowerName.includes('lounge') || lowerCatId.includes('sofa')) {
+      return buildSofaMeshGroup(
+        {
+          type: 'straight_2_seater',
+          cushionStyle: 'plump',
+          armStyle: 'track_arm',
+          legStyle: 'wooden_pegs',
+          width: item.width,
+          depth: item.depth,
+          height: item.height,
+        },
+        itemMat
+      );
+    }
+
+    if (lowerName.includes('table') || lowerName.includes('desk') || lowerCatId.includes('table')) {
+      return buildTableMeshGroup(
+        {
+          shape: lowerName.includes('round') ? 'round' : 'rectangular',
+          legStyle: '4_legs_corner',
+          topThickness: 4,
+          legThickness: 5,
+          bevel: true,
+          width: item.width,
+          depth: item.depth,
+          height: item.height,
+        },
+        itemMat
+      );
+    }
+
+    if (lowerName.includes('bed') || lowerCat === 'bedroom' || lowerCatId.includes('bed')) {
+      return buildBedMeshGroup(
+        {
+          headboardStyle: 'tufted',
+          frameStyle: 'platform',
+          width: item.width,
+          depth: item.depth,
+          height: item.height,
+          hasNightstands: false,
+        },
+        itemMat
+      );
+    }
+
+    if (lowerCat === 'kitchen' || lowerName.includes('cabinet') || lowerName.includes('wardrobe') || lowerCatId.includes('cabinet')) {
+      return buildCabinetMeshGroup(
+        {
+          columns: 2,
+          rows: 2,
+          doorType: 'solid_doors',
+          width: item.width,
+          depth: item.depth,
+          height: item.height,
+          hasLegs: true,
+        },
+        itemMat
+      );
+    }
+
+    if (lowerCat === 'lighting' || lowerName.includes('lamp') || lowerCatId.includes('lamp')) {
+      return buildLampMeshGroup(
+        {
+          type: 'table_lamp',
+          shadeWidth: item.width,
+          shadeHeight: item.depth,
+          totalHeight: item.height,
+        },
+        itemMat
+      );
+    }
+
+    if (lowerCat === 'doors & windows' || lowerName.includes('door') || lowerName.includes('window')) {
+      if (lowerName.includes('window')) {
+        return buildWindowMeshGroup(
+          {
+            type: 'modern_sliding',
+            width: item.width,
+            depth: item.depth,
+            height: item.height,
+          },
+          itemMat
+        );
+      }
+      return buildDoorMeshGroup(
+        {
+          type: 'modern_flush',
+          width: item.width,
+          depth: item.depth,
+          height: item.height,
+        },
+        itemMat
+      );
+    }
+
+    if (lowerCat === 'bathroom' || lowerName.includes('bath') || lowerCatId.includes('bath')) {
+      return buildCabinetMeshGroup(
+        {
+          columns: 2,
+          rows: 1,
+          doorType: 'open_shelf',
+          width: item.width,
+          depth: item.depth,
+          height: item.height,
+          hasLegs: false,
+        },
+        itemMat
+      );
+    }
+  } catch (e) {}
+
+  const grp = new THREE.Group();
+  const geom = new THREE.BoxGeometry(item.width * CM, item.height * CM, item.depth * CM);
+  const mesh = new THREE.Mesh(geom, itemMat);
+  mesh.position.y = (item.height * CM) / 2;
+  grp.add(mesh);
+  return grp;
+}
+
 export const Viewport3D: React.FC<Viewport3DProps> = ({
   plan,
   selectedId,
@@ -1107,6 +1252,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           itemGroup.add(mesh);
         }
       } else if (item.model && (item.model.endsWith('.obj') || item.model.startsWith('local_obj:') || item.model.startsWith('data:'))) {
+        // Immediate beautiful smart archetype fallback so it never renders as an empty flat box
+        const tempFallback = buildSmartArchetypeFallback(item, itemMat);
+        tempFallback.name = 'temp_fallback';
+        tempFallback.userData = { isColliding };
+        itemGroup.add(tempFallback);
+
         loadObjGeometry(item.model).then((geom) => {
           geom.computeBoundingBox();
           const bbox = geom.boundingBox!;
@@ -1127,16 +1278,20 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           mesh.castShadow = true;
           mesh.receiveShadow = true;
           mesh.userData = { isColliding };
+
+          // Remove temp fallback and add real OBJ mesh
+          const existingFallback = itemGroup.getObjectByName('temp_fallback');
+          if (existingFallback) {
+            itemGroup.remove(existingFallback);
+          }
           itemGroup.add(mesh);
+        }).catch(() => {
+          // Keep the smart archetype fallback
         });
       } else {
-        const geom = new THREE.BoxGeometry(item.width * CM, item.height * CM, item.depth * CM);
-        const mesh = new THREE.Mesh(geom, itemMat);
-        mesh.position.y = (item.height * CM) / 2;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        mesh.userData = { isColliding };
-        itemGroup.add(mesh);
+        const smartFallback = buildSmartArchetypeFallback(item, itemMat);
+        smartFallback.userData = { isColliding };
+        itemGroup.add(smartFallback);
       }
 
       if (item.category === 'Lighting' && !isColliding) {

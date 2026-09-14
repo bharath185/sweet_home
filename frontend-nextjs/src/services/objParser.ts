@@ -8,6 +8,14 @@ export function registerCustomObjGeometry(id: string, textOrGeom: string | THREE
   if (typeof textOrGeom === 'string') {
     const geom = parseObjText(textOrGeom);
     geometryCache.set(key, geom);
+    // Persist in localStorage so custom 3D models survive page refreshes and sessions!
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`sweethome_geom_${key}`, textOrGeom);
+      } catch (e) {
+        console.warn('Could not cache OBJ in localStorage (quota may be full):', e);
+      }
+    }
   } else {
     geometryCache.set(key, textOrGeom);
   }
@@ -22,6 +30,20 @@ export async function loadObjGeometry(url: string): Promise<THREE.BufferGeometry
   if (url.startsWith('local_obj:')) {
     const cached = geometryCache.get(url);
     if (cached) return cached.clone();
+
+    // Check localStorage for persisted geometry text across reloads
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(`sweethome_geom_${url}`) || localStorage.getItem(url);
+        if (stored) {
+          const geom = parseObjText(stored);
+          geometryCache.set(url, geom);
+          return geom.clone();
+        }
+      } catch (e) {
+        console.warn('Failed reading stored OBJ from localStorage:', e);
+      }
+    }
     return new THREE.BoxGeometry(1, 1, 1);
   }
 
@@ -30,14 +52,16 @@ export async function loadObjGeometry(url: string): Promise<THREE.BufferGeometry
       const base64Index = url.indexOf('base64,');
       let text = '';
       if (base64Index >= 0) {
-        text = atob(url.slice(base64Index + 7));
+        const b64Data = url.slice(base64Index + 7);
+        text = decodeURIComponent(escape(atob(b64Data)));
       } else {
         text = decodeURIComponent(url.slice(url.indexOf(',') + 1));
       }
       const geom = parseObjText(text);
       geometryCache.set(url, geom);
       return geom.clone();
-    } catch {
+    } catch (e) {
+      console.warn('Failed parsing data URI OBJ:', e);
       return new THREE.BoxGeometry(1, 1, 1);
     }
   }

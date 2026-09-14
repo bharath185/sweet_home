@@ -470,6 +470,8 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                         >
                           <CatalogThumbnail3D
                             model={item.model}
+                            category={item.category}
+                            name={item.name}
                             width={item.width}
                             depth={item.depth}
                             height={item.height}

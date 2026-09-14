@@ -31,6 +31,7 @@ import {
   createAdminUser,
   toggleUserStatus,
   addCustomCatalogItem,
+  updateCatalogItem,
   deleteCatalogItem,
   fetchFloorTemplates
 } from '../services/api';
@@ -403,6 +404,32 @@ export default function HomeStudioPage() {
     } catch (e) {}
   };
 
+  const handleUpdateCatalogItem = async (updatedItem: CatalogItem) => {
+    try {
+      const saved = await updateCatalogItem(updatedItem);
+      setCatalog((prev) => prev.map((c) => (c.id === saved.id ? saved : c)));
+      setPlan((prev) => ({
+        ...prev,
+        furniture: prev.furniture.map((f) =>
+          f.catalogId === saved.id
+            ? {
+                ...f,
+                name: saved.name,
+                category: saved.category,
+                width: saved.width,
+                depth: saved.depth,
+                height: saved.height,
+                model: saved.model,
+                color: f.color || saved.defaultColor,
+              }
+            : f
+        ),
+      }));
+    } catch (e) {
+      console.error('Failed to update catalog item:', e);
+    }
+  };
+
   const handleAddUser = async (user: User) => {
     try {
       const res = await createAdminUser(user);
@@ -544,6 +571,7 @@ export default function HomeStudioPage() {
             currentUser={currentUser}
             onLogout={handleLogout}
             onAddItem={handleAddItem}
+            onUpdateCatalogItem={handleUpdateCatalogItem}
           />
         )}
 

@@ -16,12 +16,14 @@ import {
   FolderKanban,
   BarChart3,
   ChevronRight,
-  Eye
+  Eye,
+  Pencil
 } from 'lucide-react';
 import { User, CatalogItem, FloorTemplate, HomePlan } from '../types/plan';
 import { ALL_CLIENT_PLANS } from '../services/api';
 import { CatalogThumbnail3D } from './CatalogThumbnail3D';
 import { Catalog3DPreviewModal } from './Catalog3DPreviewModal';
+import { EditCatalogItemModal } from './EditCatalogItemModal';
 
 export type DashboardMenuTab = 'dashboard' | 'projects' | 'users' | 'catalog' | 'floors';
 
@@ -47,6 +49,7 @@ interface AdminDashboardProps {
   currentUser?: User | null;
   onLogout?: () => void;
   onAddItem?: (item: CatalogItem) => void;
+  onUpdateCatalogItem?: (item: CatalogItem) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -71,6 +74,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   currentUser,
   onLogout,
   onAddItem,
+  onUpdateCatalogItem,
 }) => {
   const currentTab: DashboardMenuTab =
     adminTab === 'overview' || adminTab === 'dashboard'
@@ -90,6 +94,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [catalogCategory, setCatalogCategory] = useState<string>('ALL');
   const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);
   const [previewCatalogItem, setPreviewCatalogItem] = useState<CatalogItem | null>(null);
+  const [editingCatalogItem, setEditingCatalogItem] = useState<CatalogItem | null>(null);
 
   const clientUsers = useMemo(() => users.filter((u) => u.role === 'CLIENT'), [users]);
   const adminUsers = useMemo(() => users.filter((u) => u.role === 'ADMIN'), [users]);
@@ -664,6 +669,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     >
                       <CatalogThumbnail3D
                         model={item.model}
+                        category={item.category}
+                        name={item.name}
                         width={item.width}
                         depth={item.depth}
                         height={item.height}
@@ -688,21 +695,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <Eye className="w-3 h-3" />
                         3D
                       </button>
-                      {/* Add to Plan */}
-                      {onAddItem && (
-                        <button
-                          onClick={() => onAddItem(item)}
-                          className="px-1.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold flex items-center gap-0.5 transition shadow-sm cursor-pointer"
-                          title="Add to floor plan"
-                        >
-                          <Plus className="w-3 h-3" />
-                          Add
-                        </button>
-                      )}
+                      {/* Edit Item */}
+                      <button
+                        onClick={() => setEditingCatalogItem(item)}
+                        className="px-1.5 py-1 rounded-lg bg-slate-900 hover:bg-amber-900/40 text-amber-300 border border-slate-700 hover:border-amber-500/50 text-[10px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                        title="Edit Catalog Item"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        Edit
+                      </button>
                     </div>
+                    {/* Delete Item */}
                     <button
                       onClick={() => onDeleteCatalogItem(item.id)}
-                      className="p-1 rounded hover:bg-rose-950 text-slate-500 hover:text-rose-400 transition-colors"
+                      className="p-1 rounded hover:bg-rose-950 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                      title="Delete from Catalog"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -717,6 +724,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               isOpen={Boolean(previewCatalogItem)}
               onClose={() => setPreviewCatalogItem(null)}
               onAddItem={onAddItem}
+            />
+
+            {/* Edit Catalog Item Modal */}
+            <EditCatalogItemModal
+              item={editingCatalogItem}
+              isOpen={Boolean(editingCatalogItem)}
+              onClose={() => setEditingCatalogItem(null)}
+              onSave={(updated) => {
+                if (onUpdateCatalogItem) {
+                  onUpdateCatalogItem(updated);
+                }
+              }}
             />
           </div>
         )}
