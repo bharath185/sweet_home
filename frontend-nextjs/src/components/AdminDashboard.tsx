@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { User, CatalogItem, FloorTemplate, HomePlan } from '../types/plan';
 import { ALL_CLIENT_PLANS } from '../services/api';
-import { CatalogThumbnail3D } from './CatalogThumbnail3D';
+import { CatalogThumbnail } from './CatalogThumbnail';
 import { Catalog3DPreviewModal } from './Catalog3DPreviewModal';
 import { EditCatalogItemModal } from './EditCatalogItemModal';
 
@@ -661,21 +661,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="bg-[#0e1628] border border-slate-800 hover:border-indigo-500/40 rounded-xl p-2.5 transition-all duration-200 flex flex-col justify-between group shadow-sm"
                 >
                   <div>
-                    {/* 3D Thumbnail */}
+                    {/* Real 3D Thumbnail on Clean Pure White Background */}
                     <div
                       onClick={() => setPreviewCatalogItem(item)}
-                      className="h-24 rounded-lg bg-[#0b1120] border border-slate-800/80 flex items-center justify-center mb-2 group-hover:scale-[1.02] group-hover:border-indigo-500/40 transition-all cursor-pointer overflow-hidden"
+                      className="h-28 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center mb-2 group-hover:scale-[1.02] group-hover:shadow-md transition-all cursor-pointer overflow-hidden p-2"
                       title="Click for interactive 360° 3D Preview"
                     >
-                      <CatalogThumbnail3D
-                        model={item.model}
-                        category={item.category}
+                      <CatalogThumbnail
+                        icon={item.icon}
                         name={item.name}
-                        width={item.width}
-                        depth={item.depth}
-                        height={item.height}
-                        color={item.defaultColor || '#94a3b8'}
-                        size={88}
+                        category={item.category}
+                        size={84}
                       />
                     </div>
                     <h4 className="text-xs font-bold text-white truncate group-hover:text-indigo-400 transition">{item.name}</h4>

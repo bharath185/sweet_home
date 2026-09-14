@@ -507,14 +507,20 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   // Handle Save & Add to Catalog
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    const finalName = name.trim() || `Custom ${archetype.charAt(0).toUpperCase() + archetype.slice(1)}`;
 
     let modelUri = '';
-    let iconUri = '/models/armchair.png';
+    let iconUri = '/models/squareTable.png';
 
     if (studioMode === 'import_obj' && importedObjKey) {
       modelUri = `local_obj:${importedObjKey}`;
-      iconUri = '/models/sofa.png';
+      if (category === 'Living') iconUri = '/models/sofa.png';
+      else if (category === 'Bedroom') iconUri = '/models/bed140x190.png';
+      else if (category === 'Kitchen') iconUri = '/models/kitchenCabinet.png';
+      else if (category === 'Bathroom') iconUri = '/models/bath.png';
+      else if (category === 'Lighting') iconUri = '/models/pendantLamp.png';
+      else if (category === 'Doors & Windows') iconUri = '/models/door.png';
+      else iconUri = '/models/sofa.png';
     } else {
       const config = getProceduralConfig();
       modelUri = `procedural:${archetype}:${JSON.stringify(config)}`;
@@ -528,7 +534,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
 
     const newItem: CatalogItem = {
       id: `custom_${Date.now()}`,
-      name,
+      name: finalName,
       category,
       model: modelUri,
       icon: iconUri,

@@ -396,12 +396,22 @@ export default function HomeStudioPage() {
     }
   };
 
-  const handleAddCustomItem = async (newItem: CatalogItem) => {
+  const handleAddCustomItem = async (newItem: CatalogItem, autoPlaceInScene?: boolean) => {
     try {
       const created = await addCustomCatalogItem(newItem);
-      setCatalog((prev) => [created, ...prev]);
+      setCatalog((prev) => [created, ...prev.filter((c) => c.id !== created.id)]);
+      if (autoPlaceInScene) {
+        handleAddItem(created);
+      }
       setIsAddItemModalOpen(false);
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Backend catalog offline, adding locally:', e);
+      setCatalog((prev) => [newItem, ...prev.filter((c) => c.id !== newItem.id)]);
+      if (autoPlaceInScene) {
+        handleAddItem(newItem);
+      }
+      setIsAddItemModalOpen(false);
+    }
   };
 
   const handleUpdateCatalogItem = async (updatedItem: CatalogItem) => {
@@ -969,6 +979,7 @@ export default function HomeStudioPage() {
                 isOpen={isInspectorOpen}
                 onToggleOpen={() => setIsInspectorOpen(!isInspectorOpen)}
                 isWalkMode={cameraMode3D === 'visitor'}
+                onOpenAddItemModal={() => setIsAddItemModalOpen(true)}
               />
             </div>
 

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Sliders, Palette, Check, Box, Save } from 'lucide-react';
 import { CatalogItem } from '../types/plan';
-import { CatalogThumbnail3D } from './CatalogThumbnail3D';
+import { CatalogThumbnail } from './CatalogThumbnail';
 
 interface EditCatalogItemModalProps {
   item: CatalogItem | null;
@@ -111,16 +111,12 @@ export const EditCatalogItemModal: React.FC<EditCatalogItemModalProps> = ({
         <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto max-h-[75vh] custom-scrollbar text-xs">
           {/* Top preview row */}
           <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
-            <div className="w-16 h-16 rounded-lg bg-[#0b1120] border border-slate-800 flex items-center justify-center shrink-0 overflow-hidden">
-              <CatalogThumbnail3D
-                model={item.model}
-                category={category}
+            <div className="w-16 h-16 rounded-xl bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0 shadow-xs">
+              <CatalogThumbnail
+                icon={item.icon}
                 name={name}
-                width={width}
-                depth={depth}
-                height={height}
-                color={defaultColor}
-                size={60}
+                category={category}
+                size={56}
               />
             </div>
             <div className="min-w-0 flex-1">
