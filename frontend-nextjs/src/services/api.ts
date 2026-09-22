@@ -515,7 +515,8 @@ export const fallbackCatalog: CatalogItem[] = [
 
   // --- STRUCTURAL & DINING ---
   { id: 'dinnerSet', name: 'Fine Dining Table Setting', category: 'Living', width: 60, depth: 40, height: 12, model: 'procedural:table:{"shape":"rectangular","legStyle":"4_legs_corner","topThickness":2,"legThickness":2,"bevel":true}', icon: '/models/squareTable.png', placementType: 'tabletop', placeOnTable: true, defaultColor: '#ffffff' },
-  { id: 'staircase', name: 'Straight Staircase', category: 'Stairs & Structural', width: 90, depth: 260, height: 250, model: '/models/staircase.obj', icon: '/models/staircase.png' },
+  { id: 'staircaseStraight', name: 'Straight Flight Staircase', category: 'Stairs & Structural', width: 100, depth: 240, height: 260, model: 'procedural:stairs:{"type":"straight","stepsCount":14,"hasHandrail":true}', icon: '/models/staircase.png', defaultColor: '#d4a373', description: 'Architectural straight flight open-riser staircase with steel stringers, solid oak treads, and safety handrail' },
+  { id: 'staircaseSpiral', name: 'Curved Helical Spiral Staircase', category: 'Stairs & Structural', width: 140, depth: 140, height: 260, model: 'procedural:stairs:{"type":"spiral","stepsCount":16,"hasHandrail":true}', icon: '/models/staircase.png', defaultColor: '#d4a373', description: 'Architectural spiral staircase with central steel column, radiating wood treads, and perimeter balusters' },
 ];
 
 export async function fetchCatalog(): Promise<CatalogItem[]> {

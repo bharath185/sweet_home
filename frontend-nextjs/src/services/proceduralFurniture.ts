@@ -1246,6 +1246,117 @@ export function buildInteriorDecorMeshGroup(params: DecorParams, mat: THREE.Mate
   return group;
 }
 
+export interface StairsParams {
+  type?: 'straight' | 'spiral' | 'l_shape';
+  width: number;
+  depth: number;
+  height: number;
+  stepsCount?: number;
+  hasHandrail?: boolean;
+}
+
+export function buildStairsMeshGroup(params: StairsParams, mat: THREE.Material): THREE.Group {
+  const group = new THREE.Group();
+  const w = Math.max(60, params.width) * CM;
+  const d = Math.max(100, params.depth) * CM;
+  const h = Math.max(150, params.height) * CM;
+  const steps = params.stepsCount || 14;
+  const hasHandrail = params.hasHandrail !== false;
+
+  const stepRise = h / steps;
+  const stepRun = d / steps;
+
+  if (params.type === 'spiral') {
+    // Elegant Spiral / Helical Staircase with center column & radiating treads
+    const centerRadius = 0.08;
+    const colGeom = new THREE.CylinderGeometry(centerRadius, centerRadius, h, 24);
+    const colMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 });
+    const colMesh = new THREE.Mesh(colGeom, colMat);
+    colMesh.position.y = h / 2;
+    colMesh.castShadow = true;
+    group.add(colMesh);
+
+    const outerRadius = Math.min(w, d) / 2;
+    const angleStep = (Math.PI * 1.6) / steps;
+
+    for (let i = 0; i < steps; i++) {
+      const stepAngle = i * angleStep;
+      const stepY = i * stepRise + stepRise / 2;
+
+      // Wedge shaped tread
+      const treadGeom = new THREE.BoxGeometry(outerRadius, 0.035, 0.22);
+      const treadMesh = new THREE.Mesh(treadGeom, mat);
+      treadMesh.position.set(Math.cos(stepAngle) * (outerRadius / 2), stepY, Math.sin(stepAngle) * (outerRadius / 2));
+      treadMesh.rotation.y = -stepAngle;
+      treadMesh.castShadow = true;
+      group.add(treadMesh);
+
+      // Baluster spindle
+      if (hasHandrail) {
+        const balGeom = new THREE.CylinderGeometry(0.008, 0.008, 0.85, 8);
+        const balMesh = new THREE.Mesh(balGeom, colMat);
+        balMesh.position.set(Math.cos(stepAngle) * (outerRadius - 0.03), stepY + 0.425, Math.sin(stepAngle) * (outerRadius - 0.03));
+        group.add(balMesh);
+      }
+    }
+  } else {
+    // Classic Architectural Straight / Open-Riser Flight
+    const stringerThick = 0.05;
+    const stringerMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.5, roughness: 0.4 });
+
+    // Left and right stringer beams
+    const beamLen = Math.hypot(d, h);
+    const beamAngle = Math.atan2(h, d);
+    const beamGeom = new THREE.BoxGeometry(stringerThick, 0.16, beamLen);
+
+    const leftBeam = new THREE.Mesh(beamGeom, stringerMat);
+    leftBeam.position.set(-w / 2 + stringerThick / 2, h / 2, 0);
+    leftBeam.rotation.x = beamAngle;
+    group.add(leftBeam);
+
+    const rightBeam = new THREE.Mesh(beamGeom, stringerMat);
+    rightBeam.position.set(w / 2 - stringerThick / 2, h / 2, 0);
+    rightBeam.rotation.x = beamAngle;
+    group.add(rightBeam);
+
+    // Horizontal Steps / Treads
+    for (let i = 0; i < steps; i++) {
+      const zPos = -d / 2 + i * stepRun + stepRun / 2;
+      const yPos = (i + 1) * stepRise;
+
+      const treadGeom = new THREE.BoxGeometry(w - stringerThick * 2, 0.04, stepRun * 1.1);
+      const treadMesh = new THREE.Mesh(treadGeom, mat);
+      treadMesh.position.set(0, yPos - 0.02, zPos);
+      treadMesh.castShadow = true;
+      treadMesh.receiveShadow = true;
+      group.add(treadMesh);
+    }
+
+    // Safety Handrail & Balusters along left edge
+    if (hasHandrail) {
+      const railH = 0.85;
+      const handrailGeom = new THREE.CylinderGeometry(0.02, 0.02, beamLen, 12);
+      const handrailMesh = new THREE.Mesh(handrailGeom, stringerMat);
+      handrailMesh.position.set(w / 2, h / 2 + railH, 0);
+      handrailMesh.rotation.x = beamAngle;
+      group.add(handrailMesh);
+
+      // Support Posts
+      for (let p = 0; p <= 3; p++) {
+        const frac = p / 3;
+        const pz = -d / 2 + frac * d;
+        const py = frac * h;
+        const postGeom = new THREE.CylinderGeometry(0.015, 0.015, railH, 8);
+        const postMesh = new THREE.Mesh(postGeom, stringerMat);
+        postMesh.position.set(w / 2, py + railH / 2, pz);
+        group.add(postMesh);
+      }
+    }
+  }
+
+  return group;
+}
+
 export function buildProceduralMeshGroup(
   archetype: string,
   params: any,
@@ -1266,6 +1377,7 @@ export function buildProceduralMeshGroup(
   if (archetype === 'window') return buildWindowMeshGroup(merged, material);
   if (archetype === 'wallDesign') return buildWallDesignMeshGroup(merged, material);
   if (archetype === 'decor') return buildInteriorDecorMeshGroup(merged, material);
+  if (archetype === 'stairs' || archetype === 'staircase') return buildStairsMeshGroup(merged, material);
   if (archetype === 'primitives' && params.primitives) return buildCustomPrimitivesMeshGroup(params.primitives, material);
   
   const grp = new THREE.Group();

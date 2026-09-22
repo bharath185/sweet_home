@@ -22,7 +22,8 @@ import {
   Download,
   Sparkles,
   Compass,
-  Maximize2
+  Maximize2,
+  Printer
 } from 'lucide-react';
 import { HomePlan, Wall, FurnitureItem, Room, DimensionLine, TextNote, VisitorCameraState } from '../types/plan';
 import { formatDistance, formatArea } from '../services/unitConverter';
@@ -55,6 +56,7 @@ export type ToolMode =
   | 'drawRoom'
   | 'door'
   | 'window'
+  | 'stairs'
   | 'dimension'
   | 'text'
   | 'pan';
@@ -592,6 +594,35 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     onSelectId(newWindow.id);
   };
 
+  // Insert Architectural Staircase Flight
+  const handleInsertStairs = (clickPt: { x: number; y: number }) => {
+    const newStairs: FurnitureItem = {
+      id: 'stairs_' + Date.now(),
+      catalogId: 'stairs_straight',
+      name: 'Architectural Flight Staircase',
+      category: 'Stairs',
+      x: Math.round(clickPt.x),
+      y: Math.round(clickPt.y),
+      elevation: 0,
+      angle: 0,
+      width: 100,
+      depth: 240,
+      height: 260,
+      model: 'procedural:stairs:{"type":"straight","stepsCount":14,"hasHandrail":true}',
+      icon: '/models/stairs.png',
+      color: '#d4a373',
+      floorLevel: activeFloor,
+    };
+
+    onUpdatePlan({
+      ...plan,
+      furniture: [...plan.furniture, newStairs],
+      updatedAt: new Date().toISOString(),
+    });
+    setToolMode('select');
+    onSelectId(newStairs.id);
+  };
+
   // Export Scalable Vector SVG Blueprint
   const handleExportSVG = () => {
     const flRooms = plan.rooms.filter((r) => (r.floorLevel ?? 0) === activeFloor);
@@ -858,6 +889,11 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     link.click();
   };
 
+  // Open Full-Page Printable Blueprint Sheet
+  const handlePrintPlanSheet = () => {
+    window.print();
+  };
+
   // Main 60fps Canvas Render Loop
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1001,20 +1037,60 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
               ctx.translate(sp.x, sp.y);
               ctx.rotate(item.angle || 0);
 
-              // Standard Furniture Item
-              ctx.fillStyle = item.color || '#f8fafc';
-              ctx.strokeStyle = isSelected ? '#0284c7' : '#334155';
-              ctx.lineWidth = isSelected ? 2.5 : 1.5;
-              ctx.beginPath();
-              ctx.roundRect(-w / 2, -d / 2, w, d, 4);
-              ctx.fill();
-              ctx.stroke();
+              const isStairs = item.category === 'Stairs' || (item.name || '').toLowerCase().includes('stair');
 
-              ctx.fillStyle = '#0f172a';
-              ctx.font = 'bold 9.5px system-ui';
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillText(item.name, 0, 0);
+              if (isStairs) {
+                // Architectural Staircase CAD Symbol with treads and UP arrow
+                ctx.fillStyle = '#f8fafc';
+                ctx.strokeStyle = isSelected ? '#0284c7' : '#334155';
+                ctx.lineWidth = isSelected ? 2.5 : 1.5;
+                ctx.fillRect(-w / 2, -d / 2, w, d);
+                ctx.strokeRect(-w / 2, -d / 2, w, d);
+
+                // Draw 10-14 tread lines
+                const numTreads = 12;
+                const treadStep = d / numTreads;
+                ctx.strokeStyle = '#64748b';
+                ctx.lineWidth = 1;
+                for (let t = 1; t < numTreads; t++) {
+                  const ty = -d / 2 + t * treadStep;
+                  ctx.beginPath();
+                  ctx.moveTo(-w / 2, ty);
+                  ctx.lineTo(w / 2, ty);
+                  ctx.stroke();
+                }
+
+                // Directional UP arrow
+                ctx.strokeStyle = '#0284c7';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, d / 2 - 12);
+                ctx.lineTo(0, -d / 2 + 16);
+                ctx.lineTo(-6, -d / 2 + 24);
+                ctx.moveTo(0, -d / 2 + 16);
+                ctx.lineTo(6, -d / 2 + 24);
+                ctx.stroke();
+
+                ctx.fillStyle = '#0284c7';
+                ctx.font = 'bold 9px system-ui';
+                ctx.textAlign = 'center';
+                ctx.fillText('UP', 0, d / 2 - 18);
+              } else {
+                // Standard Furniture Item
+                ctx.fillStyle = item.color || '#f8fafc';
+                ctx.strokeStyle = isSelected ? '#0284c7' : '#334155';
+                ctx.lineWidth = isSelected ? 2.5 : 1.5;
+                ctx.beginPath();
+                ctx.roundRect(-w / 2, -d / 2, w, d, 4);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#0f172a';
+                ctx.font = 'bold 9.5px system-ui';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(item.name, 0, 0);
+              }
 
               // Selection Handles
               if (isSelected) {
@@ -1581,6 +1657,12 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       return;
     }
 
+    // CAD Tool: Insert Staircase
+    if (toolMode === 'stairs') {
+      handleInsertStairs(clickPlan);
+      return;
+    }
+
     // CAD Tool: Dimension Line
     if (toolMode === 'dimension') {
       const snap = findSnapVertex(clickPlan.x, clickPlan.y);
@@ -1961,6 +2043,16 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             <span className="hidden md:inline text-[11px]">Window</span>
           </button>
 
+          {/* Staircase Inserter */}
+          <button
+            onClick={() => setToolMode('stairs')}
+            className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'stairs' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+            title="Insert Architectural Staircase Flight (Click anywhere on floor)"
+          >
+            <Compass className="w-3.5 h-3.5" />
+            <span className="hidden md:inline text-[11px]">Stairs</span>
+          </button>
+
           {/* Aligned Dimension */}
           <button
             onClick={() => { setToolMode('dimension'); setDimStart(null); }}
@@ -2089,6 +2181,16 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export 4K HD</span>
+          </button>
+
+          {/* Print Architectural Sheet */}
+          <button
+            onClick={handlePrintPlanSheet}
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            title="Print Architectural Blueprint Sheet"
+          >
+            <Printer className="w-3.5 h-3.5 text-slate-600" />
+            <span className="hidden sm:inline">Print</span>
           </button>
         </div>
       </div>

@@ -45,6 +45,7 @@ import {
   buildWallDesignMeshGroup,
   buildInteriorDecorMeshGroup,
   buildCustomPrimitivesMeshGroup,
+  buildStairsMeshGroup,
 } from '../services/proceduralFurniture';
 import { getProceduralTexture } from '../services/pbrTextures';
 import { RenderStudioModal, RenderSnapshotSettings } from './RenderStudioModal';
@@ -191,16 +192,13 @@ function buildSmartArchetypeFallback(
       );
     }
 
-    if (lowerCat === 'bathroom' || lowerName.includes('bath') || lowerCatId.includes('bath')) {
-      return buildCabinetMeshGroup(
+    if (lowerCat === 'stairs' || lowerName.includes('stair') || lowerCatId.includes('stair')) {
+      return buildStairsMeshGroup(
         {
-          columns: 2,
-          rows: 1,
-          doorType: 'open_shelf',
+          type: lowerName.includes('spiral') ? 'spiral' : 'straight',
           width: item.width,
           depth: item.depth,
           height: item.height,
-          hasLegs: false,
         },
         itemMat
       );
@@ -1093,7 +1091,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       group.add(floorMesh);
     });
 
-    // 2. Build Walls
+    // 2. Build Walls with Architectural Openings / Cutouts for Doors & Windows
     plan.walls.filter((w) => isFloorVisible(w.floorLevel ?? 0)).forEach((wall) => {
       const offset = getFloor3DOffset(wall.floorLevel ?? 0);
       const x1 = wall.xStart * CM;
@@ -1108,8 +1106,6 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       const height = (wall.height || 250) * CM;
       const thickness = (wall.thickness || 15) * CM;
-
-      const geom = new THREE.BoxGeometry(length, height, thickness);
       const isSelected = selectedId === wall.id;
 
       const wallTex = wall.texture ? getProceduralTexture(wall.texture, wall.color) : null;
@@ -1120,18 +1116,115 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         map: wallTex || undefined,
       });
 
-      const wallMesh = new THREE.Mesh(geom, mat);
-      wallMesh.position.set(
-        (x1 + x2) / 2 + offset.x,
-        offset.y + height / 2,
-        (z1 + z2) / 2 + offset.z
-      );
-      wallMesh.rotation.y = -angle;
-      wallMesh.castShadow = true;
-      wallMesh.receiveShadow = true;
-      wallMesh.userData = { id: wall.id, type: 'wall', floorLevel: wall.floorLevel ?? 0 };
+      // Find any doors or windows placed along this wall
+      const wallFloor = wall.floorLevel ?? 0;
+      const wallOpenings = plan.furniture.filter((f) => {
+        if ((f.floorLevel ?? 0) !== wallFloor) return false;
+        const isOpening =
+          f.category === 'Doors & Windows' ||
+          (f.name || '').toLowerCase().includes('door') ||
+          (f.name || '').toLowerCase().includes('window');
+        if (!isOpening) return false;
 
-      group.add(wallMesh);
+        // Project opening position onto wall line
+        const fx = f.x * CM;
+        const fz = f.y * CM;
+        const d = Math.abs((x2 - x1) * (z1 - fz) - (x1 - fx) * (z2 - z1)) / length;
+        if (d > 0.45) return false; // More than 45cm away from wall centerline
+
+        const dot = ((fx - x1) * dx + (fz - z1) * dz) / (length * length);
+        return dot >= -0.05 && dot <= 1.05;
+      });
+
+      if (wallOpenings.length === 0) {
+        // Solid wall segment
+        const geom = new THREE.BoxGeometry(length, height, thickness);
+        const wallMesh = new THREE.Mesh(geom, mat);
+        wallMesh.position.set(
+          (x1 + x2) / 2 + offset.x,
+          offset.y + height / 2,
+          (z1 + z2) / 2 + offset.z
+        );
+        wallMesh.rotation.y = -angle;
+        wallMesh.castShadow = true;
+        wallMesh.receiveShadow = true;
+        wallMesh.userData = { id: wall.id, type: 'wall', floorLevel: wallFloor };
+        group.add(wallMesh);
+      } else {
+        // Build wall segments with cutouts (Left sub-wall, Right sub-wall, and Top Lintel above opening)
+        // Sort openings by distance along wall from start point
+        const sortedOpenings = wallOpenings.map((op) => {
+          const fx = op.x * CM;
+          const fz = op.y * CM;
+          const distAlong = Math.max(0, Math.min(length, ((fx - x1) * dx + (fz - z1) * dz) / length));
+          const opWidth = (op.width || 90) * CM;
+          const opHeight = (op.height || 210) * CM;
+          const opElevation = (op.elevation || 0) * CM;
+          return {
+            distAlong,
+            start: Math.max(0, distAlong - opWidth / 2),
+            end: Math.min(length, distAlong + opWidth / 2),
+            height: opHeight,
+            elevation: opElevation,
+          };
+        }).sort((a, b) => a.start - b.start);
+
+        const wallGroup = new THREE.Group();
+        wallGroup.position.set(x1 + offset.x, offset.y, z1 + offset.z);
+        wallGroup.rotation.y = -angle;
+        wallGroup.userData = { id: wall.id, type: 'wall', floorLevel: wallFloor };
+
+        let curPos = 0;
+        sortedOpenings.forEach((op) => {
+          // Left solid section
+          const leftLen = op.start - curPos;
+          if (leftLen > 0.05) {
+            const leftGeom = new THREE.BoxGeometry(leftLen, height, thickness);
+            const leftMesh = new THREE.Mesh(leftGeom, mat);
+            leftMesh.position.set(curPos + leftLen / 2, height / 2, 0);
+            leftMesh.castShadow = true;
+            leftMesh.receiveShadow = true;
+            wallGroup.add(leftMesh);
+          }
+
+          // Top Header / Lintel above door or window opening
+          const openLen = op.end - op.start;
+          const lintelH = Math.max(0, height - (op.elevation + op.height));
+          if (lintelH > 0.04 && openLen > 0.05) {
+            const lintelGeom = new THREE.BoxGeometry(openLen, lintelH, thickness);
+            const lintelMesh = new THREE.Mesh(lintelGeom, mat);
+            lintelMesh.position.set(op.start + openLen / 2, (op.elevation + op.height) + lintelH / 2, 0);
+            lintelMesh.castShadow = true;
+            lintelMesh.receiveShadow = true;
+            wallGroup.add(lintelMesh);
+          }
+
+          // Bottom Sill (for windows with elevation above floor)
+          if (op.elevation > 0.05 && openLen > 0.05) {
+            const sillGeom = new THREE.BoxGeometry(openLen, op.elevation, thickness);
+            const sillMesh = new THREE.Mesh(sillGeom, mat);
+            sillMesh.position.set(op.start + openLen / 2, op.elevation / 2, 0);
+            sillMesh.castShadow = true;
+            sillMesh.receiveShadow = true;
+            wallGroup.add(sillMesh);
+          }
+
+          curPos = op.end;
+        });
+
+        // Final solid section to wall end
+        const remLen = length - curPos;
+        if (remLen > 0.05) {
+          const remGeom = new THREE.BoxGeometry(remLen, height, thickness);
+          const remMesh = new THREE.Mesh(remGeom, mat);
+          remMesh.position.set(curPos + remLen / 2, height / 2, 0);
+          remMesh.castShadow = true;
+          remMesh.receiveShadow = true;
+          wallGroup.add(remMesh);
+        }
+
+        group.add(wallGroup);
+      }
     });
 
     // 3. Build Furniture Items (with VIBRANT RED GLOW on Collision)
@@ -1262,6 +1355,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             procGroup = buildWallDesignMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
           } else if (pType === 'decor') {
             procGroup = buildInteriorDecorMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
+          } else if (pType === 'stairs' || pType === 'staircase') {
+            procGroup = buildStairsMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
           } else if (pType === 'primitives' && parsed.primitives) {
             procGroup = buildCustomPrimitivesMeshGroup(parsed.primitives, itemMat);
           }
