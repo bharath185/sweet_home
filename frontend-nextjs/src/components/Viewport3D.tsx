@@ -33,6 +33,7 @@ import { HomePlan, FurnitureItem, Wall, Room, CatalogItem, VisitorCameraState } 
 import { isTabletopItem, autoAttachToTabletop } from '../services/tabletopAttachment';
 import { loadObjGeometry } from '../services/objParser';
 import { loadGltfModel, getLocalModelBlob } from '../services/modelLoader';
+import { buildSubPartMaterials } from '../services/partMaterials';
 import {
   buildTableMeshGroup,
   buildChairMeshGroup,
@@ -1332,24 +1333,25 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           const pType = parts[1];
           const rawParams = parts.slice(2).join(':');
           const parsed = rawParams ? JSON.parse(rawParams) : {};
+          const partMats = buildSubPartMaterials(item, itemMat);
 
           let procGroup: THREE.Group | null = null;
           if (pType === 'table') {
-            procGroup = buildTableMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
+            procGroup = buildTableMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
           } else if (pType === 'chair') {
-            procGroup = buildChairMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
+            procGroup = buildChairMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
           } else if (pType === 'sofa') {
-            procGroup = buildSofaMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
+            procGroup = buildSofaMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
           } else if (pType === 'cabinet') {
-            procGroup = buildCabinetMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
+            procGroup = buildCabinetMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
           } else if (pType === 'bed') {
-            procGroup = buildBedMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
+            procGroup = buildBedMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
           } else if (pType === 'lamp') {
-            procGroup = buildLampMeshGroup({ ...parsed, shadeWidth: item.width, shadeHeight: item.depth, totalHeight: item.height }, itemMat);
+            procGroup = buildLampMeshGroup({ ...parsed, shadeWidth: item.width, shadeHeight: item.depth, totalHeight: item.height }, itemMat, partMats);
           } else if (pType === 'shelf') {
             procGroup = buildShelfMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
           } else if (pType === 'door') {
-            procGroup = buildDoorMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
+            procGroup = buildDoorMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
           } else if (pType === 'window') {
             procGroup = buildWindowMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
           } else if (pType === 'wallDesign') {
@@ -1357,7 +1359,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           } else if (pType === 'decor') {
             procGroup = buildInteriorDecorMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
           } else if (pType === 'stairs' || pType === 'staircase') {
-            procGroup = buildStairsMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
+            procGroup = buildStairsMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
           } else if (pType === 'primitives' && parsed.primitives) {
             procGroup = buildCustomPrimitivesMeshGroup(parsed.primitives, itemMat);
           }

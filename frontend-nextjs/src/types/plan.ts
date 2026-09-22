@@ -40,6 +40,7 @@ export interface FurnitureItem {
   model: string;
   icon?: string;
   color?: string;
+  partColors?: Record<string, string>;
   texture?: string;
   materialCategory?: 'wood' | 'fabric' | 'leather' | 'metal' | 'stone' | 'glass' | 'custom';
   materialFinish?: string;

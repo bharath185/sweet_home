@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   SlidersHorizontal,
   Move,
@@ -47,6 +47,7 @@ import { isTabletopItem, findSupportingHost, findNearestSupportingSurface } from
 import { fallbackCatalog } from '../services/api';
 import { Catalog3DPreviewModal } from './Catalog3DPreviewModal';
 import { CatalogThumbnail } from './CatalogThumbnail';
+import { getFurnitureSubParts } from '../services/partMaterials';
 
 interface InspectorSidebarProps {
   plan: HomePlan;
@@ -235,6 +236,55 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
       f.id === selectedFurniture.id ? { ...f, ...patch } : f
     );
     onUpdatePlan({ ...plan, furniture: updated, updatedAt: new Date().toISOString() });
+  };
+
+  const subParts = useMemo(() => {
+    if (!selectedFurniture) return [];
+    return getFurnitureSubParts(selectedFurniture);
+  }, [selectedFurniture]);
+
+  const [activePartId, setActivePartId] = useState<string>('');
+
+  useEffect(() => {
+    if (subParts.length > 0) {
+      if (!activePartId || !subParts.find((p) => p.id === activePartId)) {
+        setActivePartId(subParts[0].id);
+      }
+    } else {
+      setActivePartId('');
+    }
+  }, [subParts, activePartId]);
+
+  const updatePartColor = (partId: string, colorHex: string) => {
+    if (!selectedFurniture) return;
+    const currentPartColors = selectedFurniture.partColors || {};
+    const updated = {
+      ...currentPartColors,
+      [partId]: colorHex,
+    };
+    updateFurniture({
+      partColors: updated,
+      color: partId === subParts[0]?.id ? colorHex : selectedFurniture.color,
+    });
+  };
+
+  const applyColorToAllParts = (colorHex: string) => {
+    if (!selectedFurniture) return;
+    const newPartColors: Record<string, string> = {};
+    subParts.forEach((p) => {
+      newPartColors[p.id] = colorHex;
+    });
+    updateFurniture({
+      color: colorHex,
+      partColors: newPartColors,
+    });
+  };
+
+  const resetPartColors = () => {
+    if (!selectedFurniture) return;
+    updateFurniture({
+      partColors: {},
+    });
   };
 
   const updateWall = (patch: Partial<Wall>) => {
@@ -705,6 +755,76 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                 </div>
               ) : (
                 <>
+                  {/* Multi-Part 3D Component Selector */}
+                  <div className="p-3 rounded-2xl bg-indigo-950/20 border border-indigo-500/30 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
+                        3D Multi-Part Finish Styler
+                      </span>
+                      <span className="text-[9px] font-mono text-slate-400">
+                        {subParts.length} Parts
+                      </span>
+                    </div>
+
+                    {/* Part Select Buttons */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {subParts.map((part) => {
+                        const isPartActive = activePartId === part.id;
+                        const partColor = selectedFurniture.partColors?.[part.id] || selectedFurniture.color || '#3b82f6';
+                        return (
+                          <button
+                            key={part.id}
+                            onClick={() => setActivePartId(part.id)}
+                            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border ${
+                              isPartActive
+                                ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
+                                : isDark
+                                ? 'bg-slate-900 hover:bg-slate-800 border-slate-700/80 text-slate-300'
+                                : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                            }`}
+                          >
+                            <span>{part.icon}</span>
+                            <span>{part.name}</span>
+                            <span
+                              className="w-3 h-3 rounded-full border border-white/40 shrink-0 ml-0.5 shadow-2xs"
+                              style={{ backgroundColor: partColor }}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Active Part Info Bar */}
+                    {activePartId && (
+                      <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-indigo-500/20">
+                        <span className="text-slate-300">
+                          Active: <strong className="text-white">{subParts.find((p) => p.id === activePartId)?.name || 'Selected Part'}</strong>
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              const currentColor = selectedFurniture.partColors?.[activePartId] || selectedFurniture.color || '#3b82f6';
+                              applyColorToAllParts(currentColor);
+                            }}
+                            className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold underline cursor-pointer"
+                            title="Apply this part's color to all other parts of this object"
+                          >
+                            Sync All Parts
+                          </button>
+                          {selectedFurniture.partColors && Object.keys(selectedFurniture.partColors).length > 0 && (
+                            <button
+                              onClick={resetPartColors}
+                              className="text-[10px] text-slate-400 hover:text-rose-400 font-semibold cursor-pointer"
+                              title="Reset all parts back to unified color"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* PBR Texture Material Library Category Tabs */}
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
@@ -735,18 +855,22 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                     {/* Material Swatches Grid */}
                     <div className="grid grid-cols-2 gap-1.5 pt-1.5">
                       {MATERIAL_LIBRARIES[activeMatCategory]?.swatches.map((swatch) => {
-                        const isCurrent =
-                          selectedFurniture.color?.toLowerCase() === swatch.color.toLowerCase();
+                        const currentPartColor = (activePartId && selectedFurniture.partColors?.[activePartId]) || selectedFurniture.color || '';
+                        const isCurrent = currentPartColor.toLowerCase() === swatch.color.toLowerCase();
                         return (
                           <button
                             key={swatch.name}
                             onClick={() => {
-                              updateFurniture({
-                                color: swatch.color,
-                                roughness: swatch.roughness,
-                                metalness: swatch.metalness,
-                                opacity: swatch.opacity ?? 1.0,
-                              });
+                              if (activePartId) {
+                                updatePartColor(activePartId, swatch.color);
+                              } else {
+                                updateFurniture({
+                                  color: swatch.color,
+                                  roughness: swatch.roughness,
+                                  metalness: swatch.metalness,
+                                  opacity: swatch.opacity ?? 1.0,
+                                });
+                              }
                             }}
                             className={`p-1.5 rounded-sm border text-left flex items-center gap-2 transition cursor-pointer ${
                               isCurrent
@@ -776,42 +900,73 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
 
                   {/* Custom Hex Color Picker */}
                   <div className="space-y-1.5 pt-2 border-t border-inherit">
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      Custom Color Tint
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={selectedFurniture.color || '#3b82f6'}
-                        onChange={(e) => updateFurniture({ color: e.target.value })}
-                        className="w-8 h-8 rounded-sm border-0 cursor-pointer bg-transparent"
-                      />
-                      <input
-                        type="text"
-                        value={selectedFurniture.color || '#3b82f6'}
-                        onChange={(e) => updateFurniture({ color: e.target.value })}
-                        className={`flex-1 px-2.5 py-1 text-xs font-mono rounded-sm border focus:outline-none ${
-                          isDark
-                            ? 'bg-slate-900 border-slate-800 text-white'
-                            : 'bg-white border-slate-200 text-slate-900'
-                        }`}
-                      />
-                    </div>
+                    {(() => {
+                      const activePart = subParts.find((p) => p.id === activePartId);
+                      const currentPartColor = (activePartId && selectedFurniture.partColors?.[activePartId]) || selectedFurniture.color || '#3b82f6';
+                      return (
+                        <>
+                          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                            <span>{activePart ? `${activePart.name} Color` : 'Custom Color Tint'}</span>
+                            <span className="font-mono text-[10px] text-slate-400">{currentPartColor}</span>
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={currentPartColor}
+                              onChange={(e) => {
+                                if (activePartId) {
+                                  updatePartColor(activePartId, e.target.value);
+                                } else {
+                                  updateFurniture({ color: e.target.value });
+                                }
+                              }}
+                              className="w-8 h-8 rounded-sm border-0 cursor-pointer bg-transparent"
+                            />
+                            <input
+                              type="text"
+                              value={currentPartColor}
+                              onChange={(e) => {
+                                if (activePartId) {
+                                  updatePartColor(activePartId, e.target.value);
+                                } else {
+                                  updateFurniture({ color: e.target.value });
+                                }
+                              }}
+                              className={`flex-1 px-2.5 py-1 text-xs font-mono rounded-sm border focus:outline-none ${
+                                isDark
+                                  ? 'bg-slate-900 border-slate-800 text-white'
+                                  : 'bg-white border-slate-200 text-slate-900'
+                              }`}
+                            />
+                          </div>
+                        </>
+                      );
+                    })()}
 
                     {/* Quick Swatches */}
                     <div className="grid grid-cols-9 gap-1 pt-1">
-                      {PRESET_COLORS.map((c) => (
-                        <button
-                          key={c}
-                          onClick={() => updateFurniture({ color: c })}
-                          style={{ backgroundColor: c }}
-                          className={`w-full h-5 rounded-xs border transition hover:scale-110 cursor-pointer ${
-                            selectedFurniture.color?.toLowerCase() === c.toLowerCase()
-                              ? 'border-indigo-500 ring-2 ring-indigo-400 ring-offset-1 ring-offset-slate-900'
-                              : 'border-white/20'
-                          }`}
-                        />
-                      ))}
+                      {PRESET_COLORS.map((c) => {
+                        const currentPartColor = (activePartId && selectedFurniture.partColors?.[activePartId]) || selectedFurniture.color || '';
+                        const isMatch = currentPartColor.toLowerCase() === c.toLowerCase();
+                        return (
+                          <button
+                            key={c}
+                            onClick={() => {
+                              if (activePartId) {
+                                updatePartColor(activePartId, c);
+                              } else {
+                                updateFurniture({ color: c });
+                              }
+                            }}
+                            style={{ backgroundColor: c }}
+                            className={`w-full h-5 rounded-xs border transition hover:scale-110 cursor-pointer ${
+                              isMatch
+                                ? 'border-indigo-500 ring-2 ring-indigo-400 ring-offset-1 ring-offset-slate-900'
+                                : 'border-white/20'
+                            }`}
+                          />
+                        );
+                      })}
                     </div>
                   </div>
 

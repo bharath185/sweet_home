@@ -71,8 +71,11 @@ export interface CustomPrimitive {
 
 const CM = 0.01;
 
-export function buildTableMeshGroup(params: TableParams, mat: THREE.Material): THREE.Group {
+export function buildTableMeshGroup(params: TableParams, mat: THREE.Material, partMats?: Record<string, THREE.Material>): THREE.Group {
   const group = new THREE.Group();
+  const topMat = partMats?.top || mat;
+  const legsMat = partMats?.legs || mat;
+
   const w = Math.max(20, params.width) * CM;
   const d = Math.max(20, params.depth) * CM;
   const h = Math.max(20, params.height) * CM;
@@ -83,34 +86,37 @@ export function buildTableMeshGroup(params: TableParams, mat: THREE.Material): T
   if (params.shape === 'round') {
     const radius = Math.min(w, d) / 2;
     const geom = new THREE.CylinderGeometry(radius, radius, topThick, 36);
-    topMesh = new THREE.Mesh(geom, mat);
+    topMesh = new THREE.Mesh(geom, topMat);
   } else if (params.shape === 'hexagonal') {
     const radius = Math.min(w, d) / 2;
     const geom = new THREE.CylinderGeometry(radius, radius, topThick, 6);
-    topMesh = new THREE.Mesh(geom, mat);
+    topMesh = new THREE.Mesh(geom, topMat);
   } else {
     const geom = new THREE.BoxGeometry(w, topThick, d);
-    topMesh = new THREE.Mesh(geom, mat);
+    topMesh = new THREE.Mesh(geom, topMat);
   }
   topMesh.position.y = h - topThick / 2;
   topMesh.castShadow = true;
   topMesh.receiveShadow = true;
+  topMesh.userData = { partId: 'top' };
   group.add(topMesh);
 
   const legHeight = h - topThick;
 
   if (params.legStyle === 'pedestal_column' || params.shape === 'round') {
     const colGeom = new THREE.CylinderGeometry(legThick * 1.5, legThick * 2, legHeight, 24);
-    const colMesh = new THREE.Mesh(colGeom, mat);
+    const colMesh = new THREE.Mesh(colGeom, legsMat);
     colMesh.position.y = legHeight / 2;
     colMesh.castShadow = true;
+    colMesh.userData = { partId: 'legs' };
     group.add(colMesh);
 
     const baseRadius = Math.min(w, d) * 0.35;
     const baseGeom = new THREE.CylinderGeometry(baseRadius, baseRadius, 0.03, 32);
-    const baseMesh = new THREE.Mesh(baseGeom, mat);
+    const baseMesh = new THREE.Mesh(baseGeom, legsMat);
     baseMesh.position.y = 0.015;
     baseMesh.castShadow = true;
+    baseMesh.userData = { partId: 'legs' };
     group.add(baseMesh);
   } else if (params.legStyle === 'trestle_base' || params.legStyle === 'cross_x_legs') {
     const leftX = -w / 2 + 0.15;
@@ -118,16 +124,18 @@ export function buildTableMeshGroup(params: TableParams, mat: THREE.Material): T
 
     [leftX, rightX].forEach((posX) => {
       const trestleGeom = new THREE.BoxGeometry(legThick, legHeight, d * 0.75);
-      const tMesh = new THREE.Mesh(trestleGeom, mat);
+      const tMesh = new THREE.Mesh(trestleGeom, legsMat);
       tMesh.position.set(posX, legHeight / 2, 0);
       tMesh.castShadow = true;
+      tMesh.userData = { partId: 'legs' };
       group.add(tMesh);
     });
 
     const beamGeom = new THREE.BoxGeometry(w - 0.3, legThick * 0.8, legThick * 0.8);
-    const beamMesh = new THREE.Mesh(beamGeom, mat);
+    const beamMesh = new THREE.Mesh(beamGeom, legsMat);
     beamMesh.position.set(0, legHeight * 0.3, 0);
     beamMesh.castShadow = true;
+    beamMesh.userData = { partId: 'legs' };
     group.add(beamMesh);
   } else {
     const offsetX = w / 2 - legThick;
@@ -142,9 +150,10 @@ export function buildTableMeshGroup(params: TableParams, mat: THREE.Material): T
     ];
 
     positions.forEach(([x, y, z]) => {
-      const legMesh = new THREE.Mesh(legGeom, mat);
+      const legMesh = new THREE.Mesh(legGeom, legsMat);
       legMesh.position.set(x, y, z);
       legMesh.castShadow = true;
+      legMesh.userData = { partId: 'legs' };
       group.add(legMesh);
     });
   }
@@ -152,8 +161,12 @@ export function buildTableMeshGroup(params: TableParams, mat: THREE.Material): T
   return group;
 }
 
-export function buildChairMeshGroup(params: ChairParams, mat: THREE.Material): THREE.Group {
+export function buildChairMeshGroup(params: ChairParams, mat: THREE.Material, partMats?: Record<string, THREE.Material>): THREE.Group {
   const group = new THREE.Group();
+  const seatMat = partMats?.seat || mat;
+  const backMat = partMats?.backrest || mat;
+  const legsMat = partMats?.legs || mat;
+
   const w = Math.max(30, params.width) * CM;
   const d = Math.max(30, params.depth) * CM;
   const h = Math.max(40, params.height) * CM;
@@ -161,18 +174,20 @@ export function buildChairMeshGroup(params: ChairParams, mat: THREE.Material): T
   const seatThick = 0.05;
 
   const seatGeom = new THREE.BoxGeometry(w, seatThick, d);
-  const seatMesh = new THREE.Mesh(seatGeom, mat);
+  const seatMesh = new THREE.Mesh(seatGeom, seatMat);
   seatMesh.position.set(0, seatH - seatThick / 2, 0);
   seatMesh.castShadow = true;
+  seatMesh.userData = { partId: 'seat' };
   group.add(seatMesh);
 
   if (params.backrestStyle !== 'backless') {
     const backHeight = h - seatH;
     const backThick = 0.04;
     const backGeom = new THREE.BoxGeometry(w * 0.95, backHeight, backThick);
-    const backMesh = new THREE.Mesh(backGeom, mat);
+    const backMesh = new THREE.Mesh(backGeom, backMat);
     backMesh.position.set(0, seatH + backHeight / 2, -d / 2 + backThick / 2);
     backMesh.castShadow = true;
+    backMesh.userData = { partId: 'backrest' };
     group.add(backMesh);
   }
 
@@ -190,109 +205,153 @@ export function buildChairMeshGroup(params: ChairParams, mat: THREE.Material): T
 
   const legGeom = new THREE.CylinderGeometry(legThick * 0.6, legThick, legHeight, 16);
   positions.forEach(([x, y, z]) => {
-    const legMesh = new THREE.Mesh(legGeom, mat);
+    const legMesh = new THREE.Mesh(legGeom, legsMat);
     legMesh.position.set(x, y, z);
     legMesh.castShadow = true;
+    legMesh.userData = { partId: 'legs' };
     group.add(legMesh);
   });
 
   return group;
 }
 
-export function buildSofaMeshGroup(params: SofaParams, mat: THREE.Material): THREE.Group {
+export function buildSofaMeshGroup(params: SofaParams, mat: THREE.Material, partMats?: Record<string, THREE.Material>): THREE.Group {
   const group = new THREE.Group();
+  const bodyMat = partMats?.body || mat;
+  const cushionsMat = partMats?.cushions || mat;
+  const legsMat = partMats?.legs || mat;
+  const pillowsMat = partMats?.pillows || cushionsMat;
+
   const w = Math.max(60, params.width) * CM;
   const d = Math.max(60, params.depth) * CM;
   const h = Math.max(50, params.height) * CM;
   const armWidth = 0.15;
 
   const baseGeom = new THREE.BoxGeometry(w, 0.12, d);
-  const baseMesh = new THREE.Mesh(baseGeom, mat);
+  const baseMesh = new THREE.Mesh(baseGeom, legsMat);
   baseMesh.position.set(0, 0.06, 0);
   baseMesh.castShadow = true;
+  baseMesh.userData = { partId: 'legs' };
   group.add(baseMesh);
 
   const seatW = w - armWidth * 2;
   const seatGeom = new THREE.BoxGeometry(seatW, 0.22, d * 0.85);
-  const seatMesh = new THREE.Mesh(seatGeom, mat);
+  const seatMesh = new THREE.Mesh(seatGeom, cushionsMat);
   seatMesh.position.set(0, 0.22, 0.02);
   seatMesh.castShadow = true;
+  seatMesh.userData = { partId: 'cushions' };
   group.add(seatMesh);
 
   const backGeom = new THREE.BoxGeometry(w, h - 0.12, 0.2);
-  const backMesh = new THREE.Mesh(backGeom, mat);
+  const backMesh = new THREE.Mesh(backGeom, bodyMat);
   backMesh.position.set(0, h / 2 + 0.06, -d / 2 + 0.1);
   backMesh.castShadow = true;
+  backMesh.userData = { partId: 'body' };
   group.add(backMesh);
 
   if (params.armStyle !== 'armless') {
     const armH = h * 0.72;
     [-w / 2 + armWidth / 2, w / 2 - armWidth / 2].forEach((xPos) => {
       const armGeom = new THREE.BoxGeometry(armWidth, armH, d);
-      const armMesh = new THREE.Mesh(armGeom, mat);
+      const armMesh = new THREE.Mesh(armGeom, bodyMat);
       armMesh.position.set(xPos, armH / 2 + 0.06, 0);
       armMesh.castShadow = true;
+      armMesh.userData = { partId: 'body' };
       group.add(armMesh);
     });
   }
 
+  // Accent throw pillows on corners
+  const pilGeom = new THREE.BoxGeometry(0.22, 0.22, 0.08);
+  [-seatW / 2 + 0.12, seatW / 2 - 0.12].forEach((px, idx) => {
+    const pillow = new THREE.Mesh(pilGeom, pillowsMat);
+    pillow.position.set(px, 0.32, -d / 2 + 0.26);
+    pillow.rotation.y = idx === 0 ? 0.25 : -0.25;
+    pillow.castShadow = true;
+    pillow.userData = { partId: 'pillows' };
+    group.add(pillow);
+  });
+
   if (params.type === 'l_shape_left' || params.type === 'l_shape_right') {
     const chaiseX = params.type === 'l_shape_left' ? -w / 2 + d * 0.4 : w / 2 - d * 0.4;
     const chaiseGeom = new THREE.BoxGeometry(d * 0.7, 0.22, d * 0.9);
-    const chaiseMesh = new THREE.Mesh(chaiseGeom, mat);
+    const chaiseMesh = new THREE.Mesh(chaiseGeom, cushionsMat);
     chaiseMesh.position.set(chaiseX, 0.22, d * 0.7);
     chaiseMesh.castShadow = true;
+    chaiseMesh.userData = { partId: 'cushions' };
     group.add(chaiseMesh);
   }
 
   return group;
 }
 
-export function buildCabinetMeshGroup(params: CabinetParams, mat: THREE.Material): THREE.Group {
+export function buildCabinetMeshGroup(params: CabinetParams, mat: THREE.Material, partMats?: Record<string, THREE.Material>): THREE.Group {
   const group = new THREE.Group();
+  const topMat = partMats?.top || mat;
+  const frameMat = partMats?.frame || mat;
+  const doorsMat = partMats?.doors || mat;
+  const legsMat = partMats?.legs || mat;
+  const handlesMat = partMats?.handles || new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.85, roughness: 0.2 });
+
   const w = Math.max(30, params.width) * CM;
   const d = Math.max(20, params.depth) * CM;
   const h = Math.max(30, params.height) * CM;
   const wallThick = 0.025;
 
   const topGeom = new THREE.BoxGeometry(w, wallThick, d);
-  const topMesh = new THREE.Mesh(topGeom, mat);
+  const topMesh = new THREE.Mesh(topGeom, topMat);
   topMesh.position.set(0, h - wallThick / 2, 0);
   topMesh.castShadow = true;
+  topMesh.userData = { partId: 'top' };
   group.add(topMesh);
 
-  const bottomMesh = new THREE.Mesh(topGeom, mat);
+  const bottomMesh = new THREE.Mesh(topGeom, frameMat);
   bottomMesh.position.set(0, wallThick / 2 + (params.hasLegs ? 0.1 : 0), 0);
   bottomMesh.castShadow = true;
+  bottomMesh.userData = { partId: 'frame' };
   group.add(bottomMesh);
 
   const sideH = h - wallThick * 2 - (params.hasLegs ? 0.1 : 0);
   const sideGeom = new THREE.BoxGeometry(wallThick, sideH, d);
 
-  const leftMesh = new THREE.Mesh(sideGeom, mat);
+  const leftMesh = new THREE.Mesh(sideGeom, frameMat);
   leftMesh.position.set(-w / 2 + wallThick / 2, sideH / 2 + wallThick + (params.hasLegs ? 0.1 : 0), 0);
   leftMesh.castShadow = true;
+  leftMesh.userData = { partId: 'frame' };
   group.add(leftMesh);
 
-  const rightMesh = new THREE.Mesh(sideGeom, mat);
+  const rightMesh = new THREE.Mesh(sideGeom, frameMat);
   rightMesh.position.set(w / 2 - wallThick / 2, sideH / 2 + wallThick + (params.hasLegs ? 0.1 : 0), 0);
   rightMesh.castShadow = true;
+  rightMesh.userData = { partId: 'frame' };
   group.add(rightMesh);
 
   const backGeom = new THREE.BoxGeometry(w, sideH, 0.01);
-  const backMesh = new THREE.Mesh(backGeom, mat);
+  const backMesh = new THREE.Mesh(backGeom, frameMat);
   backMesh.position.set(0, sideH / 2 + wallThick + (params.hasLegs ? 0.1 : 0), -d / 2 + 0.005);
   backMesh.castShadow = true;
+  backMesh.userData = { partId: 'frame' };
   group.add(backMesh);
 
-  const rows = Math.max(1, params.rows || 2);
-  for (let r = 1; r < rows; r++) {
-    const shelfGeom = new THREE.BoxGeometry(w - wallThick * 2, wallThick, d - 0.02);
-    const shelfMesh = new THREE.Mesh(shelfGeom, mat);
-    shelfMesh.position.set(0, (sideH / rows) * r + (params.hasLegs ? 0.1 : 0), 0);
-    shelfMesh.castShadow = true;
-    group.add(shelfMesh);
-  }
+  // Door Faces & Handles
+  const doorWidth = (w - wallThick * 2) / 2;
+  [-doorWidth / 2, doorWidth / 2].forEach((dx, didx) => {
+    const doorGeom = new THREE.BoxGeometry(doorWidth * 0.96, sideH * 0.96, 0.018);
+    const doorMesh = new THREE.Mesh(doorGeom, doorsMat);
+    doorMesh.position.set(dx, sideH / 2 + wallThick + (params.hasLegs ? 0.1 : 0), d / 2 - 0.01);
+    doorMesh.castShadow = true;
+    doorMesh.userData = { partId: 'doors' };
+    group.add(doorMesh);
+
+    // Handle Pull
+    const handleGeom = new THREE.CylinderGeometry(0.006, 0.006, 0.12, 12);
+    const handleMesh = new THREE.Mesh(handleGeom, handlesMat);
+    const hx = didx === 0 ? dx + doorWidth * 0.35 : dx - doorWidth * 0.35;
+    handleMesh.position.set(hx, sideH / 2 + wallThick + (params.hasLegs ? 0.1 : 0), d / 2 + 0.015);
+    handleMesh.castShadow = true;
+    handleMesh.userData = { partId: 'handles' };
+    group.add(handleMesh);
+  });
 
   if (params.hasLegs) {
     const legGeom = new THREE.CylinderGeometry(0.02, 0.02, 0.1, 16);
@@ -302,9 +361,10 @@ export function buildCabinetMeshGroup(params: CabinetParams, mat: THREE.Material
       [-w / 2 + 0.05, 0.05, d / 2 - 0.05],
       [w / 2 - 0.05, 0.05, d / 2 - 0.05],
     ].forEach(([x, y, z]) => {
-      const leg = new THREE.Mesh(legGeom, mat);
+      const leg = new THREE.Mesh(legGeom, legsMat);
       leg.position.set(x, y, z);
       leg.castShadow = true;
+      leg.userData = { partId: 'legs' };
       group.add(leg);
     });
   }
@@ -312,49 +372,59 @@ export function buildCabinetMeshGroup(params: CabinetParams, mat: THREE.Material
   return group;
 }
 
-export function buildBedMeshGroup(params: BedParams, mat: THREE.Material): THREE.Group {
+export function buildBedMeshGroup(params: BedParams, mat: THREE.Material, partMats?: Record<string, THREE.Material>): THREE.Group {
   const group = new THREE.Group();
+  const frameMat = partMats?.frame || mat;
+  const headMat = partMats?.headboard || mat;
+  const beddingMat = partMats?.bedding || new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.85, metalness: 0.05 });
+  const pillowMat = partMats?.pillows || new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
+
   const w = Math.max(80, params.width) * CM;
   const d = Math.max(120, params.depth) * CM;
   const h = Math.max(40, params.height) * CM;
   const frameH = 0.25;
 
   const frameGeom = new THREE.BoxGeometry(w + 0.1, frameH, d + 0.1);
-  const frameMesh = new THREE.Mesh(frameGeom, mat);
+  const frameMesh = new THREE.Mesh(frameGeom, frameMat);
   frameMesh.position.set(0, frameH / 2, 0);
   frameMesh.castShadow = true;
+  frameMesh.userData = { partId: 'frame' };
   group.add(frameMesh);
 
   const matGeom = new THREE.BoxGeometry(w, 0.22, d);
-  const matMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.9, metalness: 0.05 });
-  const matMesh = new THREE.Mesh(matGeom, matMat);
+  const matMesh = new THREE.Mesh(matGeom, beddingMat);
   matMesh.position.set(0, frameH + 0.11, 0);
   matMesh.castShadow = true;
+  matMesh.userData = { partId: 'bedding' };
   group.add(matMesh);
 
   const pillowGeom = new THREE.BoxGeometry(w * 0.4, 0.1, 0.35);
-  const pillowMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
   [-w * 0.22, w * 0.22].forEach((xPos) => {
     const pillow = new THREE.Mesh(pillowGeom, pillowMat);
     pillow.position.set(xPos, frameH + 0.26, -d / 2 + 0.25);
     pillow.castShadow = true;
+    pillow.userData = { partId: 'pillows' };
     group.add(pillow);
   });
 
   if (params.headboardStyle !== 'none') {
     const headH = Math.max(0.6, h);
     const headGeom = new THREE.BoxGeometry(w + 0.15, headH, 0.1);
-    const headMesh = new THREE.Mesh(headGeom, mat);
+    const headMesh = new THREE.Mesh(headGeom, headMat);
     headMesh.position.set(0, headH / 2, -d / 2 - 0.05);
     headMesh.castShadow = true;
+    headMesh.userData = { partId: 'headboard' };
     group.add(headMesh);
   }
 
   return group;
 }
 
-export function buildLampMeshGroup(params: LampParams, mat: THREE.Material): THREE.Group {
+export function buildLampMeshGroup(params: LampParams, mat: THREE.Material, partMats?: Record<string, THREE.Material>): THREE.Group {
   const group = new THREE.Group();
+  const shadeMat = partMats?.shade || mat;
+  const stemMat = partMats?.stem || mat;
+  const baseMat = partMats?.base || mat;
   const shadeR = (params.shadeWidth || 40) * CM * 0.5;
   const shadeH = (params.shadeHeight || 30) * CM;
   const totalH = (params.totalHeight || 60) * CM;
@@ -697,10 +767,14 @@ export function buildShelfMeshGroup(params: ShelfParams, mat: THREE.Material): T
 
 // ----------------------------------------------------
 // DOOR MESH BUILDER (With Proximity Swing & Slide Animation Pivots)
-export function buildDoorMeshGroup(params: DoorParams, mat: THREE.Material): THREE.Group {
+export function buildDoorMeshGroup(params: DoorParams, mat: THREE.Material, partMats?: Record<string, THREE.Material>): THREE.Group {
   const group = new THREE.Group();
   group.userData.isInteractive = true;
   group.userData.interactiveType = 'door';
+
+  const panelMat = partMats?.panel || mat;
+  const frameMat = partMats?.frame || mat;
+  const handleMat = partMats?.handle || new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.85, roughness: 0.2 });
 
   const w = Math.max(50, params.width) * CM;
   const d = Math.max(4, params.depth) * CM;
@@ -1255,8 +1329,12 @@ export interface StairsParams {
   hasHandrail?: boolean;
 }
 
-export function buildStairsMeshGroup(params: StairsParams, mat: THREE.Material): THREE.Group {
+export function buildStairsMeshGroup(params: StairsParams, mat: THREE.Material, partMats?: Record<string, THREE.Material>): THREE.Group {
   const group = new THREE.Group();
+  const treadsMat = partMats?.treads || mat;
+  const stringersMat = partMats?.stringers || new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.5, roughness: 0.4 });
+  const handrailMat = partMats?.handrail || stringersMat;
+
   const w = Math.max(60, params.width) * CM;
   const d = Math.max(100, params.depth) * CM;
   const h = Math.max(150, params.height) * CM;
@@ -1270,10 +1348,10 @@ export function buildStairsMeshGroup(params: StairsParams, mat: THREE.Material):
     // Elegant Spiral / Helical Staircase with center column & radiating treads
     const centerRadius = 0.08;
     const colGeom = new THREE.CylinderGeometry(centerRadius, centerRadius, h, 24);
-    const colMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 });
-    const colMesh = new THREE.Mesh(colGeom, colMat);
+    const colMesh = new THREE.Mesh(colGeom, stringersMat);
     colMesh.position.y = h / 2;
     colMesh.castShadow = true;
+    colMesh.userData = { partId: 'stringers' };
     group.add(colMesh);
 
     const outerRadius = Math.min(w, d) / 2;
@@ -1285,38 +1363,41 @@ export function buildStairsMeshGroup(params: StairsParams, mat: THREE.Material):
 
       // Wedge shaped tread
       const treadGeom = new THREE.BoxGeometry(outerRadius, 0.035, 0.22);
-      const treadMesh = new THREE.Mesh(treadGeom, mat);
+      const treadMesh = new THREE.Mesh(treadGeom, treadsMat);
       treadMesh.position.set(Math.cos(stepAngle) * (outerRadius / 2), stepY, Math.sin(stepAngle) * (outerRadius / 2));
       treadMesh.rotation.y = -stepAngle;
       treadMesh.castShadow = true;
+      treadMesh.userData = { partId: 'treads' };
       group.add(treadMesh);
 
       // Baluster spindle
       if (hasHandrail) {
         const balGeom = new THREE.CylinderGeometry(0.008, 0.008, 0.85, 8);
-        const balMesh = new THREE.Mesh(balGeom, colMat);
+        const balMesh = new THREE.Mesh(balGeom, handrailMat);
         balMesh.position.set(Math.cos(stepAngle) * (outerRadius - 0.03), stepY + 0.425, Math.sin(stepAngle) * (outerRadius - 0.03));
+        balMesh.userData = { partId: 'handrail' };
         group.add(balMesh);
       }
     }
   } else {
     // Classic Architectural Straight / Open-Riser Flight
     const stringerThick = 0.05;
-    const stringerMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.5, roughness: 0.4 });
 
     // Left and right stringer beams
     const beamLen = Math.hypot(d, h);
     const beamAngle = Math.atan2(h, d);
     const beamGeom = new THREE.BoxGeometry(stringerThick, 0.16, beamLen);
 
-    const leftBeam = new THREE.Mesh(beamGeom, stringerMat);
+    const leftBeam = new THREE.Mesh(beamGeom, stringersMat);
     leftBeam.position.set(-w / 2 + stringerThick / 2, h / 2, 0);
     leftBeam.rotation.x = beamAngle;
+    leftBeam.userData = { partId: 'stringers' };
     group.add(leftBeam);
 
-    const rightBeam = new THREE.Mesh(beamGeom, stringerMat);
+    const rightBeam = new THREE.Mesh(beamGeom, stringersMat);
     rightBeam.position.set(w / 2 - stringerThick / 2, h / 2, 0);
     rightBeam.rotation.x = beamAngle;
+    rightBeam.userData = { partId: 'stringers' };
     group.add(rightBeam);
 
     // Horizontal Steps / Treads
@@ -1325,10 +1406,11 @@ export function buildStairsMeshGroup(params: StairsParams, mat: THREE.Material):
       const yPos = (i + 1) * stepRise;
 
       const treadGeom = new THREE.BoxGeometry(w - stringerThick * 2, 0.04, stepRun * 1.1);
-      const treadMesh = new THREE.Mesh(treadGeom, mat);
+      const treadMesh = new THREE.Mesh(treadGeom, treadsMat);
       treadMesh.position.set(0, yPos - 0.02, zPos);
       treadMesh.castShadow = true;
       treadMesh.receiveShadow = true;
+      treadMesh.userData = { partId: 'treads' };
       group.add(treadMesh);
     }
 
@@ -1336,9 +1418,10 @@ export function buildStairsMeshGroup(params: StairsParams, mat: THREE.Material):
     if (hasHandrail) {
       const railH = 0.85;
       const handrailGeom = new THREE.CylinderGeometry(0.02, 0.02, beamLen, 12);
-      const handrailMesh = new THREE.Mesh(handrailGeom, stringerMat);
+      const handrailMesh = new THREE.Mesh(handrailGeom, handrailMat);
       handrailMesh.position.set(w / 2, h / 2 + railH, 0);
       handrailMesh.rotation.x = beamAngle;
+      handrailMesh.userData = { partId: 'handrail' };
       group.add(handrailMesh);
 
       // Support Posts
@@ -1347,8 +1430,9 @@ export function buildStairsMeshGroup(params: StairsParams, mat: THREE.Material):
         const pz = -d / 2 + frac * d;
         const py = frac * h;
         const postGeom = new THREE.CylinderGeometry(0.015, 0.015, railH, 8);
-        const postMesh = new THREE.Mesh(postGeom, stringerMat);
+        const postMesh = new THREE.Mesh(postGeom, handrailMat);
         postMesh.position.set(w / 2, py + railH / 2, pz);
+        postMesh.userData = { partId: 'handrail' };
         group.add(postMesh);
       }
     }
@@ -1363,21 +1447,22 @@ export function buildProceduralMeshGroup(
   widthCm: number,
   depthCm: number,
   heightCm: number,
-  material: THREE.Material
+  material: THREE.Material,
+  partMats?: Record<string, THREE.Material>
 ): THREE.Group {
   const merged = { ...params, width: widthCm, depth: depthCm, height: heightCm };
-  if (archetype === 'table') return buildTableMeshGroup(merged, material);
-  if (archetype === 'chair') return buildChairMeshGroup(merged, material);
-  if (archetype === 'sofa') return buildSofaMeshGroup(merged, material);
-  if (archetype === 'cabinet') return buildCabinetMeshGroup(merged, material);
-  if (archetype === 'bed') return buildBedMeshGroup(merged, material);
-  if (archetype === 'lamp') return buildLampMeshGroup({ ...params, shadeWidth: widthCm, shadeHeight: depthCm, totalHeight: heightCm }, material);
+  if (archetype === 'table') return buildTableMeshGroup(merged, material, partMats);
+  if (archetype === 'chair') return buildChairMeshGroup(merged, material, partMats);
+  if (archetype === 'sofa') return buildSofaMeshGroup(merged, material, partMats);
+  if (archetype === 'cabinet') return buildCabinetMeshGroup(merged, material, partMats);
+  if (archetype === 'bed') return buildBedMeshGroup(merged, material, partMats);
+  if (archetype === 'lamp') return buildLampMeshGroup({ ...params, shadeWidth: widthCm, shadeHeight: depthCm, totalHeight: heightCm }, material, partMats);
   if (archetype === 'shelf') return buildShelfMeshGroup(merged, material);
-  if (archetype === 'door') return buildDoorMeshGroup(merged, material);
+  if (archetype === 'door') return buildDoorMeshGroup(merged, material, partMats);
   if (archetype === 'window') return buildWindowMeshGroup(merged, material);
   if (archetype === 'wallDesign') return buildWallDesignMeshGroup(merged, material);
   if (archetype === 'decor') return buildInteriorDecorMeshGroup(merged, material);
-  if (archetype === 'stairs' || archetype === 'staircase') return buildStairsMeshGroup(merged, material);
+  if (archetype === 'stairs' || archetype === 'staircase') return buildStairsMeshGroup(merged, material, partMats);
   if (archetype === 'primitives' && params.primitives) return buildCustomPrimitivesMeshGroup(params.primitives, material);
   
   const grp = new THREE.Group();
