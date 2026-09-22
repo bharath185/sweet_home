@@ -61,8 +61,10 @@ import {
   Building,
   Columns,
   Eye,
-  AlertTriangle
+  AlertTriangle,
+  DollarSign
 } from 'lucide-react';
+import { CostEstimatorModal } from '../components/CostEstimatorModal';
 
 export default function HomeStudioPage() {
   const [plan, setPlan] = useState<HomePlan>(sampleDefaultPlan);
@@ -174,6 +176,7 @@ export default function HomeStudioPage() {
   const [isBlueprintModalOpen, setIsBlueprintModalOpen] = useState<boolean>(false);
   const [isPreferencesModalOpen, setIsPreferencesModalOpen] = useState<boolean>(false);
   const [isClientSelectModalOpen, setIsClientSelectModalOpen] = useState<boolean>(false);
+  const [isCostEstimatorModalOpen, setIsCostEstimatorModalOpen] = useState<boolean>(false);
 
   // Ref-Backed Undo / Redo History Stack
   const historyRef = useRef<HomePlan[]>([JSON.parse(JSON.stringify(sampleDefaultPlan))]);
@@ -798,6 +801,20 @@ export default function HomeStudioPage() {
                   <Sliders className="w-3.5 h-3.5" />
                 </button>
 
+                {/* Cost Estimator & BOM Button */}
+                <button
+                  onClick={() => setIsCostEstimatorModalOpen(true)}
+                  className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
+                    isDark
+                      ? 'bg-slate-900 hover:bg-slate-800 text-emerald-300 border-emerald-500/30'
+                      : 'bg-white hover:bg-slate-100 text-emerald-700 border-emerald-300 shadow-2xs'
+                  }`}
+                  title="Bill of Materials (BOM) & Project Cost Estimator"
+                >
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className="hidden lg:inline">Cost / BOM</span>
+                </button>
+
                 {/* Collision Warning Indicator */}
                 {collisionReport.totalCollisions > 0 && (
                   <span
@@ -1054,6 +1071,13 @@ export default function HomeStudioPage() {
         }}
         onSavePreferences={handleSavePreferences}
       />
+
+      <CostEstimatorModal
+        isOpen={isCostEstimatorModalOpen}
+        onClose={() => setIsCostEstimatorModalOpen(false)}
+        plan={plan}
+        activeFloor={activeFloor}
+      />
     </div>
   );
-}
+};

@@ -46,6 +46,8 @@ import {
   buildInteriorDecorMeshGroup,
   buildCustomPrimitivesMeshGroup,
 } from '../services/proceduralFurniture';
+import { getProceduralTexture } from '../services/pbrTextures';
+import { RenderStudioModal, RenderSnapshotSettings } from './RenderStudioModal';
 
 interface Viewport3DProps {
   plan: HomePlan;
@@ -337,6 +339,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
   const [timeOfDay, setTimeOfDay] = useState<number>(plan.environment?.timeOfDay || 14.5);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isRenderStudioOpen, setIsRenderStudioOpen] = useState(false);
   const [walkWarning, setWalkWarning] = useState<string | null>(null);
   const walkWarningRef = useRef<string | null>(null);
   walkWarningRef.current = walkWarning;
@@ -845,7 +848,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     }
   }, [activeFloor]);
 
-  // Update Sunlight based on Time of Day
+  // Update Sunlight & Atmospheric Sky based on Time of Day
   useEffect(() => {
     if (!dirLightRef.current || !hemiLightRef.current || !sceneRef.current) return;
 
@@ -853,25 +856,48 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const isDay = timeOfDay >= 5.5 && timeOfDay <= 19.5;
 
     if (isDay) {
-      const sunY = Math.max(0.1, Math.sin(sunAngle) * 30);
-      const sunX = Math.cos(sunAngle) * 30;
+      const sunY = Math.max(0.1, Math.sin(sunAngle) * 35);
+      const sunX = Math.cos(sunAngle) * 35;
       dirLightRef.current.position.set(sunX, sunY, 15);
 
-      if (timeOfDay < 8 || timeOfDay > 17) {
-        dirLightRef.current.color.setHex(0xffaa5e);
-        dirLightRef.current.intensity = 1.2;
+      if (timeOfDay < 8) {
+        // Dawn / Early Morning: soft peach-rose sunrise
+        dirLightRef.current.color.setHex(0xffaa77);
+        dirLightRef.current.intensity = 1.3;
+        hemiLightRef.current.color.setHex(0xffedd5);
+        hemiLightRef.current.groundColor.setHex(0x64748b);
+        hemiLightRef.current.intensity = 0.75;
+        sceneRef.current.background = new THREE.Color('#fed7aa');
+        if (sceneRef.current.fog) (sceneRef.current.fog as THREE.FogExp2).color.set('#fed7aa');
+      } else if (timeOfDay > 17) {
+        // Golden Hour / Sunset: rich golden amber light
+        dirLightRef.current.color.setHex(0xf59e0b);
+        dirLightRef.current.intensity = 1.4;
+        hemiLightRef.current.color.setHex(0xfef3c7);
+        hemiLightRef.current.groundColor.setHex(0x475569);
+        hemiLightRef.current.intensity = 0.8;
+        sceneRef.current.background = new THREE.Color('#fdba74');
+        if (sceneRef.current.fog) (sceneRef.current.fog as THREE.FogExp2).color.set('#fdba74');
       } else {
-        dirLightRef.current.color.setHex(0xfff5e6);
-        dirLightRef.current.intensity = 1.6;
+        // High Noon / Daylight: crisp natural sun
+        dirLightRef.current.color.setHex(0xffffff);
+        dirLightRef.current.intensity = 1.75;
+        hemiLightRef.current.color.setHex(0xffffff);
+        hemiLightRef.current.groundColor.setHex(0x94a3b8);
+        hemiLightRef.current.intensity = 0.9;
+        sceneRef.current.background = new THREE.Color('#e2e8f0');
+        if (sceneRef.current.fog) (sceneRef.current.fog as THREE.FogExp2).color.set('#e2e8f0');
       }
-      hemiLightRef.current.intensity = 0.75;
-      sceneRef.current.background = new THREE.Color(0x0f172a);
     } else {
-      dirLightRef.current.position.set(10, 20, -10);
-      dirLightRef.current.color.setHex(0x38bdf8);
-      dirLightRef.current.intensity = 0.3;
-      hemiLightRef.current.intensity = 0.2;
-      sceneRef.current.background = new THREE.Color(0x020617);
+      // Night / Twilight: cool deep midnight blue moonlight
+      dirLightRef.current.position.set(-15, 25, -15);
+      dirLightRef.current.color.setHex(0x60a5fa);
+      dirLightRef.current.intensity = 0.45;
+      hemiLightRef.current.color.setHex(0x1e293b);
+      hemiLightRef.current.groundColor.setHex(0x020617);
+      hemiLightRef.current.intensity = 0.35;
+      sceneRef.current.background = new THREE.Color('#030712');
+      if (sceneRef.current.fog) (sceneRef.current.fog as THREE.FogExp2).color.set('#030712');
     }
   }, [timeOfDay]);
 
@@ -1051,10 +1077,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       shape.closePath();
 
       const geom = new THREE.ShapeGeometry(shape);
+      const floorTex = room.floorTexture ? getProceduralTexture(room.floorTexture, room.floorColor) : null;
       const mat = new THREE.MeshStandardMaterial({
         color: room.floorColor ? new THREE.Color(room.floorColor) : 0xd8b48f,
-        roughness: 0.6,
-        metalness: 0.05,
+        roughness: room.floorTexture?.includes('marble') ? 0.2 : 0.65,
+        metalness: room.floorTexture?.includes('marble') ? 0.08 : 0.03,
+        map: floorTex || undefined,
       });
 
       const floorMesh = new THREE.Mesh(geom, mat);
@@ -1084,10 +1112,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const geom = new THREE.BoxGeometry(length, height, thickness);
       const isSelected = selectedId === wall.id;
 
+      const wallTex = wall.texture ? getProceduralTexture(wall.texture, wall.color) : null;
       const mat = new THREE.MeshStandardMaterial({
         color: isSelected ? 0x38bdf8 : wall.color ? new THREE.Color(wall.color) : 0xf8fafc,
         roughness: 0.85,
         metalness: 0.02,
+        map: wallTex || undefined,
       });
 
       const wallMesh = new THREE.Mesh(geom, mat);
@@ -1354,23 +1384,89 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   }, [selectedId, hoveredId]);
 
 
-  // Capture Photo Snapshot (from Section 10 & 12 of guide) based on selected floor
+  // Capture Photo Snapshot based on selected floor
   const handleTakePhotoSnapshot = () => {
-    const renderer = rendererRef.current;
-    if (!renderer) return;
+    setIsRenderStudioOpen(true);
+  };
 
-    setIsCapturing(true);
-    setTimeout(() => {
-      const dataUrl = renderer.domElement.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = dataUrl;
-      const floorName = activeFloor === 0 ? 'Ground_Floor' : activeFloor === 1 ? '1st_Floor' : `Floor_${activeFloor}`;
-      a.download = `${(plan.name || 'Project').replace(/\s+/g, '_')}_${floorName}_3D_Render.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setIsCapturing(false);
-    }, 100);
+  const handleCaptureRenderStudioSnapshot = async (settings: RenderSnapshotSettings): Promise<string | null> => {
+    const renderer = rendererRef.current;
+    const scene = sceneRef.current;
+    const camera = cameraRef.current;
+    if (!renderer || !scene || !camera) return null;
+
+    // Determine target dimensions based on aspect ratio & resolution multiplier
+    let baseWidth = 1920;
+    let baseHeight = 1080;
+    if (settings.aspectRatio === '4:3') {
+      baseWidth = 1600;
+      baseHeight = 1200;
+    } else if (settings.aspectRatio === '1:1') {
+      baseWidth = 1440;
+      baseHeight = 1440;
+    } else if (settings.aspectRatio === '9:16') {
+      baseWidth = 1080;
+      baseHeight = 1920;
+    }
+
+    const targetWidth = baseWidth * (settings.resolutionMultiplier === 4 ? 2 : settings.resolutionMultiplier === 2 ? 1.25 : 0.8);
+    const targetHeight = baseHeight * (settings.resolutionMultiplier === 4 ? 2 : settings.resolutionMultiplier === 2 ? 1.25 : 0.8);
+
+    // Save current renderer state
+    const originalSize = new THREE.Vector2();
+    renderer.getSize(originalSize);
+    const originalAspect = camera.aspect;
+
+    // Render offscreen at target high-resolution & exact aspect ratio
+    camera.aspect = targetWidth / targetHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(targetWidth, targetHeight, false);
+    renderer.render(scene, camera);
+
+    // Create compositing canvas to add branding watermark if enabled
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width = targetWidth;
+    finalCanvas.height = targetHeight;
+    const ctx = finalCanvas.getContext('2d');
+
+    if (ctx) {
+      // Draw 3D scene render
+      ctx.drawImage(renderer.domElement, 0, 0);
+
+      // Add architectural watermark & project metadata if enabled
+      if (settings.includeWatermark) {
+        ctx.save();
+        // Subtle dark gradient bar at bottom
+        const grad = ctx.createLinearGradient(0, targetHeight - 80, 0, targetHeight);
+        grad.addColorStop(0, 'rgba(15, 23, 42, 0)');
+        grad.addColorStop(1, 'rgba(15, 23, 42, 0.7)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, targetHeight - 80, targetWidth, 80);
+
+        // Watermark text
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.font = 'bold 22px system-ui, -apple-system, sans-serif';
+        ctx.fillText(settings.watermarkText || 'Visual Rendered 3D Studio', 32, targetHeight - 28);
+
+        // Right side metadata
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.font = '16px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        const floorText = activeFloor === 0 ? 'Ground Floor' : activeFloor === 1 ? '1st Floor' : `Floor ${activeFloor}`;
+        ctx.fillText(`${plan.name || 'Architecture'} • ${floorText}`, targetWidth - 32, targetHeight - 28);
+        ctx.restore();
+      }
+    }
+
+    const dataUrl = finalCanvas.toDataURL('image/png');
+
+    // Restore original canvas view
+    camera.aspect = originalAspect;
+    camera.updateProjectionMatrix();
+    renderer.setSize(originalSize.x, originalSize.y, false);
+    renderer.render(scene, camera);
+
+    return dataUrl;
   };
 
   const mouseDownPosRef = useRef({ x: 0, y: 0 });
@@ -2314,6 +2410,15 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           </span>
         </div>
       )}
+
+      {/* Cinematic 4K Render Studio Modal */}
+      <RenderStudioModal
+        isOpen={isRenderStudioOpen}
+        onClose={() => setIsRenderStudioOpen(false)}
+        onCaptureSnapshot={handleCaptureRenderStudioSnapshot}
+        projectName={plan.name}
+        activeFloor={activeFloor}
+      />
     </div>
   );
 };

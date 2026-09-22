@@ -42,7 +42,7 @@ import {
   Maximize2,
   Plus
 } from 'lucide-react';
-import { HomePlan, FurnitureItem, Wall, CatalogItem } from '../types/plan';
+import { HomePlan, FurnitureItem, Wall, Room, CatalogItem } from '../types/plan';
 import { isTabletopItem, findSupportingHost, findNearestSupportingSurface } from '../services/tabletopAttachment';
 import { fallbackCatalog } from '../services/api';
 import { Catalog3DPreviewModal } from './Catalog3DPreviewModal';
@@ -243,6 +243,14 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
       w.id === selectedWall.id ? { ...w, ...patch } : w
     );
     onUpdatePlan({ ...plan, walls: updated, updatedAt: new Date().toISOString() });
+  };
+
+  const updateRoom = (patch: Partial<Room>) => {
+    if (!selectedRoom) return;
+    const updated = plan.rooms.map((r) =>
+      r.id === selectedRoom.id ? { ...r, ...patch } : r
+    );
+    onUpdatePlan({ ...plan, rooms: updated, updatedAt: new Date().toISOString() });
   };
 
   const handleDuplicate = () => {
@@ -537,13 +545,163 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
               ===================================================================== */}
           {activeTab === 'design' && (
             <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar text-xs">
-              {!selectedFurniture ? (
+              {!selectedFurniture && !selectedRoom && !selectedWall ? (
                 <div className="text-center py-12 text-slate-400 space-y-2">
                   <Palette className="w-8 h-8 mx-auto text-slate-500 opacity-60" />
-                  <p className="font-semibold">No 3D Model Selected</p>
+                  <p className="font-semibold">No Item, Room, or Wall Selected</p>
                   <p className="text-[11px] text-slate-500">
-                    Click any furniture or fixture on the floorplan to customize its materials, colors, and PBR finish.
+                    Click any furniture, room floor, or wall on the plan to customize its materials, colors, and PBR architectural textures.
                   </p>
+                </div>
+              ) : selectedRoom ? (
+                /* Room Floor PBR Material & Color Customizer */
+                <div className="space-y-4">
+                  <div className="p-2.5 rounded-xl bg-indigo-950/20 border border-indigo-500/30">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 block mb-1">
+                      Room Flooring Finishes
+                    </span>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">
+                      {selectedRoom.name || 'Selected Room'}
+                    </p>
+                    <p className="text-xs text-slate-400 font-mono">
+                      Floor Area: {selectedRoom.areaSquareMeters || 18} m²
+                    </p>
+                  </div>
+
+                  {/* Room PBR Floor Texture Presets */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      Architectural Floor Textures
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { id: 'hardwood_oak', name: 'Natural Oak Planks', color: '#d4a373' },
+                        { id: 'hardwood_walnut', name: 'Dark Walnut Planks', color: '#5c3d2e' },
+                        { id: 'herringbone', name: 'Luxury Herringbone', color: '#c18c5d' },
+                        { id: 'marble_carrara', name: 'Carrara Italian Marble', color: '#f8fafc' },
+                        { id: 'ceramic_tile_grid', name: 'Modern Ceramic Tile', color: '#e2e8f0' },
+                        { id: 'concrete_loft', name: 'Polished Loft Concrete', color: '#94a3b8' },
+                      ].map((tex) => (
+                        <button
+                          key={tex.id}
+                          onClick={() => updateRoom({ floorTexture: tex.id, floorColor: tex.color })}
+                          className={`p-2 rounded-xl border text-left flex items-center gap-2 transition cursor-pointer ${
+                            selectedRoom.floorTexture === tex.id
+                              ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-950/30 font-bold'
+                              : isDark
+                              ? 'bg-slate-900/60 hover:bg-slate-800 border-slate-800'
+                              : 'bg-white hover:bg-slate-50 border-slate-200'
+                          }`}
+                        >
+                          <span
+                            className="w-4 h-4 rounded-full border border-white/20 shrink-0"
+                            style={{ backgroundColor: tex.color }}
+                          />
+                          <span className="text-[10px] truncate">{tex.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Room Custom Color Tint */}
+                  <div className="space-y-1.5 pt-2 border-t border-inherit">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      Floor Base Color
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={selectedRoom.floorColor || '#d8b48f'}
+                        onChange={(e) => updateRoom({ floorColor: e.target.value })}
+                        className="w-8 h-8 rounded-sm border-0 cursor-pointer bg-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={selectedRoom.floorColor || '#d8b48f'}
+                        onChange={(e) => updateRoom({ floorColor: e.target.value })}
+                        className={`flex-1 px-2.5 py-1 text-xs font-mono rounded-sm border focus:outline-none ${
+                          isDark
+                            ? 'bg-slate-900 border-slate-800 text-white'
+                            : 'bg-white border-slate-200 text-slate-900'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : selectedWall ? (
+                /* Wall PBR Material & Paint Customizer */
+                <div className="space-y-4">
+                  <div className="p-2.5 rounded-xl bg-indigo-950/20 border border-indigo-500/30">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 block mb-1">
+                      Wall Finishes & Textures
+                    </span>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">
+                      Selected Wall Partition
+                    </p>
+                    <p className="text-xs text-slate-400 font-mono">
+                      Height: {selectedWall.height || 250} cm • Thickness: {selectedWall.thickness || 15} cm
+                    </p>
+                  </div>
+
+                  {/* Wall Texture Presets */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      Wall Cladding & Textures
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { id: '', name: 'Smooth Matte Paint', color: '#f8fafc' },
+                        { id: 'brick_modern', name: 'Exposed Loft Brick', color: '#b91c1c' },
+                        { id: 'concrete_loft', name: 'Raw Architectural Concrete', color: '#94a3b8' },
+                        { id: 'hardwood_oak', name: 'Vertical Timber Slats', color: '#d4a373' },
+                        { id: 'marble_carrara', name: 'Carrara Marble Wall', color: '#f8fafc' },
+                        { id: 'ceramic_tile_grid', name: 'Subway Ceramic Tile', color: '#e2e8f0' },
+                      ].map((tex) => (
+                        <button
+                          key={tex.id}
+                          onClick={() => updateWall({ texture: tex.id || undefined, color: tex.color })}
+                          className={`p-2 rounded-xl border text-left flex items-center gap-2 transition cursor-pointer ${
+                            (selectedWall.texture || '') === tex.id
+                              ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-950/30 font-bold'
+                              : isDark
+                              ? 'bg-slate-900/60 hover:bg-slate-800 border-slate-800'
+                              : 'bg-white hover:bg-slate-50 border-slate-200'
+                          }`}
+                        >
+                          <span
+                            className="w-4 h-4 rounded-full border border-white/20 shrink-0"
+                            style={{ backgroundColor: tex.color }}
+                          />
+                          <span className="text-[10px] truncate">{tex.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Wall Custom Color Tint */}
+                  <div className="space-y-1.5 pt-2 border-t border-inherit">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      Paint Tone
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={selectedWall.color || '#f8fafc'}
+                        onChange={(e) => updateWall({ color: e.target.value })}
+                        className="w-8 h-8 rounded-sm border-0 cursor-pointer bg-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={selectedWall.color || '#f8fafc'}
+                        onChange={(e) => updateWall({ color: e.target.value })}
+                        className={`flex-1 px-2.5 py-1 text-xs font-mono rounded-sm border focus:outline-none ${
+                          isDark
+                            ? 'bg-slate-900 border-slate-800 text-white'
+                            : 'bg-white border-slate-200 text-slate-900'
+                        }`}
+                      />
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <>
