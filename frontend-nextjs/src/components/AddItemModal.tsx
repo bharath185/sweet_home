@@ -30,6 +30,7 @@ import {
   LampParams,
 } from '../services/proceduralFurniture';
 import { registerCustomObjGeometry, loadObjGeometry } from '../services/objParser';
+import { loadGltfModel, registerLocalModelBlob, getLocalModelBlob } from '../services/modelLoader';
 
 interface AddItemModalProps {
   isOpen: boolean;
@@ -407,23 +408,32 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     });
 
     if (studioMode === 'import_obj' && importedObjKey) {
-      loadObjGeometry(`local_obj:${importedObjKey}`).then((geom) => {
-        geom.computeBoundingBox();
-        const bbox = geom.boundingBox!;
-        const size = new THREE.Vector3();
-        bbox.getSize(size);
+      if (importedObjKey.startsWith('blob_model:')) {
+        const blobUrl = getLocalModelBlob(importedObjKey) || importedObjKey;
+        loadGltfModel(blobUrl, width, depth, height).then((gltfGroup) => {
+          group.add(gltfGroup);
+        }).catch((err) => {
+          console.warn('GLTF preview error:', err);
+        });
+      } else {
+        loadObjGeometry(`local_obj:${importedObjKey}`).then((geom) => {
+          geom.computeBoundingBox();
+          const bbox = geom.boundingBox!;
+          const size = new THREE.Vector3();
+          bbox.getSize(size);
 
-        const scaleX = size.x > 0 ? wM / size.x : wM;
-        const scaleY = size.y > 0 ? hM / size.y : hM;
-        const scaleZ = size.z > 0 ? dM / size.z : dM;
+          const scaleX = size.x > 0 ? wM / size.x : wM;
+          const scaleY = size.y > 0 ? hM / size.y : hM;
+          const scaleZ = size.z > 0 ? dM / size.z : dM;
 
-        const mesh = new THREE.Mesh(geom, baseMaterial);
-        mesh.scale.set(scaleX, scaleY, scaleZ);
-        mesh.position.y = hM / 2;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        group.add(mesh);
-      });
+          const mesh = new THREE.Mesh(geom, baseMaterial);
+          mesh.scale.set(scaleX, scaleY, scaleZ);
+          mesh.position.y = hM / 2;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          group.add(mesh);
+        });
+      }
     } else if (studioMode === 'sculpt') {
       const config = getProceduralConfig();
       const proceduralGroup = buildProceduralMeshGroup(archetype, config, width, depth, height, baseMaterial);
@@ -452,7 +462,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     getProceduralConfig,
   ]);
 
-  // Handle Local .OBJ File Upload
+  // Handle Local 3D File Upload (.GLB, .GLTF, .OBJ)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -462,21 +472,29 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     setImportedFileName(file.name);
     setName(fileNameWithoutExt);
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      if (text) {
-        const customId = `local_obj_${Date.now()}`;
-        registerCustomObjGeometry(customId, text);
-        setImportedObjKey(customId);
-        setIsImporting(false);
-      }
-    };
-    reader.onerror = () => {
+    const isGltf = file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf');
+    if (isGltf) {
+      const customId = `glb_${Date.now()}`;
+      registerLocalModelBlob(customId, file);
+      setImportedObjKey(`blob_model:${customId}`);
       setIsImporting(false);
-      alert('Failed to read 3D OBJ file');
-    };
-    reader.readAsText(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        if (text) {
+          const customId = `local_obj_${Date.now()}`;
+          registerCustomObjGeometry(customId, text);
+          setImportedObjKey(customId);
+          setIsImporting(false);
+        }
+      };
+      reader.onerror = () => {
+        setIsImporting(false);
+        alert('Failed to read 3D file');
+      };
+      reader.readAsText(file);
+    }
   };
 
   // Preview Orbit Controls Handlers
@@ -513,7 +531,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     let iconUri = '/models/squareTable.png';
 
     if (studioMode === 'import_obj' && importedObjKey) {
-      modelUri = `local_obj:${importedObjKey}`;
+      modelUri = importedObjKey.startsWith('blob_model:') ? importedObjKey : `local_obj:${importedObjKey}`;
       if (category === 'Living') iconUri = '/models/sofa.png';
       else if (category === 'Bedroom') iconUri = '/models/bed140x190.png';
       else if (category === 'Kitchen') iconUri = '/models/kitchenCabinet.png';
@@ -613,7 +631,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
             }`}
           >
             <FolderOpen className="w-3.5 h-3.5" />
-            <span>📁 Import Local 3D File (.OBJ)</span>
+            <span>📁 Import 3D Model (.GLB, .GLTF, .OBJ)</span>
           </button>
         </div>
 
@@ -1051,22 +1069,24 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
               </>
             )}
 
-            {/* Import OBJ Mode */}
+            {/* Import OBJ/GLTF/GLB Mode */}
             {studioMode === 'import_obj' && (
               <div className="bg-indigo-50/50 border border-indigo-200/80 p-4 rounded-2xl space-y-3">
                 <div className="flex items-center gap-2 text-xs font-bold text-indigo-900">
                   <Upload className="w-4 h-4 text-indigo-600" />
-                  <span>Import Custom 3D Model File (.OBJ)</span>
+                  <span>Import Custom 3D Model File (.GLB / .GLTF / .OBJ)</span>
                 </div>
                 <p className="text-xs text-slate-600">
-                  Select any 3D wavefront (<code className="font-mono text-indigo-700 bg-white px-1.5 py-0.5 rounded border border-indigo-200">.obj</code>)
-                  file directly from your local computer. It will be parsed instantly into 3D geometry and rendered in real-time.
+                  Select any 3D asset (<code className="font-mono text-indigo-700 bg-white px-1.5 py-0.5 rounded border border-indigo-200">.glb</code>,{' '}
+                  <code className="font-mono text-indigo-700 bg-white px-1.5 py-0.5 rounded border border-indigo-200">.gltf</code>, or{' '}
+                  <code className="font-mono text-indigo-700 bg-white px-1.5 py-0.5 rounded border border-indigo-200">.obj</code>)
+                  file directly from your local computer. It will be loaded with full textures, materials, and geometry.
                 </p>
 
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".obj"
+                  accept=".glb,.gltf,.obj"
                   onChange={handleFileUpload}
                   className="hidden"
                 />
@@ -1080,15 +1100,15 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                   </div>
                   <div>
                     <span className="text-xs font-bold text-slate-800 block">
-                      {importedFileName ? `Uploaded: ${importedFileName}` : 'Click to Browse Local System .OBJ File'}
+                      {importedFileName ? `Uploaded: ${importedFileName}` : 'Click to Browse Local 3D Model (.GLB, .GLTF, .OBJ)'}
                     </span>
-                    <span className="text-[10px] text-slate-500">Supports standard Wavefront 3D geometries</span>
+                    <span className="text-[10px] text-slate-500">Supports industry-standard GLTF, binary GLB, and Wavefront OBJ</span>
                   </div>
                 </div>
 
                 {isImporting && (
                   <div className="text-center text-xs font-bold text-indigo-600 animate-pulse">
-                    Parsing 3D Wavefront Geometry...
+                    Parsing & Loading 3D Model...
                   </div>
                 )}
               </div>

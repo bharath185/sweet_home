@@ -62,9 +62,11 @@ import {
   Columns,
   Eye,
   AlertTriangle,
-  DollarSign
+  DollarSign,
+  Wand2
 } from 'lucide-react';
 import { CostEstimatorModal } from '../components/CostEstimatorModal';
+import { AiStylerModal } from '../components/AiStylerModal';
 
 export default function HomeStudioPage() {
   const [plan, setPlan] = useState<HomePlan>(sampleDefaultPlan);
@@ -177,6 +179,7 @@ export default function HomeStudioPage() {
   const [isPreferencesModalOpen, setIsPreferencesModalOpen] = useState<boolean>(false);
   const [isClientSelectModalOpen, setIsClientSelectModalOpen] = useState<boolean>(false);
   const [isCostEstimatorModalOpen, setIsCostEstimatorModalOpen] = useState<boolean>(false);
+  const [isAiStylerModalOpen, setIsAiStylerModalOpen] = useState<boolean>(false);
 
   // Ref-Backed Undo / Redo History Stack
   const historyRef = useRef<HomePlan[]>([JSON.parse(JSON.stringify(sampleDefaultPlan))]);
@@ -815,6 +818,20 @@ export default function HomeStudioPage() {
                   <span className="hidden lg:inline">Cost / BOM</span>
                 </button>
 
+                {/* AI Room Styler Button */}
+                <button
+                  onClick={() => setIsAiStylerModalOpen(true)}
+                  className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
+                    isDark
+                      ? 'bg-slate-900 hover:bg-slate-800 text-fuchsia-300 border-fuchsia-500/30'
+                      : 'bg-white hover:bg-slate-100 text-fuchsia-700 border-fuchsia-300 shadow-2xs'
+                  }`}
+                  title="AI Room Styler & Color Theme Preset Generator"
+                >
+                  <Wand2 className="w-3.5 h-3.5 text-fuchsia-400" />
+                  <span className="hidden lg:inline">AI Styler</span>
+                </button>
+
                 {/* Collision Warning Indicator */}
                 {collisionReport.totalCollisions > 0 && (
                   <span
@@ -1077,6 +1094,14 @@ export default function HomeStudioPage() {
         onClose={() => setIsCostEstimatorModalOpen(false)}
         plan={plan}
         activeFloor={activeFloor}
+      />
+
+      <AiStylerModal
+        isOpen={isAiStylerModalOpen}
+        onClose={() => setIsAiStylerModalOpen(false)}
+        plan={plan}
+        activeFloor={activeFloor}
+        onUpdatePlan={handleUpdatePlan}
       />
     </div>
   );

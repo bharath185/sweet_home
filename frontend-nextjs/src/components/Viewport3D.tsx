@@ -32,6 +32,7 @@ import {
 import { HomePlan, FurnitureItem, Wall, Room, CatalogItem, VisitorCameraState } from '../types/plan';
 import { isTabletopItem, autoAttachToTabletop } from '../services/tabletopAttachment';
 import { loadObjGeometry } from '../services/objParser';
+import { loadGltfModel, getLocalModelBlob } from '../services/modelLoader';
 import {
   buildTableMeshGroup,
   buildChairMeshGroup,
@@ -1376,6 +1377,25 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           mesh.position.y = (item.height * CM) / 2;
           itemGroup.add(mesh);
         }
+      } else if (item.model && (item.model.endsWith('.glb') || item.model.endsWith('.gltf') || item.model.startsWith('blob_model:') || item.model.includes('.glb?') || item.model.includes('.gltf?'))) {
+        const tempFallback = buildSmartArchetypeFallback(item, itemMat);
+        tempFallback.name = 'temp_fallback';
+        tempFallback.userData = { isColliding };
+        itemGroup.add(tempFallback);
+
+        const modelUrl = item.model.startsWith('blob_model:') ? getLocalModelBlob(item.model) || item.model : item.model;
+        loadGltfModel(modelUrl, item.width, item.depth, item.height)
+          .then((gltfGroup) => {
+            gltfGroup.userData = { isColliding };
+            const existingFallback = itemGroup.getObjectByName('temp_fallback');
+            if (existingFallback) {
+              itemGroup.remove(existingFallback);
+            }
+            itemGroup.add(gltfGroup);
+          })
+          .catch((err) => {
+            console.warn('GLTF load failed, keeping fallback:', err);
+          });
       } else if (item.model && (item.model.endsWith('.obj') || item.model.startsWith('local_obj:') || item.model.startsWith('data:'))) {
         // Immediate beautiful smart archetype fallback so it never renders as an empty flat box
         const tempFallback = buildSmartArchetypeFallback(item, itemMat);

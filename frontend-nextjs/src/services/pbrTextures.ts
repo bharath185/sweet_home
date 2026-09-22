@@ -3,6 +3,19 @@ import * as THREE from 'three';
 // Cache generated canvas textures in memory to avoid rebuilding every frame
 const textureCache = new Map<string, THREE.CanvasTexture>();
 
+export type PBRTextureId =
+  | 'hardwood_oak'
+  | 'wood_oak'
+  | 'parquet_oak'
+  | 'hardwood_walnut'
+  | 'wood_walnut'
+  | 'herringbone'
+  | 'wood_parquet'
+  | 'marble_carrara'
+  | 'tile_subway'
+  | 'brick_red'
+  | 'concrete_loft';
+
 /**
  * Creates high-detail procedural PBR textures for architectural surfaces.
  */
@@ -18,6 +31,7 @@ export function getProceduralTexture(textureType: string, tintHex?: string): THR
   const ctx = canvas.getContext('2d')!;
 
   switch (textureType) {
+    case 'wood_oak':
     case 'hardwood_oak':
     case 'parquet_oak': {
       // Warm Natural Oak Wood Planks
@@ -46,6 +60,7 @@ export function getProceduralTexture(textureType: string, tintHex?: string): THR
       break;
     }
 
+    case 'wood_walnut':
     case 'hardwood_walnut': {
       // Deep Walnut Dark Flooring
       ctx.fillStyle = tintHex || '#4a332a';
@@ -69,6 +84,7 @@ export function getProceduralTexture(textureType: string, tintHex?: string): THR
       break;
     }
 
+    case 'wood_parquet':
     case 'herringbone': {
       // Classic Luxury Herringbone Parquet
       ctx.fillStyle = tintHex || '#c18c5d';
