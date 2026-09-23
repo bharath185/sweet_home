@@ -225,48 +225,93 @@ export function buildSofaMeshGroup(params: SofaParams, mat: THREE.Material, part
   const w = Math.max(60, params.width) * CM;
   const d = Math.max(60, params.depth) * CM;
   const h = Math.max(50, params.height) * CM;
-  const armWidth = 0.15;
+  const armWidth = Math.min(0.18, w * 0.12);
 
-  const baseGeom = new THREE.BoxGeometry(w, 0.12, d);
-  const baseMesh = new THREE.Mesh(baseGeom, legsMat);
-  baseMesh.position.set(0, 0.06, 0);
+  // 1. Sleek Lower Platform / Base Frame
+  const baseH = 0.08;
+  const baseGeom = new THREE.BoxGeometry(w, baseH, d);
+  const baseMesh = new THREE.Mesh(baseGeom, bodyMat);
+  baseMesh.position.set(0, 0.12 + baseH / 2, 0);
   baseMesh.castShadow = true;
-  baseMesh.userData = { partId: 'legs' };
+  baseMesh.userData = { partId: 'body' };
   group.add(baseMesh);
 
-  const seatW = w - armWidth * 2;
-  const seatGeom = new THREE.BoxGeometry(seatW, 0.22, d * 0.85);
-  const seatMesh = new THREE.Mesh(seatGeom, cushionsMat);
-  seatMesh.position.set(0, 0.22, 0.02);
-  seatMesh.castShadow = true;
-  seatMesh.userData = { partId: 'cushions' };
-  group.add(seatMesh);
+  // 2. Realistic Tapered Legs
+  const legH = 0.12;
+  const legOffsets = [
+    [-w / 2 + 0.08, -d / 2 + 0.08],
+    [w / 2 - 0.08, -d / 2 + 0.08],
+    [-w / 2 + 0.08, d / 2 - 0.08],
+    [w / 2 - 0.08, d / 2 - 0.08],
+  ];
+  const legGeom = new THREE.CylinderGeometry(0.018, 0.028, legH, 16);
+  legOffsets.forEach(([lx, lz]) => {
+    const legMesh = new THREE.Mesh(legGeom, legsMat);
+    legMesh.position.set(lx, legH / 2, lz);
+    legMesh.castShadow = true;
+    legMesh.userData = { partId: 'legs' };
+    group.add(legMesh);
+  });
 
-  const backGeom = new THREE.BoxGeometry(w, h - 0.12, 0.2);
+  // 3. Padded Backrest Structure
+  const backH = h - 0.12;
+  const backThick = Math.min(0.18, d * 0.22);
+  const backGeom = new THREE.BoxGeometry(w, backH, backThick);
   const backMesh = new THREE.Mesh(backGeom, bodyMat);
-  backMesh.position.set(0, h / 2 + 0.06, -d / 2 + 0.1);
+  backMesh.position.set(0, 0.12 + backH / 2, -d / 2 + backThick / 2);
   backMesh.castShadow = true;
   backMesh.userData = { partId: 'body' };
   group.add(backMesh);
 
+  // 4. Track Armrests
+  const seatW = w - armWidth * 2;
+  const armH = h * 0.68;
   if (params.armStyle !== 'armless') {
-    const armH = h * 0.72;
     [-w / 2 + armWidth / 2, w / 2 - armWidth / 2].forEach((xPos) => {
       const armGeom = new THREE.BoxGeometry(armWidth, armH, d);
       const armMesh = new THREE.Mesh(armGeom, bodyMat);
-      armMesh.position.set(xPos, armH / 2 + 0.06, 0);
+      armMesh.position.set(xPos, 0.12 + armH / 2, 0);
       armMesh.castShadow = true;
       armMesh.userData = { partId: 'body' };
       group.add(armMesh);
     });
   }
 
-  // Accent throw pillows on corners
-  const pilGeom = new THREE.BoxGeometry(0.22, 0.22, 0.08);
-  [-seatW / 2 + 0.12, seatW / 2 - 0.12].forEach((px, idx) => {
+  // 5. Individual Plump Seat Cushions (Multi-cushion design)
+  const numCushions = w > 1.6 ? 3 : 2;
+  const gap = 0.015;
+  const cushionW = (seatW - gap * (numCushions - 1)) / numCushions;
+  const cushionH = 0.16;
+  const cushionD = d - backThick - 0.04;
+  const seatCenterZ = -d / 2 + backThick + cushionD / 2 + 0.02;
+
+  for (let i = 0; i < numCushions; i++) {
+    const cx = -seatW / 2 + cushionW / 2 + i * (cushionW + gap);
+    const cushionGeom = new THREE.BoxGeometry(cushionW * 0.98, cushionH, cushionD);
+    const cushionMesh = new THREE.Mesh(cushionGeom, cushionsMat);
+    cushionMesh.position.set(cx, 0.12 + baseH + cushionH / 2, seatCenterZ);
+    cushionMesh.castShadow = true;
+    cushionMesh.userData = { partId: 'cushions' };
+    group.add(cushionMesh);
+
+    // Thick angled Back Cushions resting on the backrest
+    const backCushionH = Math.max(0.3, (h - 0.28) * 0.7);
+    const backCushionGeom = new THREE.BoxGeometry(cushionW * 0.96, backCushionH, 0.14);
+    const backCushionMesh = new THREE.Mesh(backCushionGeom, cushionsMat);
+    backCushionMesh.position.set(cx, 0.12 + baseH + cushionH + backCushionH * 0.45, -d / 2 + backThick + 0.06);
+    backCushionMesh.rotation.x = 0.12;
+    backCushionMesh.castShadow = true;
+    backCushionMesh.userData = { partId: 'cushions' };
+    group.add(backCushionMesh);
+  }
+
+  // 6. Plump Organic Accent Throw Pillows
+  const pilGeom = new THREE.BoxGeometry(0.24, 0.24, 0.1);
+  [-seatW / 2 + 0.14, seatW / 2 - 0.14].forEach((px, idx) => {
     const pillow = new THREE.Mesh(pilGeom, pillowsMat);
-    pillow.position.set(px, 0.32, -d / 2 + 0.26);
-    pillow.rotation.y = idx === 0 ? 0.25 : -0.25;
+    pillow.position.set(px, 0.12 + baseH + cushionH + 0.12, -d / 2 + backThick + 0.16);
+    pillow.rotation.y = idx === 0 ? 0.35 : -0.35;
+    pillow.rotation.z = idx === 0 ? -0.1 : 0.1;
     pillow.castShadow = true;
     pillow.userData = { partId: 'pillows' };
     group.add(pillow);
@@ -274,9 +319,9 @@ export function buildSofaMeshGroup(params: SofaParams, mat: THREE.Material, part
 
   if (params.type === 'l_shape_left' || params.type === 'l_shape_right') {
     const chaiseX = params.type === 'l_shape_left' ? -w / 2 + d * 0.4 : w / 2 - d * 0.4;
-    const chaiseGeom = new THREE.BoxGeometry(d * 0.7, 0.22, d * 0.9);
+    const chaiseGeom = new THREE.BoxGeometry(d * 0.7, cushionH, d * 0.9);
     const chaiseMesh = new THREE.Mesh(chaiseGeom, cushionsMat);
-    chaiseMesh.position.set(chaiseX, 0.22, d * 0.7);
+    chaiseMesh.position.set(chaiseX, 0.12 + baseH + cushionH / 2, d * 0.7);
     chaiseMesh.castShadow = true;
     chaiseMesh.userData = { partId: 'cushions' };
     group.add(chaiseMesh);

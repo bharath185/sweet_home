@@ -180,3 +180,56 @@ export function buildSubPartMaterials(
 
   return result;
 }
+
+/**
+ * Maps a sub-group name inside an OBJ 3D model (French or English standard)
+ * to the corresponding FurnitureSubPart id.
+ */
+export function mapObjGroupToPartId(
+  groupName: string,
+  category?: string,
+  itemName?: string
+): string {
+  const g = (groupName || '').toLowerCase();
+  const c = (category || '').toLowerCase();
+  const n = (itemName || '').toLowerCase();
+
+  // 1. Table
+  if (g.includes('plateau') || g.includes('top') || g.includes('surface') || g.includes('tabletop')) return 'top';
+  if (g.includes('pied') || g.includes('socle') || g.includes('leg') || g.includes('base') || g.includes('stand')) return 'legs';
+
+  // 2. Chair vs Sofa
+  const isChair = c.includes('chair') || n.includes('chair') || n.includes('stool') || n.includes('chaise');
+  if (g.includes('assise') || g.includes('cushion') || g.includes('seat')) {
+    return isChair ? 'seat' : 'cushions';
+  }
+  if (g.includes('dossier') || g.includes('backrest') || g.includes('back')) {
+    return isChair ? 'backrest' : 'cushions';
+  }
+  if (g.includes('accoud') || g.includes('armrest') || g.includes('accoudoir')) return 'body';
+  if (g.includes('coussin') || g.includes('pillow')) return 'pillows';
+
+  // 3. Bed
+  if (g.includes('matelas') || g.includes('mattress') || g.includes('bedding') || g.includes('couette')) return 'bedding';
+  if (g.includes('tete') || g.includes('headboard')) return 'headboard';
+  if (g.includes('bord') || g.includes('sommier') || g.includes('cadre') || g.includes('frame')) return 'frame';
+
+  // 4. Cabinet / Wardrobe
+  if (g.includes('porte') || g.includes('door') || g.includes('tiroir') || g.includes('drawer')) return 'doors';
+  if (g.includes('poignee') || g.includes('handle') || g.includes('knob')) return 'handles';
+  if (g.includes('corps') || g.includes('carcass') || g.includes('caisson') || g.includes('montant')) return 'frame';
+
+  // 5. Stairs
+  if (g.includes('marche') || g.includes('tread') || g.includes('step')) return 'treads';
+  if (g.includes('cote') || g.includes('stringer') || g.includes('limon')) return 'stringers';
+  if (g.includes('rampe') || g.includes('handrail') || g.includes('garde')) return 'handrail';
+
+  // 6. Door
+  if (g.includes('panneau') || g.includes('panel')) return 'panel';
+
+  // 7. Lighting
+  if (g.includes('abat') || g.includes('shade') || g.includes('diffus') || g.includes('globe') || g.includes('sphere')) return 'shade';
+  if (g.includes('tube') || g.includes('cable') || g.includes('tige') || g.includes('stem')) return 'stem';
+
+  return 'primary';
+}

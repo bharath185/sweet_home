@@ -31,9 +31,9 @@ import {
 } from 'lucide-react';
 import { HomePlan, FurnitureItem, Wall, Room, CatalogItem, VisitorCameraState } from '../types/plan';
 import { isTabletopItem, autoAttachToTabletop } from '../services/tabletopAttachment';
-import { loadObjGeometry } from '../services/objParser';
+import { loadObjModel } from '../services/objParser';
 import { loadGltfModel, getLocalModelBlob } from '../services/modelLoader';
-import { buildSubPartMaterials } from '../services/partMaterials';
+import { buildSubPartMaterials, mapObjGroupToPartId } from '../services/partMaterials';
 import {
   buildTableMeshGroup,
   buildChairMeshGroup,
@@ -1390,12 +1390,6 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           mesh.position.y = (item.height * CM) / 2;
           itemGroup.add(mesh);
         }
-      } else if (hasPartColors) {
-        // Multi-part colors configured! Monolithic OBJ / GLTF cannot render distinct part colors,
-        // so we render the multi-part procedural archetype mesh group with distinct sub-materials.
-        const procGroup = buildSmartArchetypeFallback(item, itemMat, partMats);
-        procGroup.userData = { isColliding };
-        itemGroup.add(procGroup);
       } else if (item.model && (item.model.endsWith('.glb') || item.model.endsWith('.gltf') || item.model.startsWith('blob_model:') || item.model.includes('.glb?') || item.model.includes('.gltf?'))) {
         const tempFallback = buildSmartArchetypeFallback(item, itemMat, partMats);
         tempFallback.name = 'temp_fallback';
@@ -1416,39 +1410,44 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             console.warn('GLTF load failed, keeping fallback:', err);
           });
       } else if (item.model && (item.model.endsWith('.obj') || item.model.startsWith('local_obj:') || item.model.startsWith('data:'))) {
-        // Immediate beautiful smart archetype fallback so it never renders as an empty flat box
+        // Immediate smart archetype fallback while real high-poly OBJ model is loading
         const tempFallback = buildSmartArchetypeFallback(item, itemMat, partMats);
         tempFallback.name = 'temp_fallback';
         tempFallback.userData = { isColliding };
         itemGroup.add(tempFallback);
 
-        loadObjGeometry(item.model).then((geom) => {
-          geom.computeBoundingBox();
-          const bbox = geom.boundingBox!;
-          const size = new THREE.Vector3();
-          bbox.getSize(size);
-
+        loadObjModel(item.model).then((objModel) => {
           const targetW = item.width * CM;
           const targetD = item.depth * CM;
           const targetH = item.height * CM;
 
-          const scaleX = size.x > 0 ? targetW / size.x : targetW;
-          const scaleY = size.y > 0 ? targetH / size.y : targetH;
-          const scaleZ = size.z > 0 ? targetD / size.z : targetD;
+          const scaleX = objModel.size.x > 0 ? targetW / objModel.size.x : targetW;
+          const scaleY = objModel.size.y > 0 ? targetH / objModel.size.y : targetH;
+          const scaleZ = objModel.size.z > 0 ? targetD / objModel.size.z : targetD;
 
-          const mesh = new THREE.Mesh(geom, itemMat);
-          mesh.scale.set(scaleX, scaleY, scaleZ);
-          mesh.position.y = targetH / 2;
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
-          mesh.userData = { isColliding };
+          const realObjGroup = new THREE.Group();
+          realObjGroup.userData = { isColliding };
 
-          // Remove temp fallback and add real OBJ mesh
+          objModel.parts.forEach((part) => {
+            const mappedPartId = mapObjGroupToPartId(part.groupName, item.category, item.name);
+            const partMaterial = (partMats && mappedPartId && partMats[mappedPartId]) || itemMat;
+
+            const partMesh = new THREE.Mesh(part.geometry, partMaterial);
+            partMesh.castShadow = true;
+            partMesh.receiveShadow = true;
+            partMesh.userData = { partId: mappedPartId, groupName: part.groupName, isColliding };
+            realObjGroup.add(partMesh);
+          });
+
+          realObjGroup.scale.set(scaleX, scaleY, scaleZ);
+          realObjGroup.position.y = targetH / 2;
+
+          // Remove temp fallback and add real multi-part high-detail OBJ model
           const existingFallback = itemGroup.getObjectByName('temp_fallback');
           if (existingFallback) {
             itemGroup.remove(existingFallback);
           }
-          itemGroup.add(mesh);
+          itemGroup.add(realObjGroup);
         }).catch(() => {
           // Keep the smart archetype fallback
         });
