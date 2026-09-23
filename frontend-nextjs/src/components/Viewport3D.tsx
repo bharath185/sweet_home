@@ -77,7 +77,8 @@ const CM = 0.01;
 
 function buildSmartArchetypeFallback(
   item: FurnitureItem,
-  itemMat: THREE.Material
+  itemMat: THREE.Material,
+  partMats?: Record<string, THREE.Material>
 ): THREE.Group {
   const lowerName = (item.name || '').toLowerCase();
   const lowerCat = (item.category || '').toLowerCase();
@@ -95,7 +96,8 @@ function buildSmartArchetypeFallback(
           height: item.height,
           seatHeight: Math.min(45, item.height * 0.5),
         },
-        itemMat
+        itemMat,
+        partMats
       );
     }
 
@@ -110,7 +112,8 @@ function buildSmartArchetypeFallback(
           depth: item.depth,
           height: item.height,
         },
-        itemMat
+        itemMat,
+        partMats
       );
     }
 
@@ -126,7 +129,8 @@ function buildSmartArchetypeFallback(
           depth: item.depth,
           height: item.height,
         },
-        itemMat
+        itemMat,
+        partMats
       );
     }
 
@@ -140,7 +144,8 @@ function buildSmartArchetypeFallback(
           height: item.height,
           hasNightstands: false,
         },
-        itemMat
+        itemMat,
+        partMats
       );
     }
 
@@ -155,7 +160,8 @@ function buildSmartArchetypeFallback(
           height: item.height,
           hasLegs: true,
         },
-        itemMat
+        itemMat,
+        partMats
       );
     }
 
@@ -167,7 +173,8 @@ function buildSmartArchetypeFallback(
           shadeHeight: item.depth,
           totalHeight: item.height,
         },
-        itemMat
+        itemMat,
+        partMats
       );
     }
 
@@ -190,7 +197,8 @@ function buildSmartArchetypeFallback(
           depth: item.depth,
           height: item.height,
         },
-        itemMat
+        itemMat,
+        partMats
       );
     }
 
@@ -202,7 +210,8 @@ function buildSmartArchetypeFallback(
           depth: item.depth,
           height: item.height,
         },
-        itemMat
+        itemMat,
+        partMats
       );
     }
   } catch (e) {}
@@ -1327,13 +1336,15 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         });
       }
 
+      const partMats = buildSubPartMaterials(item, itemMat);
+      const hasPartColors = !!(item.partColors && Object.keys(item.partColors).length > 0);
+
       if (item.model && item.model.startsWith('procedural:')) {
         try {
           const parts = item.model.split(':');
           const pType = parts[1];
           const rawParams = parts.slice(2).join(':');
           const parsed = rawParams ? JSON.parse(rawParams) : {};
-          const partMats = buildSubPartMaterials(item, itemMat);
 
           let procGroup: THREE.Group | null = null;
           if (pType === 'table') {
@@ -1379,8 +1390,14 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           mesh.position.y = (item.height * CM) / 2;
           itemGroup.add(mesh);
         }
+      } else if (hasPartColors) {
+        // Multi-part colors configured! Monolithic OBJ / GLTF cannot render distinct part colors,
+        // so we render the multi-part procedural archetype mesh group with distinct sub-materials.
+        const procGroup = buildSmartArchetypeFallback(item, itemMat, partMats);
+        procGroup.userData = { isColliding };
+        itemGroup.add(procGroup);
       } else if (item.model && (item.model.endsWith('.glb') || item.model.endsWith('.gltf') || item.model.startsWith('blob_model:') || item.model.includes('.glb?') || item.model.includes('.gltf?'))) {
-        const tempFallback = buildSmartArchetypeFallback(item, itemMat);
+        const tempFallback = buildSmartArchetypeFallback(item, itemMat, partMats);
         tempFallback.name = 'temp_fallback';
         tempFallback.userData = { isColliding };
         itemGroup.add(tempFallback);
@@ -1400,7 +1417,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           });
       } else if (item.model && (item.model.endsWith('.obj') || item.model.startsWith('local_obj:') || item.model.startsWith('data:'))) {
         // Immediate beautiful smart archetype fallback so it never renders as an empty flat box
-        const tempFallback = buildSmartArchetypeFallback(item, itemMat);
+        const tempFallback = buildSmartArchetypeFallback(item, itemMat, partMats);
         tempFallback.name = 'temp_fallback';
         tempFallback.userData = { isColliding };
         itemGroup.add(tempFallback);
@@ -1436,7 +1453,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           // Keep the smart archetype fallback
         });
       } else {
-        const smartFallback = buildSmartArchetypeFallback(item, itemMat);
+        const smartFallback = buildSmartArchetypeFallback(item, itemMat, partMats);
         smartFallback.userData = { isColliding };
         itemGroup.add(smartFallback);
       }

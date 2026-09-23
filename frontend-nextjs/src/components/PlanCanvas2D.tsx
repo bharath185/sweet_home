@@ -832,7 +832,8 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         ectx.arc(-w / 2, d / 2, w, 0, -Math.PI / 2, true);
         ectx.stroke();
       } else {
-        ectx.fillStyle = item.color || '#f8fafc';
+        const primaryColor = item.partColors?.top || item.partColors?.seat || item.partColors?.cushions || item.partColors?.body || item.partColors?.bedding || item.color || '#f8fafc';
+        ectx.fillStyle = primaryColor;
         ectx.strokeStyle = '#1e293b';
         ectx.lineWidth = 2.5;
         ectx.beginPath();
@@ -1077,7 +1078,8 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
                 ctx.fillText('UP', 0, d / 2 - 18);
               } else {
                 // Standard Furniture Item
-                ctx.fillStyle = item.color || '#f8fafc';
+                const primaryColor = item.partColors?.top || item.partColors?.seat || item.partColors?.cushions || item.partColors?.body || item.partColors?.bedding || item.color || '#f8fafc';
+                ctx.fillStyle = primaryColor;
                 ctx.strokeStyle = isSelected ? '#0284c7' : '#334155';
                 ctx.lineWidth = isSelected ? 2.5 : 1.5;
                 ctx.beginPath();

@@ -566,20 +566,22 @@ export function buildLampMeshGroup(params: LampParams, mat: THREE.Material, part
     group.add(orbMesh);
   } else {
     const shadeGeom = new THREE.CylinderGeometry(shadeR * 0.7, shadeR, shadeH, 24, 1, true);
-    const shadeMesh = new THREE.Mesh(shadeGeom, mat);
+    const shadeMesh = new THREE.Mesh(shadeGeom, shadeMat);
     shadeMesh.position.set(0, totalH - shadeH / 2, 0);
     shadeMesh.castShadow = true;
+    shadeMesh.userData = { partId: 'shade' };
     group.add(shadeMesh);
 
     const poleGeom = new THREE.CylinderGeometry(0.015, 0.015, totalH - shadeH, 12);
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.9, roughness: 0.2 });
-    const poleMesh = new THREE.Mesh(poleGeom, poleMat);
+    const poleMesh = new THREE.Mesh(poleGeom, stemMat);
     poleMesh.position.set(0, (totalH - shadeH) / 2, 0);
+    poleMesh.userData = { partId: 'stem' };
     group.add(poleMesh);
 
     const baseGeom = new THREE.CylinderGeometry(shadeR * 0.8, shadeR * 0.8, 0.02, 24);
-    const baseMesh = new THREE.Mesh(baseGeom, poleMat);
+    const baseMesh = new THREE.Mesh(baseGeom, baseMat);
     baseMesh.position.set(0, 0.01, 0);
+    baseMesh.userData = { partId: 'base' };
     group.add(baseMesh);
   }
 

@@ -17,14 +17,28 @@ export function getFurnitureSubParts(item: FurnitureItem): FurnitureSubPart[] {
   const name = (item.name || '').toLowerCase();
   const model = (item.model || '').toLowerCase();
 
-  if (model.includes(':table') || cat.includes('living') && (name.includes('table') || name.includes('desk'))) {
+  if (
+    model.includes(':table') ||
+    model.includes('table') ||
+    model.includes('desk') ||
+    name.includes('table') ||
+    name.includes('desk') ||
+    cat.includes('table')
+  ) {
     return [
       { id: 'top', name: 'Tabletop Surface', icon: '🪵' },
       { id: 'legs', name: 'Legs & Base Structure', icon: '🦿' },
     ];
   }
 
-  if (model.includes(':sofa') || name.includes('sofa') || name.includes('couch') || name.includes('lounge')) {
+  if (
+    model.includes(':sofa') ||
+    model.includes('sofa') ||
+    name.includes('sofa') ||
+    name.includes('couch') ||
+    name.includes('lounge') ||
+    cat.includes('sofa')
+  ) {
     return [
       { id: 'body', name: 'Main Frame & Backrest', icon: '🛋️' },
       { id: 'cushions', name: 'Seat Cushions', icon: '🪑' },
@@ -33,7 +47,12 @@ export function getFurnitureSubParts(item: FurnitureItem): FurnitureSubPart[] {
     ];
   }
 
-  if (model.includes(':bed') || cat.includes('bedroom') || name.includes('bed')) {
+  if (
+    model.includes(':bed') ||
+    model.includes('bed') ||
+    cat.includes('bedroom') ||
+    name.includes('bed')
+  ) {
     return [
       { id: 'headboard', name: 'Headboard', icon: '🛏️' },
       { id: 'bedding', name: 'Linen & Duvet', icon: '🪶' },
@@ -42,7 +61,15 @@ export function getFurnitureSubParts(item: FurnitureItem): FurnitureSubPart[] {
     ];
   }
 
-  if (model.includes(':chair') || name.includes('chair') || name.includes('stool')) {
+  if (
+    model.includes(':chair') ||
+    model.includes('chair') ||
+    model.includes('armchair') ||
+    name.includes('chair') ||
+    name.includes('stool') ||
+    name.includes('armchair') ||
+    cat.includes('chair')
+  ) {
     return [
       { id: 'seat', name: 'Upholstered Seat', icon: '🪑' },
       { id: 'backrest', name: 'Backrest', icon: '🪵' },
@@ -50,7 +77,18 @@ export function getFurnitureSubParts(item: FurnitureItem): FurnitureSubPart[] {
     ];
   }
 
-  if (model.includes(':cabinet') || cat.includes('kitchen') || name.includes('cabinet') || name.includes('credenza') || name.includes('sideboard')) {
+  if (
+    model.includes(':cabinet') ||
+    model.includes('cabinet') ||
+    cat.includes('kitchen') ||
+    name.includes('cabinet') ||
+    name.includes('credenza') ||
+    name.includes('sideboard') ||
+    name.includes('wardrobe') ||
+    name.includes('shelf') ||
+    name.includes('bookcase') ||
+    name.includes('dresser')
+  ) {
     return [
       { id: 'top', name: 'Countertop Slab', icon: '🪨' },
       { id: 'doors', name: 'Cabinet Doors & Drawers', icon: '🚪' },
@@ -59,7 +97,12 @@ export function getFurnitureSubParts(item: FurnitureItem): FurnitureSubPart[] {
     ];
   }
 
-  if (model.includes(':stairs') || cat.includes('stairs') || name.includes('stair')) {
+  if (
+    model.includes(':stairs') ||
+    model.includes('stair') ||
+    cat.includes('stairs') ||
+    name.includes('stair')
+  ) {
     return [
       { id: 'treads', name: 'Step Treads', icon: '🪜' },
       { id: 'stringers', name: 'Structural Beams', icon: '🏗️' },
@@ -67,7 +110,12 @@ export function getFurnitureSubParts(item: FurnitureItem): FurnitureSubPart[] {
     ];
   }
 
-  if (model.includes(':door') || cat.includes('door') || name.includes('door')) {
+  if (
+    model.includes(':door') ||
+    model.includes('door') ||
+    cat.includes('door') ||
+    name.includes('door')
+  ) {
     return [
       { id: 'panel', name: 'Door Leaf Panel', icon: '🚪' },
       { id: 'frame', name: 'Architrave Frame', icon: '🪟' },
@@ -75,7 +123,16 @@ export function getFurnitureSubParts(item: FurnitureItem): FurnitureSubPart[] {
     ];
   }
 
-  if (model.includes(':lamp') || cat.includes('lighting') || name.includes('lamp') || name.includes('light')) {
+  if (
+    model.includes(':lamp') ||
+    model.includes('lamp') ||
+    model.includes('light') ||
+    cat.includes('lighting') ||
+    name.includes('lamp') ||
+    name.includes('light') ||
+    name.includes('chandelier') ||
+    name.includes('pendant')
+  ) {
     return [
       { id: 'shade', name: 'Lampshade / Diffuser', icon: '💡' },
       { id: 'stem', name: 'Stem / Cord / Chain', icon: '🦯' },
