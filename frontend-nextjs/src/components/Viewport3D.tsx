@@ -71,6 +71,8 @@ interface Viewport3DProps {
   onToolModeChangeProp?: (mode: 'select' | 'pan') => void;
   visitorCameraProp?: VisitorCameraState;
   onVisitorCameraChange?: (state: VisitorCameraState) => void;
+  onUpgradePrompt?: (featureName: string) => void;
+  isPro?: boolean;
 }
 
 const CM = 0.01;
@@ -243,6 +245,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   onToolModeChangeProp,
   visitorCameraProp,
   onVisitorCameraChange,
+  onUpgradePrompt,
+  isPro = true,
 }) => {
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -2551,6 +2555,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         onCaptureSnapshot={handleCaptureRenderStudioSnapshot}
         projectName={plan.name}
         activeFloor={activeFloor}
+        onUpgradePrompt={onUpgradePrompt}
+        isPro={isPro}
       />
     </div>
   );

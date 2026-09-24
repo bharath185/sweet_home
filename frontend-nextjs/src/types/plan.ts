@@ -9,6 +9,12 @@ export interface User {
   isOnline: boolean;
   assignedPlan: string;
   createdAt: string;
+  subscriptionTier?: 'FREE' | 'PRO' | 'ENTERPRISE';
+  subscriptionStatus?: 'active' | 'inactive' | 'trial';
+  subscriptionExpiresAt?: string;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+  subscriptionToken?: string;
 }
 
 export interface Wall {

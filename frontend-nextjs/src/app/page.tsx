@@ -16,7 +16,7 @@ import { AddItemModal } from '../components/AddItemModal';
 import { BlueprintImportModal } from '../components/BlueprintImportModal';
 import { PreferencesModal } from '../components/PreferencesModal';
 import { ClientProjectSelectModal } from '../components/ClientProjectSelectModal';
-import { HomePlan, CatalogItem, FurnitureItem, User, UserRole, FloorTemplate, BlueprintImage, ProjectPreferences, VisitorCameraState } from '../types/plan';
+import { HomePlan, CatalogItem, FurnitureItem, User, UserRole, FloorTemplate, BlueprintImage, ProjectPreferences, VisitorCameraState, FloorLevel } from '../types/plan';
 import { detectCollisions } from '../services/collisionDetector';
 import { isTabletopItem, findNearestSupportingSurface, autoAttachToTabletop } from '../services/tabletopAttachment';
 import {
@@ -63,10 +63,13 @@ import {
   Eye,
   AlertTriangle,
   DollarSign,
-  Wand2
+  Wand2,
+  Crown,
 } from 'lucide-react';
 import { CostEstimatorModal } from '../components/CostEstimatorModal';
 import { AiStylerModal } from '../components/AiStylerModal';
+import UpgradeModal from '../components/UpgradeModal';
+import { canAccessFeature, getUserSubscriptionTier } from '../services/subscriptionService';
 
 export default function HomeStudioPage() {
   const [plan, setPlan] = useState<HomePlan>(sampleDefaultPlan);
@@ -180,6 +183,16 @@ export default function HomeStudioPage() {
   const [isClientSelectModalOpen, setIsClientSelectModalOpen] = useState<boolean>(false);
   const [isCostEstimatorModalOpen, setIsCostEstimatorModalOpen] = useState<boolean>(false);
   const [isAiStylerModalOpen, setIsAiStylerModalOpen] = useState<boolean>(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState<boolean>(false);
+  const [upgradeHighlight, setUpgradeHighlight] = useState<string | undefined>(undefined);
+
+  const handleOpenUpgrade = useCallback((highlight?: string) => {
+    setUpgradeHighlight(highlight);
+    setIsUpgradeModalOpen(true);
+  }, []);
+
+  const userSubTier = getUserSubscriptionTier(currentUser);
+  const isProOrAdmin = userSubTier === 'PRO' || userSubTier === 'ENTERPRISE' || currentUser?.role === 'ADMIN';
 
   // Ref-Backed Undo / Redo History Stack
   const historyRef = useRef<HomePlan[]>([JSON.parse(JSON.stringify(sampleDefaultPlan))]);
@@ -695,10 +708,14 @@ export default function HomeStudioPage() {
                   <button
                     key={fl.level}
                     onClick={() => {
+                      if (fl.level > 0 && !canAccessFeature(currentUser, 'multi_floor')) {
+                        handleOpenUpgrade('Multi-Floor Architecture (1st, 2nd, Penthouse)');
+                        return;
+                      }
                       setActiveFloor(fl.level);
                       setFloorMode('single');
                     }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
                       floorMode !== 'sideBySide' && activeFloor === fl.level
                         ? 'bg-indigo-600 text-white shadow-xs'
                         : isDark
@@ -706,9 +723,46 @@ export default function HomeStudioPage() {
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
                     }`}
                   >
-                    {fl.level === 0 ? 'Ground' : fl.level === 1 ? '1st Fl' : `L${fl.level}`}
+                    <span>{fl.level === 0 ? 'Ground' : fl.level === 1 ? '1st Fl' : `L${fl.level}`}</span>
+                    {fl.level > 0 && !isProOrAdmin && <span className="text-[10px] opacity-75">🔒</span>}
                   </button>
                 ))}
+
+                {/* Add New Floor Button */}
+                <button
+                  onClick={() => {
+                    if (!canAccessFeature(currentUser, 'multi_floor')) {
+                      handleOpenUpgrade('Multi-Floor Architecture & Custom Levels');
+                      return;
+                    }
+                    const currentFloors = plan.floors || [
+                      { level: 0, name: 'Ground Floor', elevation: 0, height: 280 },
+                      { level: 1, name: '1st Floor', elevation: 280, height: 280 },
+                    ];
+                    const nextLevel = Math.max(...currentFloors.map((f) => f.level), 0) + 1;
+                    const nextFloor: FloorLevel = {
+                      level: nextLevel,
+                      name: `Level ${nextLevel}`,
+                      elevation: nextLevel * 280,
+                      height: 280,
+                    };
+                    const updatedPlan = {
+                      ...plan,
+                      floors: [...currentFloors, nextFloor],
+                    };
+                    handleUpdatePlan(updatedPlan);
+                    setActiveFloor(nextLevel);
+                  }}
+                  className={`px-2 py-1 rounded-lg text-xs font-semibold transition border ml-0.5 cursor-pointer flex items-center gap-1 ${
+                    isDark
+                      ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                  title="Add Architectural Floor Level"
+                >
+                  <Plus className="w-3 h-3 text-indigo-400" />
+                  <span className="hidden xl:inline">Add</span>
+                </button>
 
                 <button
                   onClick={() => setFloorMode(floorMode === 'sideBySide' ? 'single' : 'sideBySide')}
@@ -897,6 +951,31 @@ export default function HomeStudioPage() {
                   <Share2 className="w-3.5 h-3.5" />
                   <span>Share</span>
                 </button>
+
+                {/* Pro Status or Upgrade Trigger with Razorpay */}
+                {isProOrAdmin ? (
+                  <button
+                    onClick={() => handleOpenUpgrade()}
+                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      isDark
+                        ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
+                        : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
+                    }`}
+                    title="Your Account has Pro / Enterprise Access"
+                  >
+                    <Crown className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="hidden sm:inline">Pro</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleOpenUpgrade()}
+                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-blue-500/25 transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                    title="Upgrade to Pro with Razorpay"
+                  >
+                    <Crown className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Upgrade</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -945,6 +1024,8 @@ export default function HomeStudioPage() {
                         onCameraModeChangeProp={setCameraMode3D}
                         visitorCameraProp={visitorCamera}
                         onVisitorCameraChange={handleUpdateVisitorCamera}
+                        onUpgradePrompt={handleOpenUpgrade}
+                        isPro={isProOrAdmin}
                       />
                     </div>
                   </>
@@ -994,6 +1075,8 @@ export default function HomeStudioPage() {
                       onCameraModeChangeProp={setCameraMode3D}
                       visitorCameraProp={visitorCamera}
                       onVisitorCameraChange={handleUpdateVisitorCamera}
+                      onUpgradePrompt={handleOpenUpgrade}
+                      isPro={isProOrAdmin}
                     />
                   </div>
                 )}
@@ -1094,6 +1177,8 @@ export default function HomeStudioPage() {
         onClose={() => setIsCostEstimatorModalOpen(false)}
         plan={plan}
         activeFloor={activeFloor}
+        onUpgradePrompt={handleOpenUpgrade}
+        isPro={isProOrAdmin}
       />
 
       <AiStylerModal
@@ -1102,6 +1187,17 @@ export default function HomeStudioPage() {
         plan={plan}
         activeFloor={activeFloor}
         onUpdatePlan={handleUpdatePlan}
+      />
+
+      {/* Premium Subscription Upgrade Modal with Razorpay */}
+      <UpgradeModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        currentUser={currentUser}
+        onUserUpdated={(updated) => {
+          setCurrentUser(updated);
+        }}
+        initialFeatureHighlight={upgradeHighlight}
       />
     </div>
   );

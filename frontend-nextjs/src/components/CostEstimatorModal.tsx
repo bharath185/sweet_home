@@ -22,36 +22,54 @@ interface CostEstimatorModalProps {
   onClose: () => void;
   plan: HomePlan;
   activeFloor?: number;
+  onUpgradePrompt?: (featureName: string) => void;
+  isPro?: boolean;
 }
 
-// Industry benchmark pricing per item category / square meter
+// Localized benchmark pricing per item category in INR (₹)
 const DEFAULT_UNIT_COSTS: { [category: string]: number } = {
-  Living: 850,
-  Bedroom: 1200,
-  Kitchen: 2400,
-  Dining: 950,
-  Office: 650,
-  Bathroom: 1100,
-  Lighting: 180,
-  'Doors & Windows': 450,
-  Outdoor: 380,
-  Decor: 95,
-  default: 250,
+  Living: 65000,
+  Bedroom: 75000,
+  Kitchen: 180000,
+  Dining: 45000,
+  Office: 35000,
+  Bathroom: 55000,
+  Lighting: 6500,
+  'Doors & Windows': 25000,
+  Outdoor: 18000,
+  Decor: 3500,
+  default: 15000,
 };
 
-const WALL_COST_PER_METER = 75; // $75 per linear meter drywall/masonry
-const FLOOR_FINISH_PER_SQM = 45; // $45 per sq meter flooring finish
+export const CURRENCY_CONFIG: { [symbol: string]: { label: string; rateFromInr: number; locale: string } } = {
+  '₹': { label: 'INR (₹)', rateFromInr: 1.0, locale: 'en-IN' },
+  '$': { label: 'USD ($)', rateFromInr: 0.012, locale: 'en-US' },
+  '€': { label: 'EUR (€)', rateFromInr: 0.011, locale: 'de-DE' },
+  '£': { label: 'GBP (£)', rateFromInr: 0.0095, locale: 'en-GB' },
+  'AED': { label: 'AED (د.إ)', rateFromInr: 0.044, locale: 'en-AE' },
+};
+
+const WALL_COST_PER_METER = 2400; // ₹2,400 per linear meter partition/masonry
+const FLOOR_FINISH_PER_SQM = 1500; // ₹1,500 per sq meter flooring finish
 
 export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({
   isOpen,
   onClose,
   plan,
   activeFloor = 0,
+  onUpgradePrompt,
+  isPro = true,
 }) => {
   const [filterFloor, setFilterFloor] = useState<number | 'all'>('all');
-  const [currencySymbol, setCurrencySymbol] = useState<string>('$');
+  const [currencySymbol, setCurrencySymbol] = useState<string>('₹');
   const [laborTaxRate, setLaborTaxRate] = useState<number>(10); // 10% installation/tax buffer
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const formatPrice = (amountInInr: number) => {
+    const cfg = CURRENCY_CONFIG[currencySymbol] || CURRENCY_CONFIG['₹'];
+    const converted = Math.round(amountInInr * cfg.rateFromInr);
+    return `${currencySymbol}${converted.toLocaleString(cfg.locale)}`;
+  };
 
   // 1. Group furniture items & compute quantities
   const furnitureSummary = useMemo(() => {
@@ -135,6 +153,11 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({
 
   // CSV Export
   const handleExportCSV = () => {
+    if (!isPro && onUpgradePrompt) {
+      onUpgradePrompt('Bill of Materials (BOM) Excel & CSV Quotation Export');
+      return;
+    }
+
     let csv = `Item Name,Category,Dimensions (cm),Quantity,Estimated Unit Price (${currencySymbol}),Total (${currencySymbol})\n`;
     furnitureSummary.forEach((row) => {
       const unit = Math.round(row.totalCost / row.count);
@@ -249,11 +272,11 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({
                 onChange={(e) => setCurrencySymbol(e.target.value)}
                 className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold cursor-pointer"
               >
+                <option value="₹">INR (₹)</option>
                 <option value="$">USD ($)</option>
                 <option value="€">EUR (€)</option>
                 <option value="£">GBP (£)</option>
-                <option value="₹">INR (₹)</option>
-                <option value="¥">JPY (¥)</option>
+                <option value="AED">AED (د.إ)</option>
               </select>
             </div>
 
@@ -284,8 +307,7 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({
                 <span>Interior Furniture & Fixtures ({furnitureSummary.length} types)</span>
               </h3>
               <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                {currencySymbol}
-                {furnitureSubtotal.toLocaleString()}
+                {formatPrice(furnitureSubtotal)}
               </span>
             </div>
 
@@ -325,12 +347,10 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({
                             {row.count}
                           </td>
                           <td className="py-2 px-3 text-right font-mono text-slate-500 dark:text-slate-400">
-                            {currencySymbol}
-                            {unit.toLocaleString()}
+                            {formatPrice(unit)}
                           </td>
                           <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 dark:text-white">
-                            {currencySymbol}
-                            {row.totalCost.toLocaleString()}
+                            {formatPrice(row.totalCost)}
                           </td>
                         </tr>
                       );
@@ -349,8 +369,7 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({
                 <span>Architectural Shell & Finishes</span>
               </h3>
               <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                {currencySymbol}
-                {architecturalSummary.totalArchCost.toLocaleString()}
+                {formatPrice(architecturalSummary.totalArchCost)}
               </span>
             </div>
 
@@ -359,12 +378,11 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({
                 <div>
                   <h4 className="font-semibold text-slate-900 dark:text-white">Wall Framing & Drywall</h4>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {architecturalSummary.wallLengthM} meters total length @ {currencySymbol}{WALL_COST_PER_METER}/m
+                    {architecturalSummary.wallLengthM} meters total length @ {formatPrice(WALL_COST_PER_METER)}/m
                   </p>
                 </div>
                 <span className="font-mono font-bold text-sm text-slate-900 dark:text-white">
-                  {currencySymbol}
-                  {architecturalSummary.wallTotalCost.toLocaleString()}
+                  {formatPrice(architecturalSummary.wallTotalCost)}
                 </span>
               </div>
 
@@ -372,12 +390,11 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({
                 <div>
                   <h4 className="font-semibold text-slate-900 dark:text-white">Flooring & Tiling Subfloor</h4>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {architecturalSummary.roomAreaSqm} m² covered area @ {currencySymbol}{FLOOR_FINISH_PER_SQM}/m²
+                    {architecturalSummary.roomAreaSqm} m² covered area @ {formatPrice(FLOOR_FINISH_PER_SQM)}/m²
                   </p>
                 </div>
                 <span className="font-mono font-bold text-sm text-slate-900 dark:text-white">
-                  {currencySymbol}
-                  {architecturalSummary.floorTotalCost.toLocaleString()}
+                  {formatPrice(architecturalSummary.floorTotalCost)}
                 </span>
               </div>
             </div>
@@ -390,15 +407,13 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({
             <div>
               <span>Subtotal: </span>
               <strong className="font-mono text-slate-900 dark:text-white">
-                {currencySymbol}
-                {rawSubtotal.toLocaleString()}
+                {formatPrice(rawSubtotal)}
               </strong>
             </div>
             <div>
               <span>Labor & Tax ({laborTaxRate}%): </span>
               <strong className="font-mono text-slate-900 dark:text-white">
-                +{currencySymbol}
-                {taxLaborEstimate.toLocaleString()}
+                +{formatPrice(taxLaborEstimate)}
               </strong>
             </div>
           </div>
@@ -409,16 +424,16 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({
                 Estimated Project Total
               </span>
               <span className="text-xl font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
-                {currencySymbol}
-                {grandTotal.toLocaleString()}
+                {formatPrice(grandTotal)}
               </span>
             </div>
 
             <button
               onClick={handleExportCSV}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition cursor-pointer"
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center gap-1.5"
             >
-              Download Quotation
+              <Download className="w-3.5 h-3.5" />
+              <span>{!isPro ? 'Export CSV (Pro 👑)' : 'Download Quotation'}</span>
             </button>
           </div>
         </div>

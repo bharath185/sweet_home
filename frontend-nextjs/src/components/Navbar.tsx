@@ -210,6 +210,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="hidden sm:inline text-xs font-bold text-slate-200 truncate max-w-[85px]">
                 {currentUser.name}
               </span>
+              {currentUser.subscriptionTier && currentUser.subscriptionTier !== 'FREE' && (
+                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-md">
+                  👑 {currentUser.subscriptionTier}
+                </span>
+              )}
             </div>
 
             {onLogout && (

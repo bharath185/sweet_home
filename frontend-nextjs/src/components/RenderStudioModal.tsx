@@ -19,6 +19,8 @@ interface RenderStudioModalProps {
   onCaptureSnapshot: (settings: RenderSnapshotSettings) => Promise<string | null>;
   projectName?: string;
   activeFloor?: number;
+  onUpgradePrompt?: (featureName: string) => void;
+  isPro?: boolean;
 }
 
 export interface RenderSnapshotSettings {
@@ -35,6 +37,8 @@ export const RenderStudioModal: React.FC<RenderStudioModalProps> = ({
   onCaptureSnapshot,
   projectName = '3D_Studio_Project',
   activeFloor = 0,
+  onUpgradePrompt,
+  isPro = true,
 }) => {
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '4:3' | '1:1' | '9:16'>('16:9');
   const [resolutionMultiplier, setResolutionMultiplier] = useState<1 | 2 | 4>(2);
@@ -154,11 +158,15 @@ export const RenderStudioModal: React.FC<RenderStudioModalProps> = ({
                 {[
                   { mult: 1, label: 'Standard (1x)', desc: 'Fast Web' },
                   { mult: 2, label: 'HD 2K (2x)', desc: 'Sharp Print' },
-                  { mult: 4, label: 'Ultra 4K (4x)', desc: 'Master Render' },
+                  { mult: 4, label: !isPro ? 'Ultra 4K 👑' : 'Ultra 4K (4x)', desc: !isPro ? 'Pro Feature' : 'Master Render' },
                 ].map((res) => (
                   <button
                     key={res.mult}
                     onClick={() => {
+                      if (res.mult === 4 && !isPro && onUpgradePrompt) {
+                        onUpgradePrompt('4K Ultra Raytracing Master Snapshot Engine');
+                        return;
+                      }
                       setResolutionMultiplier(res.mult as any);
                       setPreviewImage(null);
                     }}
