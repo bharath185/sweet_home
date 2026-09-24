@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 
-const SERVER_PLAN_PRICES: Record<string, { tier: 'PRO' | 'ENTERPRISE'; name: string }> = {
-  pro_monthly: { tier: 'PRO', name: 'Architect Pro (Monthly)' },
-  pro_yearly: { tier: 'PRO', name: 'Architect Pro (Annual)' },
-  enterprise_monthly: { tier: 'ENTERPRISE', name: 'Studio Enterprise (Monthly)' },
-  enterprise_yearly: { tier: 'ENTERPRISE', name: 'Studio Enterprise (Annual)' },
+const SERVER_PLAN_CONFIG: Record<string, { durationDays: number; tier: 'TRIAL' | 'PRO'; name: string }> = {
+  trial_2days: { durationDays: 2, tier: 'TRIAL', name: '2-Day Studio Trial Pass' },
+  monthly: { durationDays: 30, tier: 'PRO', name: 'Monthly Studio Pass' },
+  yearly: { durationDays: 365, tier: 'PRO', name: 'Annual Studio Pass (20% Off)' },
+  // Backward compatibility aliases
+  pro_monthly: { durationDays: 30, tier: 'PRO', name: 'Monthly Studio Pass' },
+  pro_yearly: { durationDays: 365, tier: 'PRO', name: 'Annual Studio Pass (20% Off)' },
 };
 
 function generateSubscriptionToken(payload: object, secret: string): string {
@@ -26,7 +28,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const planConfig = SERVER_PLAN_PRICES[planId];
+    const planConfig = SERVER_PLAN_CONFIG[planId];
     if (!planConfig) {
       return NextResponse.json(
         { error: 'Invalid planId supplied' },
@@ -64,12 +66,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. Generate Cryptographically Signed Subscription Token
-    const expiresAt = Date.now() + 365 * 24 * 60 * 60 * 1000; // 1 year
+    // 2. Generate Cryptographically Signed Subscription Token with precise duration
+    const durationDays = planConfig.durationDays;
+    const expiresAt = Date.now() + durationDays * 24 * 60 * 60 * 1000;
     const tokenPayload = {
       userId: userId || 'anonymous',
       tier: planConfig.tier,
       planId,
+      durationDays,
       paymentId,
       orderId,
       issuedAt: Date.now(),
@@ -82,12 +86,13 @@ export async function POST(req: NextRequest) {
       success: true,
       tier: planConfig.tier,
       planId,
+      durationDays,
       planName: planConfig.name,
       paymentId,
       orderId,
       subscriptionToken,
       expiresAt: new Date(expiresAt).toISOString(),
-      message: `Payment verified successfully! Welcome to SweetHome ${planConfig.tier}!`,
+      message: `Payment verified successfully! Your ${planConfig.name} is now active!`,
     });
   } catch (error: any) {
     console.error('Error verifying Razorpay payment:', error);

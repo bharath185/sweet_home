@@ -433,7 +433,7 @@ export const CostEstimatorModal: React.FC<CostEstimatorModalProps> = ({
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center gap-1.5"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>{!isPro ? 'Export CSV (Pro 👑)' : 'Download Quotation'}</span>
+              <span>Download Quotation</span>
             </button>
           </div>
         </div>

@@ -69,7 +69,12 @@ import {
 import { CostEstimatorModal } from '../components/CostEstimatorModal';
 import { AiStylerModal } from '../components/AiStylerModal';
 import UpgradeModal from '../components/UpgradeModal';
-import { canAccessFeature, getUserSubscriptionTier } from '../services/subscriptionService';
+import {
+  canAccessFeature,
+  getUserSubscriptionTier,
+  hasActiveSubscription,
+  getSubscriptionRemainingText,
+} from '../services/subscriptionService';
 
 export default function HomeStudioPage() {
   const [plan, setPlan] = useState<HomePlan>(sampleDefaultPlan);
@@ -192,7 +197,9 @@ export default function HomeStudioPage() {
   }, []);
 
   const userSubTier = getUserSubscriptionTier(currentUser);
-  const isProOrAdmin = userSubTier === 'PRO' || userSubTier === 'ENTERPRISE' || currentUser?.role === 'ADMIN';
+  const hasPass = hasActiveSubscription(currentUser);
+  const remainingPassText = getSubscriptionRemainingText(currentUser);
+  const isProOrAdmin = hasPass;
 
   // Ref-Backed Undo / Redo History Stack
   const historyRef = useRef<HomePlan[]>([JSON.parse(JSON.stringify(sampleDefaultPlan))]);
@@ -708,10 +715,6 @@ export default function HomeStudioPage() {
                   <button
                     key={fl.level}
                     onClick={() => {
-                      if (fl.level > 0 && !canAccessFeature(currentUser, 'multi_floor')) {
-                        handleOpenUpgrade('Multi-Floor Architecture (1st, 2nd, Penthouse)');
-                        return;
-                      }
                       setActiveFloor(fl.level);
                       setFloorMode('single');
                     }}
@@ -724,7 +727,6 @@ export default function HomeStudioPage() {
                     }`}
                   >
                     <span>{fl.level === 0 ? 'Ground' : fl.level === 1 ? '1st Fl' : `L${fl.level}`}</span>
-                    {fl.level > 0 && !isProOrAdmin && <span className="text-[10px] opacity-75">🔒</span>}
                   </button>
                 ))}
 
@@ -964,16 +966,16 @@ export default function HomeStudioPage() {
                     title="Your Account has Pro / Enterprise Access"
                   >
                     <Crown className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="hidden sm:inline">Pro</span>
+                    <span className="hidden sm:inline">{remainingPassText}</span>
                   </button>
                 ) : (
                   <button
                     onClick={() => handleOpenUpgrade()}
-                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-blue-500/25 transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
-                    title="Upgrade to Pro with Razorpay"
+                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-blue-500/25 transition active:scale-95 flex items-center gap-1.5 cursor-pointer animate-pulse"
+                    title="Get 2-Day Trial (₹200), Monthly (₹999), or Annual Pass"
                   >
                     <Crown className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Upgrade</span>
+                    <span>Get Pass</span>
                   </button>
                 )}
               </div>

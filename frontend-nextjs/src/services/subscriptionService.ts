@@ -1,156 +1,130 @@
 import { User } from '../types/plan';
 
-export type PlanId = 'free' | 'pro_monthly' | 'pro_yearly' | 'enterprise_monthly' | 'enterprise_yearly';
-export type FeatureKey =
-  | 'multi_floor'
-  | 'render_4k'
-  | 'custom_obj_upload'
-  | 'export_bom_csv'
-  | 'commercial_license'
-  | 'unlimited_projects'
-  | 'pbr_materials_unlimited';
+export type PlanId = 'trial_2days' | 'monthly' | 'yearly' | 'pro_monthly' | 'pro_yearly';
 
 export interface PlanDetail {
   id: PlanId;
   name: string;
   badge?: string;
-  tier: 'FREE' | 'PRO' | 'ENTERPRISE';
+  tier: 'TRIAL' | 'PRO' | 'ENTERPRISE';
   priceINR: number; // in Rupees
-  period: 'month' | 'year' | 'forever';
+  durationDays: number;
+  periodLabel: string;
   description: string;
   features: string[];
   highlight?: boolean;
 }
 
-export const PRICING_PLANS: Record<PlanId, PlanDetail> = {
-  free: {
-    id: 'free',
-    name: 'Starter Studio',
-    tier: 'FREE',
-    priceINR: 0,
-    period: 'forever',
-    description: 'Perfect for exploring 3D home design & viewing floor blueprints.',
+export const PRICING_PLANS: Record<string, PlanDetail> = {
+  trial_2days: {
+    id: 'trial_2days',
+    name: '2-Day Full Access Trial',
+    badge: 'Quick Test • ₹100/day',
+    tier: 'TRIAL',
+    priceINR: 200,
+    durationDays: 2,
+    periodLabel: 'for 2 days (48 Hours)',
+    description: 'Complete unrestricted access to all studio tools, multi-floor drafting, 4K raytrace renders, and BOM quotations for 48 hours.',
     features: [
-      '1 Single Floor Blueprint drafting',
-      'Full 2D & 3D Interactive Viewport',
-      'Standard Furniture & Material Library',
-      'Standard 1080p Viewport Snapshots',
-      'BOM Quotation Viewer in INR',
-    ],
-  },
-  pro_monthly: {
-    id: 'pro_monthly',
-    name: 'Architect Pro (Monthly)',
-    badge: 'Most Flexible',
-    tier: 'PRO',
-    priceINR: 999,
-    period: 'month',
-    description: 'Complete professional toolkit for residential architects and interior designers.',
-    features: [
-      'Unlimited Multi-Floor Architecture (Ground, 1st, 2nd, Penthouse)',
-      '4K Ultra Raytracing & Photorealistic Lighting Engine',
-      'Bill of Materials (BOM) Excel / CSV Export & Official Quotes',
-      'Custom 3D Model Uploads (.OBJ / .GLTF / Textures)',
-      '3D Multi-Part Finish Styler (Individual Part Finishes)',
-      'Commercial Presentation Mode with Automatic Doors & Collision',
-      'No Watermarks on Renders & Blueprints',
+      'Full 100% Studio Access for 48 Hours',
+      'Unlimited Multi-Floor Architecture Drafting',
+      '4K Ultra Raytracing & Master Snapshot Exports',
+      'Bill of Materials (BOM) Excel & CSV Quotations',
+      'Custom 3D Model Uploads (.OBJ / .GLTF)',
+      'Multi-Part Material & Finish Customizer',
+      'Instant Razorpay Activation (UPI / Cards / NetBanking)',
     ],
     highlight: false,
   },
-  pro_yearly: {
-    id: 'pro_yearly',
-    name: 'Architect Pro (Annual)',
-    badge: 'Best Value • Save 33%',
+  monthly: {
+    id: 'monthly',
+    name: 'Monthly Pro Pass',
+    badge: 'Most Popular',
     tier: 'PRO',
-    priceINR: 7999,
-    period: 'year',
-    description: 'Everything in Pro with annual savings and VIP priority cloud rendering.',
+    priceINR: 999,
+    durationDays: 30,
+    periodLabel: 'per month (30 Days)',
+    description: 'Full uninterrupted studio access for professional residential architects and interior designers.',
     features: [
-      'All Architect Pro features included',
-      'Equivalent to ₹666 / month (Save ₹3,989/year)',
-      'Unlimited Multi-Floor Blueprints',
-      'Priority 4K Cloud Raytrace Queuing',
-      'Full Commercial Client License',
-      'Dedicated Email & Technical Support',
+      'Full 100% Studio Access for 30 Days',
+      'Unlimited Multi-Floor Architecture Drafting',
+      '4K Ultra Raytracing & Master Snapshot Exports',
+      'Bill of Materials (BOM) Excel & CSV Quotations',
+      'Custom 3D Model Uploads (.OBJ / .GLTF)',
+      'Multi-Part Material & Finish Customizer',
+      'Save & Sync Unlimited Projects to Cloud',
+      'Commercial Presentation Mode & Walkthroughs',
     ],
     highlight: true,
   },
-  enterprise_monthly: {
-    id: 'enterprise_monthly',
-    name: 'Studio Enterprise',
-    tier: 'ENTERPRISE',
-    priceINR: 2499,
-    period: 'month',
-    description: 'For design studios, real estate developers, and architectural firms.',
+  yearly: {
+    id: 'yearly',
+    name: 'Annual Pro Pass',
+    badge: 'Save 20% vs Monthly',
+    tier: 'PRO',
+    priceINR: 9590, // Exactly 20% discount on ₹999 * 12 (Save ₹2,398)
+    durationDays: 365,
+    periodLabel: 'per year (₹799 / mo)',
+    description: 'Best value for design practices. 365 days of full unlimited studio access with an automatic 20% discount.',
     features: [
-      'Everything in Pro Annual',
-      'Multi-User Designer Collaboration & Permissions',
-      'White-Label Client Presentation Portal',
-      'Direct API Access & Webhooks for CRM Integration',
-      'Custom 3D Model Catalog Hosting',
+      'Full 100% Studio Access for 365 Days',
+      'Save 20% compared to monthly billing',
+      'Equivalent to just ₹799 / month',
+      'Unlimited Multi-Floor Blueprints & Projects',
+      'Priority 4K Cloud Raytrace Queuing',
+      'Bill of Materials (BOM) Official Quotes',
+      'Full Commercial Client Presentation License',
+      'Dedicated Email & Technical Support',
     ],
+    highlight: false,
   },
-  enterprise_yearly: {
-    id: 'enterprise_yearly',
-    name: 'Studio Enterprise (Annual)',
-    badge: 'Save ₹9,989',
-    tier: 'ENTERPRISE',
-    priceINR: 19999,
-    period: 'year',
-    description: 'Full studio capability with dedicated enterprise support.',
-    features: [
-      'Everything in Studio Enterprise',
-      'Dedicated Account Manager & 99.9% SLA',
-      'Custom Branding & Domain Mapping',
-    ],
+  // Backwards compatibility mappings
+  pro_monthly: {
+    id: 'pro_monthly',
+    name: 'Monthly Pro Pass',
+    badge: 'Most Popular',
+    tier: 'PRO',
+    priceINR: 999,
+    durationDays: 30,
+    periodLabel: 'per month (30 Days)',
+    description: 'Full studio access for architects and interior designers.',
+    features: ['All studio features included for 30 days'],
+  },
+  pro_yearly: {
+    id: 'pro_yearly',
+    name: 'Annual Pro Pass',
+    badge: 'Save 20%',
+    tier: 'PRO',
+    priceINR: 9590,
+    durationDays: 365,
+    periodLabel: 'per year',
+    description: 'Full studio access for 365 days.',
+    features: ['All studio features included for 365 days with 20% discount'],
   },
 };
 
 /**
- * Checks if a specific feature is accessible based on the user's active plan tier.
+ * Checks if the user has an active pass (Trial, Monthly, or Yearly) that has not expired.
+ * All features are fully accessible as long as the user has an active pass.
  */
-export function canAccessFeature(user: User | null, feature: FeatureKey): boolean {
-  // If user role is ADMIN, always allow all features
+export function hasActiveSubscription(user: User | null): boolean {
   if (user && user.role === 'ADMIN') {
     return true;
   }
 
-  const tier = getUserSubscriptionTier(user);
-
-  switch (feature) {
-    case 'multi_floor':
-    case 'render_4k':
-    case 'custom_obj_upload':
-    case 'export_bom_csv':
-    case 'commercial_license':
-    case 'pbr_materials_unlimited':
-      return tier === 'PRO' || tier === 'ENTERPRISE';
-    case 'unlimited_projects':
-      return tier === 'PRO' || tier === 'ENTERPRISE';
-    default:
-      return true;
-  }
-}
-
-/**
- * Resolves the effective subscription tier for the user.
- */
-export function getUserSubscriptionTier(user: User | null): 'FREE' | 'PRO' | 'ENTERPRISE' {
-  if (!user) return 'FREE';
-  if (user.role === 'ADMIN') return 'PRO';
-
-  if (user.subscriptionTier && user.subscriptionStatus === 'active') {
-    // Check expiration if present
+  // 1. Check user state
+  if (user && (user.subscriptionTier === 'PRO' || user.subscriptionTier === 'TRIAL' || user.subscriptionTier === 'ENTERPRISE')) {
     if (user.subscriptionExpiresAt) {
       const expires = new Date(user.subscriptionExpiresAt).getTime();
-      if (Date.now() > expires) {
-        return 'FREE';
+      if (Date.now() < expires) {
+        return true;
       }
+      return false; // Expired
     }
-    return user.subscriptionTier;
+    return true;
   }
 
-  // Check localStorage for verified subscription token
+  // 2. Check localStorage verified token
   if (typeof window !== 'undefined') {
     try {
       const token = localStorage.getItem('sweethome_sub_token');
@@ -158,8 +132,8 @@ export function getUserSubscriptionTier(user: User | null): 'FREE' | 'PRO' | 'EN
         const parts = token.split('.');
         if (parts.length === 2) {
           const payload = JSON.parse(atob(parts[0]));
-          if (payload.tier && (!payload.expiresAt || Date.now() < payload.expiresAt)) {
-            return payload.tier;
+          if (payload.expiresAt && Date.now() < payload.expiresAt) {
+            return true;
           }
         }
       }
@@ -168,25 +142,92 @@ export function getUserSubscriptionTier(user: User | null): 'FREE' | 'PRO' | 'EN
     }
   }
 
+  return false;
+}
+
+/**
+ * Access check: All studio features are accessible when the user has an active pass.
+ */
+export function canAccessFeature(user: User | null, _feature?: string): boolean {
+  if (user && user.role === 'ADMIN') return true;
+  return hasActiveSubscription(user);
+}
+
+/**
+ * Resolves the effective subscription tier for the user.
+ */
+export function getUserSubscriptionTier(user: User | null): 'FREE' | 'TRIAL' | 'PRO' | 'ENTERPRISE' {
+  if (!user) return 'FREE';
+  if (user.role === 'ADMIN') return 'PRO';
+
+  if (hasActiveSubscription(user)) {
+    return user.subscriptionTier || 'PRO';
+  }
+
   return 'FREE';
 }
 
 /**
- * Creates a client-side representation of verified subscription
+ * Formats a clean human-readable countdown of remaining pass access.
+ */
+export function getSubscriptionRemainingText(user: User | null): string {
+  if (user && user.role === 'ADMIN') return 'Admin (Lifetime)';
+
+  let expiresAt: number | null = null;
+  if (user?.subscriptionExpiresAt) {
+    expiresAt = new Date(user.subscriptionExpiresAt).getTime();
+  } else if (typeof window !== 'undefined') {
+    try {
+      const token = localStorage.getItem('sweethome_sub_token');
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[0]));
+        if (payload.expiresAt) expiresAt = payload.expiresAt;
+      }
+    } catch (e) {}
+  }
+
+  if (!expiresAt) return 'No Active Pass';
+
+  const diffMs = expiresAt - Date.now();
+  if (diffMs <= 0) return 'Pass Expired';
+
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(hours / 24);
+
+  if (days >= 2) {
+    return `${days} days left`;
+  }
+  if (days === 1) {
+    const remHours = hours % 24;
+    return `1 day ${remHours}h left`;
+  }
+  if (hours >= 1) {
+    return `${hours} hours left`;
+  }
+
+  const minutes = Math.max(1, Math.floor(diffMs / (1000 * 60)));
+  return `${minutes} mins left`;
+}
+
+/**
+ * Creates a client-side representation of verified subscription with dynamic duration
  */
 export function saveSubscriptionLocally(
   user: User,
-  tier: 'PRO' | 'ENTERPRISE',
+  tier: 'TRIAL' | 'PRO' | 'ENTERPRISE',
   paymentId: string,
   token: string,
-  orderId?: string
+  orderId?: string,
+  durationDays: number = 30,
+  planId?: 'trial_2days' | 'monthly' | 'yearly'
 ): User {
-  const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
   const updated: User = {
     ...user,
     subscriptionTier: tier,
-    subscriptionStatus: 'active',
+    subscriptionStatus: tier === 'TRIAL' ? 'trial' : 'active',
     subscriptionExpiresAt: expiresAt,
+    subscriptionPlanId: planId,
     razorpayPaymentId: paymentId,
     razorpayOrderId: orderId,
     subscriptionToken: token,

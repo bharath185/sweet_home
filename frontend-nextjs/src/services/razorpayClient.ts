@@ -9,8 +9,9 @@ declare global {
 
 export interface CheckoutResult {
   success: boolean;
-  tier: 'PRO' | 'ENTERPRISE';
+  tier: 'TRIAL' | 'PRO' | 'ENTERPRISE';
   planId: string;
+  durationDays?: number;
   paymentId: string;
   orderId: string;
   subscriptionToken: string;

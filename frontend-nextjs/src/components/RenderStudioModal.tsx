@@ -158,7 +158,7 @@ export const RenderStudioModal: React.FC<RenderStudioModalProps> = ({
                 {[
                   { mult: 1, label: 'Standard (1x)', desc: 'Fast Web' },
                   { mult: 2, label: 'HD 2K (2x)', desc: 'Sharp Print' },
-                  { mult: 4, label: !isPro ? 'Ultra 4K 👑' : 'Ultra 4K (4x)', desc: !isPro ? 'Pro Feature' : 'Master Render' },
+                  { mult: 4, label: 'Ultra 4K (4x)', desc: 'Master Render' },
                 ].map((res) => (
                   <button
                     key={res.mult}

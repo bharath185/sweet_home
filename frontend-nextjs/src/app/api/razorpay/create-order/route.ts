@@ -3,11 +3,13 @@ import crypto from 'crypto';
 
 // Fixed server-side pricing in INR paise (1 INR = 100 paise)
 // Client CANNOT tamper with prices.
-const SERVER_PLAN_PRICES_PAISE: Record<string, { amount: number; tier: 'PRO' | 'ENTERPRISE'; name: string }> = {
-  pro_monthly: { amount: 999 * 100, tier: 'PRO', name: 'Architect Pro (Monthly)' },
-  pro_yearly: { amount: 7999 * 100, tier: 'PRO', name: 'Architect Pro (Annual)' },
-  enterprise_monthly: { amount: 2499 * 100, tier: 'ENTERPRISE', name: 'Studio Enterprise (Monthly)' },
-  enterprise_yearly: { amount: 19999 * 100, tier: 'ENTERPRISE', name: 'Studio Enterprise (Annual)' },
+const SERVER_PLAN_PRICES_PAISE: Record<string, { amount: number; durationDays: number; tier: 'TRIAL' | 'PRO'; name: string }> = {
+  trial_2days: { amount: 200 * 100, durationDays: 2, tier: 'TRIAL', name: '2-Day Studio Trial Pass' },
+  monthly: { amount: 999 * 100, durationDays: 30, tier: 'PRO', name: 'Monthly Studio Pass' },
+  yearly: { amount: 9590 * 100, durationDays: 365, tier: 'PRO', name: 'Annual Studio Pass (20% Off)' },
+  // Backward compatibility aliases
+  pro_monthly: { amount: 999 * 100, durationDays: 30, tier: 'PRO', name: 'Monthly Studio Pass' },
+  pro_yearly: { amount: 9590 * 100, durationDays: 365, tier: 'PRO', name: 'Annual Studio Pass (20% Off)' },
 };
 
 export async function POST(req: NextRequest) {
@@ -17,7 +19,7 @@ export async function POST(req: NextRequest) {
 
     if (!planId || !SERVER_PLAN_PRICES_PAISE[planId]) {
       return NextResponse.json(
-        { error: 'Invalid planId. Must be one of pro_monthly, pro_yearly, enterprise_monthly, enterprise_yearly.' },
+        { error: 'Invalid planId. Must be one of trial_2days, monthly, or yearly.' },
         { status: 400 }
       );
     }

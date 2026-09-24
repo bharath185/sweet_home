@@ -9,9 +9,10 @@ export interface User {
   isOnline: boolean;
   assignedPlan: string;
   createdAt: string;
-  subscriptionTier?: 'FREE' | 'PRO' | 'ENTERPRISE';
+  subscriptionTier?: 'FREE' | 'TRIAL' | 'PRO' | 'ENTERPRISE';
   subscriptionStatus?: 'active' | 'inactive' | 'trial';
   subscriptionExpiresAt?: string;
+  subscriptionPlanId?: 'trial_2days' | 'monthly' | 'yearly';
   razorpayPaymentId?: string;
   razorpayOrderId?: string;
   subscriptionToken?: string;

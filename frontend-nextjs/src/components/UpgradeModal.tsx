@@ -13,13 +13,20 @@ import {
   Camera,
   FileSpreadsheet,
   Box,
-  CheckCircle2,
   AlertCircle,
-  Lock,
+  Clock,
+  Calendar,
+  CheckCircle2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { User } from '../types/plan';
-import { PRICING_PLANS, PlanId, saveSubscriptionLocally, getUserSubscriptionTier } from '../services/subscriptionService';
+import {
+  PRICING_PLANS,
+  PlanId,
+  saveSubscriptionLocally,
+  hasActiveSubscription,
+  getSubscriptionRemainingText,
+} from '../services/subscriptionService';
 import { initiateSubscriptionCheckout } from '../services/razorpayClient';
 
 interface UpgradeModalProps {
@@ -37,17 +44,19 @@ export default function UpgradeModal({
   onUserUpdated,
   initialFeatureHighlight,
 }: UpgradeModalProps) {
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly');
   const [isLoadingPlan, setIsLoadingPlan] = useState<PlanId | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successInfo, setSuccessInfo] = useState<{
     tier: string;
+    planName: string;
+    durationDays: number;
     paymentId: string;
   } | null>(null);
 
   if (!isOpen) return null;
 
-  const currentTier = getUserSubscriptionTier(currentUser);
+  const isActive = hasActiveSubscription(currentUser);
+  const remainingText = getSubscriptionRemainingText(currentUser);
 
   const triggerConfetti = () => {
     try {
@@ -65,6 +74,9 @@ export default function UpgradeModal({
     setErrorMessage(null);
     setIsLoadingPlan(planId);
 
+    const planConfig = PRICING_PLANS[planId];
+    const durationDays = planConfig?.durationDays || (planId === 'trial_2days' ? 2 : planId === 'yearly' ? 365 : 30);
+
     await initiateSubscriptionCheckout({
       planId,
       user: currentUser,
@@ -79,7 +91,9 @@ export default function UpgradeModal({
             result.tier,
             result.paymentId,
             result.subscriptionToken,
-            result.orderId
+            result.orderId,
+            result.durationDays || durationDays,
+            planId as any
           );
           if (onUserUpdated) {
             onUserUpdated(updated);
@@ -88,6 +102,8 @@ export default function UpgradeModal({
 
         setSuccessInfo({
           tier: result.tier,
+          planName: planConfig?.name || 'Studio Access Pass',
+          durationDays: result.durationDays || durationDays,
           paymentId: result.paymentId,
         });
       },
@@ -103,12 +119,12 @@ export default function UpgradeModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-5xl max-h-[92vh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl text-slate-100 flex flex-col">
+      <div className="relative w-full max-w-5xl max-h-[94vh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl text-slate-100 flex flex-col">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-full transition-colors"
-          aria-label="Close upgrade modal"
+          className="absolute top-4 right-4 z-10 p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-full transition-colors cursor-pointer"
+          aria-label="Close pass modal"
         >
           <X className="w-5 h-5" />
         </button>
@@ -120,27 +136,29 @@ export default function UpgradeModal({
               <Crown className="w-10 h-10" />
             </div>
             <h2 className="text-3xl font-extrabold text-white tracking-tight">
-              Welcome to SweetHome {successInfo.tier}! 🎉
+              Pass Activated Successfully! 🎉
             </h2>
             <p className="mt-3 text-slate-300 max-w-md text-base leading-relaxed">
-              Your payment has been cryptographically verified and your premium architectural features are now completely unlocked!
+              Your <strong>{successInfo.planName}</strong> is active for the next{' '}
+              <strong className="text-emerald-400">{successInfo.durationDays} days</strong>. All studio features,
+              multi-floor architecture, 4K raytracing, and BOM exports are 100% unlocked!
             </p>
 
-            <div className="mt-6 p-4 bg-slate-800/80 border border-slate-700 rounded-xl text-left text-xs font-mono text-slate-300 space-y-1 w-full max-w-md">
+            <div className="mt-6 p-4 bg-slate-800/80 border border-slate-700 rounded-2xl text-left text-xs font-mono text-slate-300 space-y-1.5 w-full max-w-md">
               <div className="flex justify-between">
                 <span className="text-slate-400">Payment ID:</span>
                 <span className="text-emerald-400 font-semibold">{successInfo.paymentId}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Tier Status:</span>
-                <span className="text-blue-400 font-semibold">{successInfo.tier} Active</span>
+                <span className="text-slate-400">Pass Duration:</span>
+                <span className="text-blue-400 font-semibold">{successInfo.durationDays} Days Full Access</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Currency:</span>
                 <span>INR (₹)</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Security Gateway:</span>
+                <span className="text-slate-400">Payment Gateway:</span>
                 <span>Razorpay HMAC-SHA256 Verified</span>
               </div>
             </div>
@@ -150,55 +168,40 @@ export default function UpgradeModal({
                 setSuccessInfo(null);
                 onClose();
               }}
-              className="mt-8 px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/30 transition-all hover:scale-[1.02]"
+              className="mt-8 px-8 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all hover:scale-[1.02] cursor-pointer"
             >
-              Start Designing with Pro Features
+              Continue Designing in 3D Studio
             </button>
           </div>
         ) : (
-          /* PRICING PLANS VIEW */
+          /* PASS PRICING VIEW */
           <div className="p-6 sm:p-8">
             {/* Header */}
             <div className="text-center max-w-2xl mx-auto mb-8">
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-full text-xs font-semibold uppercase tracking-wider mb-3">
                 <Sparkles className="w-3.5 h-3.5" />
-                Premium Architectural Suite
+                SweetHome 3D Studio Access
               </div>
               <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-                Design Without Limits
+                Select Your Access Pass
               </h2>
               <p className="mt-2 text-sm sm:text-base text-slate-300">
                 {initialFeatureHighlight
-                  ? `Unlock ${initialFeatureHighlight} and full professional 3D studio features.`
-                  : 'Upgrade your studio for multi-floor drafting, 4K raytrace rendering, and commercial BOM exports.'}
+                  ? `To access ${initialFeatureHighlight}, activate a flexible pass below.`
+                  : 'All plans include 100% full access to every tool and capability. No locked features.'}
               </p>
 
-              {/* Billing Toggle */}
-              <div className="mt-6 inline-flex items-center bg-slate-800/90 p-1.5 rounded-xl border border-slate-700">
-                <button
-                  onClick={() => setBillingCycle('monthly')}
-                  className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-                    billingCycle === 'monthly'
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Monthly Billing
-                </button>
-                <button
-                  onClick={() => setBillingCycle('yearly')}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-                    billingCycle === 'yearly'
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <span>Annual Billing</span>
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-400 rounded border border-emerald-500/40">
-                    Save 33%
-                  </span>
-                </button>
+              {/* Universal Inclusion Banner */}
+              <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 font-medium">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>Multi-Floor CAD • 4K Raytracing • BOM Quotation Export • Custom 3D Models in all passes</span>
               </div>
+
+              {isActive && (
+                <div className="mt-3 text-xs text-blue-300 font-medium">
+                  Current Status: <span className="font-bold text-white">{remainingText}</span>
+                </div>
+              )}
             </div>
 
             {/* Error Message if any */}
@@ -209,63 +212,80 @@ export default function UpgradeModal({
               </div>
             )}
 
-            {/* Pricing Cards Grid */}
+            {/* Pricing Cards Grid (3 Options: 2-Day Trial ₹200 | Monthly ₹999 | Annual 20% Off ₹9,590) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-              {/* FREE CARD */}
-              <div className="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-600 transition-all">
+              {/* CARD 1: 2-DAY TRIAL PASS (₹200) */}
+              <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-600 transition-all">
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-white">Starter Studio</h3>
-                    <span className="px-2.5 py-1 text-[11px] font-medium bg-slate-700/50 text-slate-300 rounded-md">
-                      Free Forever
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-amber-400" />
+                      2-Day Trial Pass
+                    </h3>
+                    <span className="px-2.5 py-0.5 text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-md">
+                      ₹100 / day
                     </span>
                   </div>
+
                   <div className="mb-4">
-                    <span className="text-3xl font-extrabold text-white">₹0</span>
-                    <span className="text-slate-400 text-xs ml-1">/ forever</span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-4xl font-extrabold text-white">₹200</span>
+                      <span className="text-slate-400 text-xs">/ 2 days (48 Hours)</span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-1">
+                      Full access to try and complete quick designs
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-400 mb-6">
-                    Perfect for 2D drafting and basic 3D walkthroughs of single-floor apartments.
+
+                  <p className="text-xs text-slate-300 mb-6">
+                    Perfect for completing a single floor plan, generating high-res renders, or trying the full platform.
                   </p>
+
                   <div className="space-y-3 mb-6">
-                    <div className="flex items-start gap-2.5 text-xs text-slate-300">
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>1 Single Floor Blueprint drafting</span>
+                      <span><strong>48 Hours (2 Days)</strong> Full Access</span>
                     </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-300">
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Full 2D & 3D Interactive Viewport</span>
+                      <span>Unlimited Multi-Floor Architecture</span>
                     </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-300">
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Standard Furniture & Material Library</span>
+                      <span>4K Ultra Raytracing Snapshots</span>
                     </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-300">
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>BOM Quotation Viewer in INR (₹)</span>
+                      <span>BOM Quotation & Cost Export in INR (₹)</span>
                     </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-500">
-                      <Lock className="w-4 h-4 text-slate-600 flex-shrink-0 mt-0.5" />
-                      <span>Multi-Floor additions locked</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-500">
-                      <Lock className="w-4 h-4 text-slate-600 flex-shrink-0 mt-0.5" />
-                      <span>4K Raytracing locked</span>
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
+                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                      <span>Custom 3D Models & Part Color Finishing</span>
                     </div>
                   </div>
                 </div>
 
                 <button
-                  disabled={currentTier === 'FREE'}
-                  onClick={onClose}
-                  className="w-full py-2.5 px-4 bg-slate-700/60 hover:bg-slate-700 text-slate-300 font-medium rounded-xl text-xs transition-colors"
+                  disabled={isLoadingPlan !== null}
+                  onClick={() => handleCheckout('trial_2days')}
+                  className="w-full py-3 px-4 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl text-sm transition-all hover:scale-[1.01] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
-                  {currentTier === 'FREE' ? 'Current Plan' : 'Standard Access'}
+                  {isLoadingPlan === 'trial_2days' ? (
+                    <span className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Connecting...
+                    </span>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4 text-amber-400 fill-current" />
+                      Get 2-Day Pass • ₹200
+                    </>
+                  )}
                 </button>
               </div>
 
-              {/* PRO CARD (RECOMMENDED / MOST POPULAR) */}
-              <div className="relative bg-gradient-to-b from-blue-900/40 via-slate-800/80 to-slate-800/90 border-2 border-blue-500 rounded-2xl p-6 flex flex-col justify-between shadow-xl shadow-blue-500/10 hover:border-blue-400 transition-all scale-[1.02]">
+              {/* CARD 2: MONTHLY PRO PASS (₹999) - HIGHLIGHTED */}
+              <div className="relative bg-gradient-to-b from-blue-900/40 via-slate-800/90 to-slate-800/95 border-2 border-blue-500 rounded-2xl p-6 flex flex-col justify-between shadow-xl shadow-blue-500/15 hover:border-blue-400 transition-all scale-[1.02]">
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[11px] font-bold rounded-full uppercase tracking-wider shadow-md flex items-center gap-1.5">
                   <Crown className="w-3.5 h-3.5" />
                   Most Popular
@@ -274,24 +294,21 @@ export default function UpgradeModal({
                 <div>
                   <div className="flex items-center justify-between mb-4 mt-1">
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                      Architect Pro
+                      <Calendar className="w-4 h-4 text-blue-400" />
+                      Monthly Pass
                     </h3>
-                    <span className="px-2.5 py-1 text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-md">
-                      {billingCycle === 'yearly' ? 'Save ₹3,989' : 'Flexible'}
+                    <span className="px-2.5 py-0.5 text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-md">
+                      Flexible
                     </span>
                   </div>
 
                   <div className="mb-4">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold text-white">
-                        {billingCycle === 'yearly' ? '₹7,999' : '₹999'}
-                      </span>
-                      <span className="text-slate-400 text-xs">
-                        {billingCycle === 'yearly' ? '/ year (₹666/mo)' : '/ month'}
-                      </span>
+                      <span className="text-4xl font-extrabold text-white">₹999</span>
+                      <span className="text-slate-400 text-xs">/ month (30 Days)</span>
                     </div>
                     <div className="text-[11px] text-emerald-400 mt-1 font-medium">
-                      All prices in Indian Rupees (INR) + GST included
+                      All inclusive • UPI, Cards, NetBanking accepted
                     </div>
                   </div>
 
@@ -300,23 +317,21 @@ export default function UpgradeModal({
                   </p>
 
                   <div className="space-y-3 mb-6">
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200 font-medium">
+                    <div className="flex items-start gap-2.5 text-xs text-slate-100 font-medium">
                       <Layers className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                      <span>
-                        <strong>Unlimited Multi-Floor Architecture</strong> (Ground, 1st, 2nd, Penthouse)
-                      </span>
+                      <span><strong>30 Days Full Access</strong> to all studio features</span>
                     </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200 font-medium">
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
+                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                      <span>Unlimited Multi-Floor Architecture (All levels)</span>
+                    </div>
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Camera className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                      <span>
-                        <strong>4K Ultra Raytracing Engine</strong> with daylight sun simulation
-                      </span>
+                      <span>4K Ultra Raytracing & Master Snapshot Engine</span>
                     </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200 font-medium">
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <FileSpreadsheet className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                      <span>
-                        <strong>BOM Excel & CSV Export</strong> with client-ready ₹ estimates
-                      </span>
+                      <span>BOM Excel & CSV Export with client quotes</span>
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Box className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
@@ -324,90 +339,96 @@ export default function UpgradeModal({
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Sparkles className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                      <span>Multi-Part Color & Material Finishing</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>No watermark on blueprints or exports</span>
+                      <span>Cloud Project Save & Share Presentation Link</span>
                     </div>
                   </div>
                 </div>
 
                 <button
-                  disabled={isLoadingPlan !== null || currentTier === 'PRO'}
-                  onClick={() => handleCheckout(billingCycle === 'yearly' ? 'pro_yearly' : 'pro_monthly')}
-                  className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-blue-500/25 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 disabled:opacity-50"
+                  disabled={isLoadingPlan !== null}
+                  onClick={() => handleCheckout('monthly')}
+                  className="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-blue-500/25 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
-                  {isLoadingPlan === (billingCycle === 'yearly' ? 'pro_yearly' : 'pro_monthly') ? (
+                  {isLoadingPlan === 'monthly' ? (
                     <span className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       Connecting to Razorpay...
                     </span>
-                  ) : currentTier === 'PRO' ? (
-                    'Active Plan (Pro)'
                   ) : (
                     <>
                       <Zap className="w-4 h-4 fill-current" />
-                      Upgrade to Pro with Razorpay
+                      Get Monthly Pass • ₹999
                     </>
                   )}
                 </button>
               </div>
 
-              {/* ENTERPRISE CARD */}
-              <div className="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-600 transition-all">
+              {/* CARD 3: ANNUAL PRO PASS (20% DISCOUNT - ₹9,590) */}
+              <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-600 transition-all">
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-white">Studio Enterprise</h3>
-                    <span className="px-2.5 py-1 text-[11px] font-medium bg-purple-500/10 text-purple-300 border border-purple-500/30 rounded-md">
-                      Firms & Teams
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-emerald-400" />
+                      Annual Pass
+                    </h3>
+                    <span className="px-2.5 py-0.5 text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-md">
+                      20% OFF
                     </span>
                   </div>
+
                   <div className="mb-4">
-                    <span className="text-3xl font-extrabold text-white">
-                      {billingCycle === 'yearly' ? '₹19,999' : '₹2,499'}
-                    </span>
-                    <span className="text-slate-400 text-xs ml-1">
-                      {billingCycle === 'yearly' ? '/ year' : '/ month'}
-                    </span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-4xl font-extrabold text-white">₹9,590</span>
+                      <span className="text-slate-400 text-xs">/ year</span>
+                    </div>
+                    <div className="text-[11px] text-emerald-400 mt-1 font-semibold">
+                      ₹799 / month • Save ₹2,398 / year (20% Discount)
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-400 mb-6">
-                    For architectural agencies, interior design firms, and multi-designer teams.
+
+                  <p className="text-xs text-slate-300 mb-6">
+                    Best value for design practices and full-time professionals needing 365 days of continuous access.
                   </p>
+
                   <div className="space-y-3 mb-6">
-                    <div className="flex items-start gap-2.5 text-xs text-slate-300">
-                      <Check className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />
-                      <span>Everything in Architect Pro</span>
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
+                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                      <span><strong>365 Days (1 Full Year)</strong> Unrestricted Access</span>
                     </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-300">
-                      <Check className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />
-                      <span>Multi-user real-time designer collaboration</span>
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
+                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                      <span>Save 20% compared to paying monthly</span>
                     </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-300">
-                      <Check className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />
-                      <span>White-label client presentation links</span>
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
+                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                      <span>Unlimited Multi-Floor Blueprints & Projects</span>
                     </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-300">
-                      <Check className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />
-                      <span>Dedicated Account Manager & Phone Support</span>
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
+                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                      <span>Priority 4K Cloud Raytrace Queuing</span>
+                    </div>
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
+                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                      <span>Full Commercial Client Presentation License</span>
                     </div>
                   </div>
                 </div>
 
                 <button
-                  disabled={isLoadingPlan !== null || currentTier === 'ENTERPRISE'}
-                  onClick={() =>
-                    handleCheckout(billingCycle === 'yearly' ? 'enterprise_yearly' : 'enterprise_monthly')
-                  }
-                  className="w-full py-2.5 px-4 bg-slate-700/80 hover:bg-slate-700 text-white font-medium rounded-xl text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  disabled={isLoadingPlan !== null}
+                  onClick={() => handleCheckout('yearly')}
+                  className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-sm shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.01] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
-                  {isLoadingPlan ===
-                  (billingCycle === 'yearly' ? 'enterprise_yearly' : 'enterprise_monthly') ? (
-                    'Processing...'
-                  ) : currentTier === 'ENTERPRISE' ? (
-                    'Active Plan (Enterprise)'
+                  {isLoadingPlan === 'yearly' ? (
+                    <span className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Connecting...
+                    </span>
                   ) : (
-                    'Get Studio Enterprise'
+                    <>
+                      <Crown className="w-4 h-4" />
+                      Get Annual Pass • ₹9,590 (Save 20%)
+                    </>
                   )}
                 </button>
               </div>
@@ -417,12 +438,12 @@ export default function UpgradeModal({
             <div className="mt-8 pt-6 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Bank-Grade 256-Bit SSL Encryption • HMAC-SHA256 Verified</span>
+                <span>Bank-Grade 256-Bit SSL Encryption • HMAC-SHA256 Cryptographic Verification</span>
               </div>
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1.5">
                   <CreditCard className="w-4 h-4 text-blue-400" />
-                  UPI, Cards, NetBanking, Wallets
+                  UPI (GPay, PhonePe, Paytm), Cards, NetBanking
                 </span>
                 <span className="font-semibold text-slate-300 flex items-center gap-1">
                   Powered by <span className="text-blue-400">Razorpay</span>
