@@ -9,9 +9,11 @@ import {
   Users,
   Palette,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  Crown,
 } from 'lucide-react';
 import { HomePlan, UserRole, User } from '../types/plan';
+import { hasActiveSubscription, getSubscriptionRemainingText } from '../services/subscriptionService';
 
 interface NavbarProps {
   plan: HomePlan;
@@ -25,6 +27,7 @@ interface NavbarProps {
   lastSyncedAt?: string | null;
   currentUser?: User | null;
   onLogout?: () => void;
+  onOpenUpgradeModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -38,6 +41,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   lastSyncedAt,
   currentUser,
   onLogout,
+  onOpenUpgradeModal,
 }) => {
   // Determine active state for each of the 4 requested tabs
   const isDashboardActive =
@@ -189,12 +193,33 @@ export const Navbar: React.FC<NavbarProps> = ({
           </span>
         </div>
 
+        {/* Universal Studio Pass Status & Trigger Button */}
+        {onOpenUpgradeModal && (
+          <button
+            onClick={onOpenUpgradeModal}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              hasActiveSubscription(currentUser)
+                ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
+                : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-500/25'
+            }`}
+            title="SweetHome Studio Access Passes"
+          >
+            <Crown className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+            <span>
+              {hasActiveSubscription(currentUser)
+                ? getSubscriptionRemainingText(currentUser)
+                : 'Get Pass (₹200 Trial)'}
+            </span>
+          </button>
+        )}
+
         {/* User profile & Logout */}
         {currentUser && (
           <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
             <div
-              className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800"
-              title={`Logged in as ${currentUser.name} (${currentUser.role})`}
+              onClick={onOpenUpgradeModal}
+              className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer hover:border-slate-700 transition"
+              title={`Logged in as ${currentUser.name} - Click to view subscription`}
             >
               <div
                 className={`w-5 h-5 rounded-lg flex items-center justify-center text-white text-[10px] font-bold ${

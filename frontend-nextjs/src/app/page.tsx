@@ -556,6 +556,7 @@ export default function HomeStudioPage() {
         lastSyncedAt={lastSyncedAt}
         currentUser={currentUser}
         onLogout={handleLogout}
+        onOpenUpgradeModal={() => handleOpenUpgrade()}
       />
 
       {/* Main Workspace Body */}
