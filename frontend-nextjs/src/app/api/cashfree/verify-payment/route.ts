@@ -57,39 +57,40 @@ export async function POST(req: NextRequest) {
     const isSimulated = orderId.includes('_sim_') || orderId.startsWith('cf_sim_');
 
     // 1. Live Cashfree API Order Verification
-    if (isLiveConfigured && !isSimulated) {
-      const baseUrl =
-        env === 'PRODUCTION'
-          ? `https://api.cashfree.com/pg/orders/${orderId}`
-          : `https://sandbox.cashfree.com/pg/orders/${orderId}`;
+    const baseUrl =
+      env === 'PRODUCTION'
+        ? `https://api.cashfree.com/pg/orders/${orderId}`
+        : `https://sandbox.cashfree.com/pg/orders/${orderId}`;
 
-      try {
-        const cfRes = await fetch(baseUrl, {
-          method: 'GET',
-          headers: {
-            'x-client-id': appId,
-            'x-client-secret': secretKey,
-            'x-api-version': '2023-08-01',
-          },
-        });
+    const cfRes = await fetch(baseUrl, {
+      method: 'GET',
+      headers: {
+        'x-client-id': appId,
+        'x-client-secret': secretKey,
+        'x-api-version': '2023-08-01',
+      },
+    });
 
-        if (cfRes.ok) {
-          const orderData = await cfRes.json();
-          if (orderData.order_status !== 'PAID') {
-            return NextResponse.json(
-              {
-                error: `Order payment status is ${orderData.order_status}. Payment was not completed.`,
-                status: orderData.order_status,
-              },
-              { status: 400 }
-            );
-          }
-        } else {
-          console.warn('Could not fetch Cashfree order status from API');
-        }
-      } catch (fetchErr) {
-        console.warn('Error fetching order status from Cashfree:', fetchErr);
-      }
+    if (!cfRes.ok) {
+      const errData = await cfRes.json().catch(() => ({}));
+      return NextResponse.json(
+        {
+          error: errData.message || 'Could not verify payment status with Cashfree payment gateway.',
+          code: 'VERIFICATION_FAILED',
+        },
+        { status: 400 }
+      );
+    }
+
+    const orderData = await cfRes.json();
+    if (orderData.order_status !== 'PAID') {
+      return NextResponse.json(
+        {
+          error: `Cashfree order status is '${orderData.order_status}'. Payment has not been marked as PAID.`,
+          status: orderData.order_status,
+        },
+        { status: 400 }
+      );
     }
 
     // 2. Generate Cryptographically Signed Subscription Token with precise duration
