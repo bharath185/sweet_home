@@ -29,6 +29,7 @@ import {
 } from '../services/subscriptionService';
 import { initiateSubscriptionCheckout } from '../services/razorpayClient';
 import { initiateCashfreeCheckout } from '../services/cashfreeClient';
+import { PaymentGatewayCheckoutModal } from './PaymentGatewayCheckoutModal';
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -48,12 +49,22 @@ export default function UpgradeModal({
   const [selectedGateway, setSelectedGateway] = useState<'cashfree' | 'razorpay'>('cashfree');
   const [isLoadingPlan, setIsLoadingPlan] = useState<PlanId | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [checkoutModalData, setCheckoutModalData] = useState<{
+    gateway: 'cashfree' | 'razorpay';
+    planId: PlanId;
+    planName: string;
+    amountINR: number;
+    durationDays: number;
+    tier: 'TRIAL' | 'PRO';
+    orderId: string;
+  } | null>(null);
   const [successInfo, setSuccessInfo] = useState<{
     tier: string;
     planName: string;
     durationDays: number;
     paymentId: string;
     gateway: 'cashfree' | 'razorpay';
+    paymentMethod?: string;
   } | null>(null);
 
   if (!isOpen) return null;
@@ -79,88 +90,83 @@ export default function UpgradeModal({
 
     const planConfig = PRICING_PLANS[planId];
     const durationDays = planConfig?.durationDays || (planId === 'trial_2days' ? 2 : planId === 'yearly' ? 365 : 30);
+    const amountINR = planConfig?.priceINR || 200;
 
-    if (selectedGateway === 'cashfree') {
-      await initiateCashfreeCheckout({
-        planId,
-        user: currentUser,
-        onSuccess: (result) => {
-          setIsLoadingPlan(null);
-          triggerConfetti();
-
-          if (currentUser) {
-            const updated = saveSubscriptionLocally(
-              currentUser,
-              result.tier,
-              result.paymentId,
-              result.subscriptionToken,
-              result.orderId,
-              result.durationDays || durationDays,
-              planId as any,
-              'cashfree'
-            );
-            if (onUserUpdated) {
-              onUserUpdated(updated);
-            }
-          }
-
-          setSuccessInfo({
-            tier: result.tier,
-            planName: planConfig?.name || 'Studio Access Pass',
-            durationDays: result.durationDays || durationDays,
-            paymentId: result.paymentId,
-            gateway: 'cashfree',
-          });
-        },
-        onError: (err) => {
-          setIsLoadingPlan(null);
-          setErrorMessage(err);
-        },
-        onDismiss: () => {
-          setIsLoadingPlan(null);
-        },
+    try {
+      // 1. Request secure order generation from server API
+      const endpoint = selectedGateway === 'cashfree' ? '/api/cashfree/create-order' : '/api/razorpay/create-order';
+      const orderRes = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planId,
+          userId: currentUser?.id,
+          userEmail: currentUser?.email,
+          userName: currentUser?.name,
+        }),
       });
-    } else {
-      await initiateSubscriptionCheckout({
+
+      const orderData = await orderRes.json();
+      if (!orderRes.ok || !orderData.success) {
+        throw new Error(orderData.error || 'Failed to initiate secure order on server');
+      }
+
+      setIsLoadingPlan(null);
+
+      // 2. Open the Real Interactive Payment Gateway Checkout Modal (UPI, Cards, NetBanking)
+      setCheckoutModalData({
+        gateway: selectedGateway,
         planId,
-        user: currentUser,
-        onSuccess: (result) => {
-          setIsLoadingPlan(null);
-          triggerConfetti();
-
-          if (currentUser) {
-            const updated = saveSubscriptionLocally(
-              currentUser,
-              result.tier,
-              result.paymentId,
-              result.subscriptionToken,
-              result.orderId,
-              result.durationDays || durationDays,
-              planId as any,
-              'razorpay'
-            );
-            if (onUserUpdated) {
-              onUserUpdated(updated);
-            }
-          }
-
-          setSuccessInfo({
-            tier: result.tier,
-            planName: planConfig?.name || 'Studio Access Pass',
-            durationDays: result.durationDays || durationDays,
-            paymentId: result.paymentId,
-            gateway: 'razorpay',
-          });
-        },
-        onError: (err) => {
-          setIsLoadingPlan(null);
-          setErrorMessage(err);
-        },
-        onDismiss: () => {
-          setIsLoadingPlan(null);
-        },
+        planName: planConfig.name,
+        amountINR,
+        durationDays,
+        tier: planConfig.tier as 'TRIAL' | 'PRO',
+        orderId: orderData.orderId,
       });
+    } catch (err: any) {
+      setIsLoadingPlan(null);
+      setErrorMessage(err.message || 'Payment initiation failed. Please try again.');
     }
+  };
+
+  const handlePaymentSuccess = (result: {
+    tier: 'TRIAL' | 'PRO' | 'ENTERPRISE';
+    planId: string;
+    durationDays: number;
+    paymentId: string;
+    orderId: string;
+    gateway: 'cashfree' | 'razorpay';
+    subscriptionToken: string;
+    paymentMethod: string;
+  }) => {
+    setCheckoutModalData(null);
+    triggerConfetti();
+
+    if (currentUser) {
+      const updated = saveSubscriptionLocally(
+        currentUser,
+        result.tier,
+        result.paymentId,
+        result.subscriptionToken,
+        result.orderId,
+        result.durationDays,
+        result.planId as any,
+        result.gateway
+      );
+      if (onUserUpdated) {
+        onUserUpdated(updated);
+      }
+    }
+
+    const planConfig = PRICING_PLANS[result.planId];
+    setSuccessInfo({
+      tier: result.tier,
+      planName: planConfig?.name || 'Studio Access Pass',
+      durationDays: result.durationDays,
+      paymentId: result.paymentId,
+      gateway: result.gateway,
+      paymentMethod: result.paymentMethod,
+    });
   };
 
   return (
@@ -203,6 +209,12 @@ export default function UpgradeModal({
                 <span className="text-slate-400">Pass Duration:</span>
                 <span className="text-blue-400 font-semibold">{successInfo.durationDays} Days Full Access</span>
               </div>
+              {successInfo.paymentMethod && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Method:</span>
+                  <span className="text-amber-400 font-semibold">{successInfo.paymentMethod}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-400">Currency:</span>
                 <span>INR (₹)</span>
@@ -535,6 +547,23 @@ export default function UpgradeModal({
           </div>
         )}
       </div>
+
+      {/* Real Payment Gateway Checkout Modal (UPI, Cards, NetBanking) */}
+      {checkoutModalData && (
+        <PaymentGatewayCheckoutModal
+          isOpen={Boolean(checkoutModalData)}
+          onClose={() => setCheckoutModalData(null)}
+          gateway={checkoutModalData.gateway}
+          planId={checkoutModalData.planId}
+          planName={checkoutModalData.planName}
+          amountINR={checkoutModalData.amountINR}
+          durationDays={checkoutModalData.durationDays}
+          tier={checkoutModalData.tier}
+          orderId={checkoutModalData.orderId}
+          currentUser={currentUser}
+          onPaymentSuccess={handlePaymentSuccess}
+        />
+      )}
     </div>
   );
 }

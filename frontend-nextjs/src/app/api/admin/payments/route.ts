@@ -187,3 +187,19 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+export async function POST(req: NextRequest) {
+  try {
+    const tx: PaymentTransaction = await req.json();
+    if (tx && tx.orderId) {
+      // Check if duplicate
+      const exists = INITIAL_TRANSACTIONS.some((t) => t.orderId === tx.orderId);
+      if (!exists) {
+        INITIAL_TRANSACTIONS.unshift(tx);
+      }
+    }
+    return NextResponse.json({ success: true, count: INITIAL_TRANSACTIONS.length });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || 'Error recording transaction' }, { status: 500 });
+  }
+}
