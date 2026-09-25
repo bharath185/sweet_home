@@ -27,7 +27,6 @@ import {
   hasActiveSubscription,
   getSubscriptionRemainingText,
 } from '../services/subscriptionService';
-import { initiateSubscriptionCheckout } from '../services/razorpayClient';
 import { initiateCashfreeCheckout } from '../services/cashfreeClient';
 
 interface UpgradeModalProps {
@@ -45,7 +44,6 @@ export default function UpgradeModal({
   onUserUpdated,
   initialFeatureHighlight,
 }: UpgradeModalProps) {
-  const [selectedGateway, setSelectedGateway] = useState<'cashfree' | 'razorpay'>('cashfree');
   const [isLoadingPlan, setIsLoadingPlan] = useState<PlanId | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successInfo, setSuccessInfo] = useState<{
@@ -53,7 +51,7 @@ export default function UpgradeModal({
     planName: string;
     durationDays: number;
     paymentId: string;
-    gateway: 'cashfree' | 'razorpay';
+    gateway: 'cashfree';
     paymentMethod?: string;
   } | null>(null);
 
@@ -81,61 +79,45 @@ export default function UpgradeModal({
     const planConfig = PRICING_PLANS[planId];
     const durationDays = planConfig?.durationDays || (planId === 'trial_2days' ? 2 : planId === 'yearly' ? 365 : 30);
 
-    const onSuccess = (result: any) => {
-      setIsLoadingPlan(null);
-      triggerConfetti();
+    await initiateCashfreeCheckout({
+      planId,
+      user: currentUser,
+      onSuccess: (result) => {
+        setIsLoadingPlan(null);
+        triggerConfetti();
 
-      if (currentUser) {
-        const updated = saveSubscriptionLocally(
-          currentUser,
-          result.tier,
-          result.paymentId,
-          result.subscriptionToken,
-          result.orderId,
-          result.durationDays || durationDays,
-          planId as any,
-          result.gateway || selectedGateway
-        );
-        if (onUserUpdated) {
-          onUserUpdated(updated);
+        if (currentUser) {
+          const updated = saveSubscriptionLocally(
+            currentUser,
+            result.tier,
+            result.paymentId,
+            result.subscriptionToken,
+            result.orderId,
+            result.durationDays || durationDays,
+            planId as any,
+            'cashfree'
+          );
+          if (onUserUpdated) {
+            onUserUpdated(updated);
+          }
         }
-      }
 
-      setSuccessInfo({
-        tier: result.tier,
-        planName: planConfig?.name || 'Studio Access Pass',
-        durationDays: result.durationDays || durationDays,
-        paymentId: result.paymentId,
-        gateway: result.gateway || selectedGateway,
-      });
-    };
-
-    const onError = (errMsg: string) => {
-      setIsLoadingPlan(null);
-      setErrorMessage(errMsg);
-    };
-
-    const onDismiss = () => {
-      setIsLoadingPlan(null);
-    };
-
-    if (selectedGateway === 'cashfree') {
-      await initiateCashfreeCheckout({
-        planId,
-        user: currentUser,
-        onSuccess,
-        onError,
-        onDismiss,
-      });
-    } else {
-      await initiateSubscriptionCheckout({
-        planId,
-        user: currentUser,
-        onSuccess,
-        onError,
-        onDismiss,
-      });
-    }
+        setSuccessInfo({
+          tier: result.tier,
+          planName: planConfig?.name || 'Studio Access Pass',
+          durationDays: result.durationDays || durationDays,
+          paymentId: result.paymentId,
+          gateway: 'cashfree',
+        });
+      },
+      onError: (errMsg) => {
+        setIsLoadingPlan(null);
+        setErrorMessage(errMsg);
+      },
+      onDismiss: () => {
+        setIsLoadingPlan(null);
+      },
+    });
   };
 
   return (
@@ -235,36 +217,18 @@ export default function UpgradeModal({
               )}
             </div>
 
-            {/* Gateway Selector (Cashfree Recommended vs Razorpay) */}
+            {/* Exclusive Payment Gateway Badge: Cashfree Developer Mode */}
             <div className="flex items-center justify-center gap-2 mb-8">
-              <span className="text-xs text-slate-400 font-medium mr-1">Payment Gateway:</span>
-              <button
-                type="button"
-                onClick={() => setSelectedGateway('cashfree')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border ${
-                  selectedGateway === 'cashfree'
-                    ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/25'
-                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:bg-slate-750'
-                }`}
-              >
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Cashfree (UPI / GPay / PhonePe / Cards)</span>
-                <span className="text-[10px] px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded font-semibold">
-                  Default
+              <div className="px-4 py-2 rounded-2xl bg-[#0f172a] border border-purple-500/40 text-purple-200 text-xs font-bold flex items-center gap-2.5 shadow-md shadow-purple-500/10">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50" />
+                <span>Cashfree Payments</span>
+                <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-extrabold uppercase tracking-wide">
+                  Developer Mode (Sandbox)
                 </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSelectedGateway('razorpay')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border ${
-                  selectedGateway === 'razorpay'
-                    ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/25'
-                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:bg-slate-750'
-                }`}
-              >
-                <span>Razorpay</span>
-              </button>
+                <span className="text-[11px] text-slate-400">
+                  • Official JS SDK v3
+                </span>
+              </div>
             </div>
 
             {/* Error Message if any */}
@@ -336,12 +300,12 @@ export default function UpgradeModal({
                   {isLoadingPlan === 'trial_2days' ? (
                     <span className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Connecting to {selectedGateway === 'cashfree' ? 'Cashfree' : 'Razorpay'}...
+                      Connecting to Cashfree Developer Sandbox...
                     </span>
                   ) : (
                     <>
                       <Zap className="w-4 h-4 text-amber-400 fill-current" />
-                      Pay ₹200 with {selectedGateway === 'cashfree' ? 'Cashfree' : 'Razorpay'}
+                      Pay ₹200 with Cashfree (Sandbox)
                     </>
                   )}
                 </button>
@@ -415,12 +379,12 @@ export default function UpgradeModal({
                   {isLoadingPlan === 'monthly' ? (
                     <span className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Connecting to {selectedGateway === 'cashfree' ? 'Cashfree' : 'Razorpay'}...
+                      Connecting to Cashfree Developer Sandbox...
                     </span>
                   ) : (
                     <>
                       <Zap className="w-4 h-4 fill-current" />
-                      Pay ₹999 with {selectedGateway === 'cashfree' ? 'Cashfree' : 'Razorpay'}
+                      Pay ₹999 with Cashfree (Sandbox)
                     </>
                   )}
                 </button>
@@ -485,12 +449,12 @@ export default function UpgradeModal({
                   {isLoadingPlan === 'yearly' ? (
                     <span className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Connecting to {selectedGateway === 'cashfree' ? 'Cashfree' : 'Razorpay'}...
+                      Connecting to Cashfree Developer Sandbox...
                     </span>
                   ) : (
                     <>
                       <Crown className="w-4 h-4" />
-                      Pay ₹9,590 with {selectedGateway === 'cashfree' ? 'Cashfree' : 'Razorpay'}
+                      Pay ₹9,590 with Cashfree (Sandbox)
                     </>
                   )}
                 </button>
@@ -509,7 +473,7 @@ export default function UpgradeModal({
                   UPI (GPay, PhonePe, Paytm), Cards, NetBanking, EMI
                 </span>
                 <span className="font-semibold text-slate-300 flex items-center gap-1">
-                  Supported by <span className="text-sky-400 font-bold">Cashfree</span> & <span className="text-blue-400 font-bold">Razorpay</span>
+                  Powered exclusively by <span className="text-sky-400 font-bold">Cashfree Payments Developer Mode</span>
                 </span>
               </div>
             </div>
