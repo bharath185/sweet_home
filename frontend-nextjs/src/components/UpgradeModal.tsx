@@ -65,8 +65,6 @@ export default function UpgradeModal({
     paymentMethod?: string;
   } | null>(null);
 
-  if (!isOpen) return null;
-
   const isActive = hasActiveSubscription(currentUser);
   const remainingText = getSubscriptionRemainingText(currentUser);
 
@@ -214,7 +212,9 @@ export default function UpgradeModal({
       isSubscribed = false;
       clearTimeout(timer);
     };
-  }, [activeSession, checkoutMode]);
+  }, [activeSession, checkoutMode, isOpen]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
