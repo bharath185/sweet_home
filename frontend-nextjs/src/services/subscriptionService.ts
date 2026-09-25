@@ -219,7 +219,8 @@ export function saveSubscriptionLocally(
   token: string,
   orderId?: string,
   durationDays: number = 30,
-  planId?: 'trial_2days' | 'monthly' | 'yearly'
+  planId?: 'trial_2days' | 'monthly' | 'yearly',
+  gateway: 'cashfree' | 'razorpay' = 'cashfree'
 ): User {
   const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
   const updated: User = {
@@ -228,8 +229,10 @@ export function saveSubscriptionLocally(
     subscriptionStatus: tier === 'TRIAL' ? 'trial' : 'active',
     subscriptionExpiresAt: expiresAt,
     subscriptionPlanId: planId,
-    razorpayPaymentId: paymentId,
-    razorpayOrderId: orderId,
+    paymentGateway: gateway,
+    cashfreeOrderId: gateway === 'cashfree' ? orderId : user.cashfreeOrderId,
+    razorpayPaymentId: gateway === 'razorpay' ? paymentId : user.razorpayPaymentId,
+    razorpayOrderId: gateway === 'razorpay' ? orderId : user.razorpayOrderId,
     subscriptionToken: token,
   };
 

@@ -13,6 +13,8 @@ export interface User {
   subscriptionStatus?: 'active' | 'inactive' | 'trial';
   subscriptionExpiresAt?: string;
   subscriptionPlanId?: 'trial_2days' | 'monthly' | 'yearly';
+  paymentGateway?: 'cashfree' | 'razorpay';
+  cashfreeOrderId?: string;
   razorpayPaymentId?: string;
   razorpayOrderId?: string;
   subscriptionToken?: string;
