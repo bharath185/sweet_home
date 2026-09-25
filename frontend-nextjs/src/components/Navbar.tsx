@@ -11,6 +11,7 @@ import {
   LogOut,
   ChevronRight,
   Crown,
+  CreditCard,
 } from 'lucide-react';
 import { HomePlan, UserRole, User } from '../types/plan';
 import { hasActiveSubscription, getSubscriptionRemainingText } from '../services/subscriptionService';
@@ -43,7 +44,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   onOpenUpgradeModal,
 }) => {
-  // Determine active state for each of the 4 requested tabs
+  // Determine active state for tabs
   const isDashboardActive =
     activeView === 'dashboard' &&
     (adminTab === 'dashboard' || adminTab === 'overview' || adminTab === 'floors' || !adminTab);
@@ -51,6 +52,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     activeView === 'split' || activeView === '2d' || activeView === '3d' || activeView === 'customer';
   const isCatalogActive = activeView === 'dashboard' && adminTab === 'catalog';
   const isUsersActive = activeView === 'dashboard' && adminTab === 'users';
+  const isPaymentsActive = activeView === 'dashboard' && adminTab === 'payments';
 
   return (
     <header className="h-14 bg-[#0a1224] border-b border-slate-800/90 px-4 sm:px-6 flex items-center justify-between select-none z-30 shadow-xl relative text-white">
@@ -154,6 +156,25 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Users className="w-3.5 h-3.5" />
           <span>Users & Roles</span>
         </button>
+
+        {/* Tab 5: Payments (STRICTLY ADMIN ONLY) */}
+        {(userRole === 'ADMIN' || currentUser?.role === 'ADMIN') && (
+          <button
+            onClick={() => {
+              setActiveView('dashboard');
+              if (setAdminTab) setAdminTab('payments');
+            }}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              isPaymentsActive
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+            title="Payments, Subscriptions & Revenue Dashboard (Admin Only)"
+          >
+            <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Payments</span>
+          </button>
+        )}
       </nav>
 
       {/* 3. Right Side: Cloud Sync & User Profile */}

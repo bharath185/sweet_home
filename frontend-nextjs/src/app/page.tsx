@@ -110,7 +110,7 @@ export default function HomeStudioPage() {
   const [isAuthLoaded, setIsAuthLoaded] = useState<boolean>(false);
 
   const [activeView, setActiveView] = useState<'split' | '2d' | '3d' | 'customer' | 'dashboard'>('dashboard');
-  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'catalog' | 'floors'>('overview');
+  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'catalog' | 'floors' | 'payments'>('overview');
   const [userRole, setUserRole] = useState<UserRole>('ADMIN');
   const [activeFloor, setActiveFloor] = useState<number>(0);
   const [floorMode, setFloorMode] = useState<'single' | 'sideBySide' | 'stacked'>('single');

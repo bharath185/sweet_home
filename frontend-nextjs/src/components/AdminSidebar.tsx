@@ -17,15 +17,16 @@ import {
   PinOff,
   PlusCircle,
   Activity,
-  LogOut
+  LogOut,
+  CreditCard
 } from 'lucide-react';
 import { UserRole } from '../types/plan';
 
 interface AdminSidebarProps {
   currentView: 'dashboard' | 'studio' | 'customer';
   setCurrentView: (view: 'dashboard' | 'studio' | 'customer') => void;
-  adminTab: 'overview' | 'users' | 'catalog' | 'floors';
-  setAdminTab: (tab: 'overview' | 'users' | 'catalog' | 'floors') => void;
+  adminTab: 'overview' | 'users' | 'catalog' | 'floors' | 'payments';
+  setAdminTab: (tab: 'overview' | 'users' | 'catalog' | 'floors' | 'payments') => void;
   userRole: UserRole;
   setUserRole: (role: UserRole) => void;
   onlineCount: number;
@@ -269,6 +270,22 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             >
               <Building className="w-4 h-4 shrink-0 text-sky-600" />
               {isExpanded && <span className="truncate">Floor Templates</span>}
+            </button>
+
+            <button
+              onClick={() => {
+                setCurrentView('dashboard');
+                setAdminTab('payments');
+              }}
+              className={`w-full flex items-center ${isExpanded ? 'gap-3 px-3' : 'justify-center px-0'} py-2.5 rounded-xl text-xs font-semibold transition ${
+                currentView === 'dashboard' && adminTab === 'payments'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
+              }`}
+              title="Payments, Subscriptions & Revenue Dashboard (Admin Only)"
+            >
+              <CreditCard className="w-4 h-4 shrink-0 text-emerald-600" />
+              {isExpanded && <span className="truncate">Payments & Revenue</span>}
             </button>
           </>
         )}

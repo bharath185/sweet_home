@@ -17,21 +17,23 @@ import {
   BarChart3,
   ChevronRight,
   Eye,
-  Pencil
+  Pencil,
+  CreditCard
 } from 'lucide-react';
 import { User, CatalogItem, FloorTemplate, HomePlan } from '../types/plan';
 import { ALL_CLIENT_PLANS } from '../services/api';
 import { CatalogThumbnail } from './CatalogThumbnail';
 import { Catalog3DPreviewModal } from './Catalog3DPreviewModal';
 import { EditCatalogItemModal } from './EditCatalogItemModal';
+import { AdminPaymentsView } from './AdminPaymentsView';
 
-export type DashboardMenuTab = 'dashboard' | 'projects' | 'users' | 'catalog' | 'floors';
+export type DashboardMenuTab = 'dashboard' | 'projects' | 'users' | 'catalog' | 'floors' | 'payments';
 
 interface AdminDashboardProps {
   users: User[];
   catalog: CatalogItem[];
   templates: FloorTemplate[];
-  adminTab: 'overview' | 'users' | 'catalog' | 'floors' | string;
+  adminTab: 'overview' | 'users' | 'catalog' | 'floors' | 'payments' | string;
   setAdminTab: (t: any) => void;
   onOpenStudioWithTemplate: (templateId: string) => void;
   onOpenClientPlan?: (planId: string) => void;
@@ -87,6 +89,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ? 'catalog'
       : adminTab === 'floors'
       ? 'floors'
+      : adminTab === 'payments'
+      ? 'payments'
       : 'dashboard';
 
   const [userSearch, setUserSearch] = useState('');
@@ -156,8 +160,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       <div className="flex-1 overflow-y-auto px-8 py-6 space-y-5 custom-scrollbar">
         {currentTab === 'dashboard' && (
           <>
-            {/* 4 Clean Metric Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* 4-5 Clean Metric Cards */}
+            <div className={`grid grid-cols-1 sm:grid-cols-2 ${currentUser?.role === 'ADMIN' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
               {/* Total Clients */}
               <div
                 onClick={() => setAdminTab('users')}
@@ -241,6 +245,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
                 <p className="mt-2 text-[11px] text-slate-400">Ground, Level 1 & Penthouse</p>
               </div>
+
+              {/* Payments & Revenue - STRICTLY ADMIN ONLY */}
+              {currentUser?.role === 'ADMIN' && (
+                <div
+                  onClick={() => setAdminTab('payments')}
+                  className="bg-[#0e1628] hover:bg-[#131f38] border border-slate-800/90 hover:border-emerald-500/40 rounded-2xl p-4 transition-all duration-200 cursor-pointer group shadow-sm"
+                >
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Payments & Passes</span>
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                      <CreditCard className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <div className="text-2xl font-black text-emerald-400">₹ INR</div>
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      Cashfree Live
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-400">
+                    <span className="text-emerald-400 font-semibold">Admin Ledger</span> & Subscriptions
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Middle Section: Clean Bar Chart & 3D Catalog Stats */}
@@ -774,6 +802,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               ))}
             </div>
           </div>
+        )}
+
+        {/* Sub-tab: Payments & Revenue (ADMIN ONLY) */}
+        {currentTab === 'payments' && (
+          <AdminPaymentsView currentUser={currentUser || null} />
         )}
       </div>
     </div>
