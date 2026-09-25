@@ -79,33 +79,11 @@ export async function initiateSubscriptionCheckout({
       throw new Error(orderData.error || 'Failed to initiate order on server');
     }
 
-    // 2. Handle Simulation Mode (when live Razorpay keys are not yet configured in production env)
-    if (orderData.isTestMode) {
-      const simulatedPaymentId = `pay_sim_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
-      
-      // Call verification endpoint
-      const verifyRes = await fetch('/api/razorpay/verify-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: orderData.orderId,
-          paymentId: simulatedPaymentId,
-          signature: 'simulated_signature_valid',
-          planId,
-          userId: user?.id,
-        }),
-      });
-
-      const verifyData = await verifyRes.json();
-      if (verifyData.success) {
-        onSuccess(verifyData);
-        return;
-      } else {
-        throw new Error(verifyData.error || 'Simulation verification failed');
-      }
+    if (!orderData.keyId) {
+      throw new Error('Razorpay Key ID is not configured. Please add NEXT_PUBLIC_RAZORPAY_KEY_ID in Vercel.');
     }
 
-    // 3. Live Razorpay Modal Flow
+    // 2. Official Razorpay Modal Flow via Checkout v1
     const scriptLoaded = await loadRazorpayScript();
     if (!scriptLoaded) {
       throw new Error('Could not load Razorpay payment gateway. Please check your internet connection.');

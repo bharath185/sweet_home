@@ -32,68 +32,72 @@ export async function POST(req: NextRequest) {
     const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
-    // Determine if live Razorpay keys are configured
-    const hasLiveKeys = keyId && keySecret && !keyId.includes('YourRazorpay') && !keySecret.includes('YourRazorpay');
-
-    if (hasLiveKeys) {
-      try {
-        // Use Razorpay REST API directly with Basic Auth
-        const authHeader = 'Basic ' + Buffer.from(`${keyId}:${keySecret}`).toString('base64');
-        const rzpRes = await fetch('https://api.razorpay.com/v1/orders', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: authHeader,
-          },
-          body: JSON.stringify({
-            amount: amountInPaise,
-            currency,
-            receipt,
-            notes: {
-              planId,
-              tier: planConfig.tier,
-              userId: userId || 'anonymous',
-              userEmail: userEmail || '',
-              userName: userName || '',
-              platform: 'SweetHome 3D Studio',
-            },
-          }),
-        });
-
-        if (rzpRes.ok) {
-          const order = await rzpRes.json();
-          return NextResponse.json({
-            success: true,
-            orderId: order.id,
-            amount: order.amount,
-            currency: order.currency,
-            keyId,
-            planName: planConfig.name,
-            tier: planConfig.tier,
-            isTestMode: false,
-          });
-        } else {
-          const errData = await rzpRes.json();
-          console.warn('Razorpay API error, falling back to secure sandbox:', errData);
-        }
-      } catch (apiErr) {
-        console.warn('Razorpay fetch error:', apiErr);
-      }
+    // 1. Live Razorpay API Order Creation
+    if (!keyId || !keySecret || keyId.includes('YourRazorpay')) {
+      return NextResponse.json(
+        {
+          error: 'Razorpay API credentials (NEXT_PUBLIC_RAZORPAY_KEY_ID & RAZORPAY_KEY_SECRET) are not configured on Vercel. Please provide your Razorpay keys to enable live Razorpay checkout.',
+          code: 'MISSING_RAZORPAY_KEYS',
+        },
+        { status: 400 }
+      );
     }
 
-    // Secure Sandbox / Simulation fallback (if live Razorpay credentials are still being setup)
-    const testOrderId = `order_sim_${crypto.randomBytes(8).toString('hex')}`;
-    return NextResponse.json({
-      success: true,
-      orderId: testOrderId,
-      amount: amountInPaise,
-      currency,
-      keyId: keyId || 'rzp_test_51Ru7jLBBymQ8D',
-      planName: planConfig.name,
-      tier: planConfig.tier,
-      isTestMode: true,
-      notice: 'Running in Razorpay Sandbox / Demo mode. Add RAZORPAY_KEY_SECRET to go live.',
-    });
+    try {
+      // Use Razorpay REST API directly with Basic Auth
+      const authHeader = 'Basic ' + Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+      const rzpRes = await fetch('https://api.razorpay.com/v1/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: authHeader,
+        },
+        body: JSON.stringify({
+          amount: amountInPaise,
+          currency,
+          receipt,
+          notes: {
+            planId,
+            tier: planConfig.tier,
+            userId: userId || 'anonymous',
+            userEmail: userEmail || '',
+            userName: userName || '',
+            platform: 'SweetHome 3D Studio',
+          },
+        }),
+      });
+
+      const data = await rzpRes.json();
+
+      if (rzpRes.ok && data.id) {
+        return NextResponse.json({
+          success: true,
+          orderId: data.id,
+          amount: data.amount,
+          currency: data.currency,
+          keyId,
+          planName: planConfig.name,
+          tier: planConfig.tier,
+          isTestMode: false,
+        });
+      } else {
+        return NextResponse.json(
+          {
+            error: data.error?.description || 'Razorpay rejected order generation. Please verify your Razorpay Key ID and Secret.',
+            code: data.error?.code || 'RAZORPAY_ERROR',
+          },
+          { status: 400 }
+        );
+      }
+    } catch (apiErr: any) {
+      return NextResponse.json(
+        {
+          error: `Error connecting to Razorpay API: ${apiErr.message}`,
+          code: 'RAZORPAY_CONNECTION_ERROR',
+        },
+        { status: 502 }
+      );
+    }
   } catch (error: any) {
     console.error('Error creating Razorpay order:', error);
     return NextResponse.json(

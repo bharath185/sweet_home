@@ -80,28 +80,11 @@ export async function initiateCashfreeCheckout({
       throw new Error(orderData.error || 'Failed to create Cashfree payment order on server');
     }
 
-    // 2. Handle Simulation Mode (for sandbox testing before live keys are configured)
-    if (orderData.isTestMode) {
-      const verifyRes = await fetch('/api/cashfree/verify-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: orderData.orderId,
-          planId,
-          userId: user?.id,
-        }),
-      });
-
-      const verifyData = await verifyRes.json();
-      if (verifyData.success) {
-        onSuccess(verifyData);
-        return;
-      } else {
-        throw new Error(verifyData.error || 'Cashfree sandbox verification failed');
-      }
+    if (!orderData.paymentSessionId) {
+      throw new Error('Cashfree did not return a valid payment session ID. Please verify your Cashfree merchant credentials.');
     }
 
-    // 3. Live Cashfree Modal Flow via JS SDK v3
+    // 2. Official Cashfree Modal Flow via JS SDK v3
     const scriptLoaded = await loadCashfreeScript();
     if (!scriptLoaded || typeof window.Cashfree !== 'function') {
       throw new Error('Could not load Cashfree payment SDK. Please verify your network connection.');

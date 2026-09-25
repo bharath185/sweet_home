@@ -56,74 +56,77 @@ export async function POST(req: NextRequest) {
         : 'https://sandbox.cashfree.com/pg/orders';
 
     // 1. Live Cashfree API Order Creation
-    if (isLiveConfigured) {
-      try {
-        const cfRes = await fetch(baseUrl, {
-          method: 'POST',
-          headers: {
-            'x-client-id': appId,
-            'x-client-secret': secretKey,
-            'x-api-version': '2023-08-01',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            order_id: cleanOrderId,
-            order_amount: orderAmount,
-            order_currency: orderCurrency,
-            customer_details: {
-              customer_id: customerId,
-              customer_email: customerEmail,
-              customer_phone: customerPhone,
-              customer_name: customerName,
-            },
-            order_meta: {
-              return_url: 'https://3dstudio.prigenix.com?cf_order_id={order_id}',
-              payment_methods: 'upi,cc,dc,nb,app',
-            },
-            order_note: `${planConfig.name} - SweetHome 3D Studio`,
-          }),
-        });
-
-        const data = await cfRes.json();
-
-        if (cfRes.ok && data.payment_session_id) {
-          return NextResponse.json({
-            success: true,
-            orderId: data.order_id || cleanOrderId,
-            cfOrderId: data.cf_order_id,
-            paymentSessionId: data.payment_session_id,
-            amount: orderAmount,
-            currency: orderCurrency,
-            planName: planConfig.name,
-            tier: planConfig.tier,
-            durationDays: planConfig.durationDays,
-            environment: env,
-            isTestMode: false,
-          });
-        } else {
-          console.warn('Cashfree API error response, falling back to sandbox simulation:', data);
-        }
-      } catch (apiErr) {
-        console.warn('Cashfree API fetch error:', apiErr);
-      }
+    if (!appId || !secretKey || appId.includes('your_cashfree')) {
+      return NextResponse.json(
+        {
+          error: 'Cashfree API keys are not configured on Vercel. Please provide CASHFREE_APP_ID and CASHFREE_SECRET_KEY to enable live Cashfree payments.',
+          code: 'MISSING_CASHFREE_KEYS',
+        },
+        { status: 400 }
+      );
     }
 
-    // 2. Sandbox / Instant Simulation Mode (for testing without live merchant keys)
-    const simulatedSessionId = `session_cf_sim_${crypto.randomBytes(12).toString('hex')}`;
-    return NextResponse.json({
-      success: true,
-      orderId: cleanOrderId,
-      cfOrderId: `cf_order_${Date.now()}`,
-      paymentSessionId: simulatedSessionId,
-      amount: orderAmount,
-      currency: orderCurrency,
-      planName: planConfig.name,
-      tier: planConfig.tier,
-      durationDays: planConfig.durationDays,
-      environment: env,
-      isTestMode: true,
-      notice: 'Running in Cashfree Sandbox/Demo mode. Add CASHFREE_SECRET_KEY to go live.',
-    });
+    try {
+      const cfRes = await fetch(baseUrl, {
+        method: 'POST',
+        headers: {
+          'x-client-id': appId,
+          'x-client-secret': secretKey,
+          'x-api-version': '2023-08-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          order_id: cleanOrderId,
+          order_amount: orderAmount,
+          order_currency: orderCurrency,
+          customer_details: {
+            customer_id: customerId,
+            customer_email: customerEmail,
+            customer_phone: customerPhone,
+            customer_name: customerName,
+          },
+          order_meta: {
+            return_url: 'https://3dstudio.prigenix.com?cf_order_id={order_id}',
+            payment_methods: 'upi,cc,dc,nb,app',
+          },
+          order_note: `${planConfig.name} - SweetHome 3D Studio`,
+        }),
+      });
+
+      const data = await cfRes.json();
+
+      if (cfRes.ok && data.payment_session_id) {
+        return NextResponse.json({
+          success: true,
+          orderId: data.order_id || cleanOrderId,
+          cfOrderId: data.cf_order_id,
+          paymentSessionId: data.payment_session_id,
+          amount: orderAmount,
+          currency: orderCurrency,
+          planName: planConfig.name,
+          tier: planConfig.tier,
+          durationDays: planConfig.durationDays,
+          environment: env,
+          isTestMode: false,
+        });
+      } else {
+        return NextResponse.json(
+          {
+            error: data.message || 'Cashfree payment gateway rejected order creation. Please check your App ID, Secret Key, and Environment (Sandbox vs Production).',
+            code: data.code || 'CASHFREE_ERROR',
+          },
+          { status: 400 }
+        );
+      }
+    } catch (apiErr: any) {
+      return NextResponse.json(
+        {
+          error: `Error connecting to Cashfree API: ${apiErr.message}`,
+          code: 'CASHFREE_CONNECTION_ERROR',
+        },
+        { status: 502 }
+      );
+    }
   } catch (error: any) {
     console.error('Error creating Cashfree order:', error);
     return NextResponse.json(
