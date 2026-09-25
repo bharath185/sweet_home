@@ -536,7 +536,16 @@ export default function HomeStudioPage() {
   }
 
   if (!currentUser) {
-    return <LoginPage onLogin={handleLoginSuccess} availableUsers={users} />;
+    return (
+      <LoginPage
+        onLogin={handleLoginSuccess}
+        availableUsers={users}
+        onSignUp={(newUser) => {
+          setUsers((prev) => [newUser, ...prev]);
+          handleLoginSuccess(newUser);
+        }}
+      />
+    );
   }
 
   const isDark = theme === 'dark';
