@@ -142,70 +142,72 @@ export default function UpgradeModal({
 
   // Mount Cashfree into the embedded DOM container whenever activeSession is set
   useEffect(() => {
-    if (!activeSession || checkoutMode !== 'embedded') return;
+    if (!activeSession || checkoutMode !== 'embedded' || !isOpen) return;
 
     let isSubscribed = true;
     setIsMounting(true);
 
-    const timer = setTimeout(async () => {
+    const timer = setTimeout(() => {
       const container = document.getElementById('cashfree-embedded-frame');
       if (!container || !isSubscribed) return;
 
-      try {
-        await mountCashfreeCheckout({
-          paymentSessionId: activeSession.paymentSessionId,
-          orderId: activeSession.orderId,
-          planId: activeSession.planName.toLowerCase().includes('trial')
-            ? 'trial_2days'
-            : activeSession.planName.toLowerCase().includes('annual')
-            ? 'yearly'
-            : 'monthly',
-          user: currentUser,
-          redirectTarget: container,
-          environment: activeSession.environment,
-          onSuccess: (result) => {
-            if (!isSubscribed) return;
-            setActiveSession(null);
-            triggerConfetti();
-            if (currentUser) {
-              const updated = saveSubscriptionLocally(
-                currentUser,
-                result.tier,
-                result.paymentId,
-                result.subscriptionToken,
-                result.orderId,
-                result.durationDays || activeSession.durationDays,
-                (activeSession.planName.toLowerCase().includes('trial')
-                  ? 'trial_2days'
-                  : activeSession.planName.toLowerCase().includes('annual')
-                  ? 'yearly'
-                  : 'monthly') as any,
-                'cashfree'
-              );
-              if (onUserUpdated) onUserUpdated(updated);
-            }
-            setSuccessInfo({
-              tier: result.tier,
-              planName: activeSession.planName,
-              durationDays: result.durationDays || activeSession.durationDays,
-              paymentId: result.paymentId,
-              gateway: 'cashfree',
-            });
-          },
-          onError: (errMsg) => {
-            if (isSubscribed) setErrorMessage(errMsg);
-          },
-          onDismiss: () => {
-            // Dismissed
-          },
-        });
-      } catch (err: any) {
+      // Mount checkout into target container
+      mountCashfreeCheckout({
+        paymentSessionId: activeSession.paymentSessionId,
+        orderId: activeSession.orderId,
+        planId: activeSession.planName.toLowerCase().includes('trial')
+          ? 'trial_2days'
+          : activeSession.planName.toLowerCase().includes('annual')
+          ? 'yearly'
+          : 'monthly',
+        user: currentUser,
+        redirectTarget: container,
+        environment: activeSession.environment,
+        onSuccess: (result) => {
+          if (!isSubscribed) return;
+          setActiveSession(null);
+          triggerConfetti();
+          if (currentUser) {
+            const updated = saveSubscriptionLocally(
+              currentUser,
+              result.tier,
+              result.paymentId,
+              result.subscriptionToken,
+              result.orderId,
+              result.durationDays || activeSession.durationDays,
+              (activeSession.planName.toLowerCase().includes('trial')
+                ? 'trial_2days'
+                : activeSession.planName.toLowerCase().includes('annual')
+                ? 'yearly'
+                : 'monthly') as any,
+              'cashfree'
+            );
+            if (onUserUpdated) onUserUpdated(updated);
+          }
+          setSuccessInfo({
+            tier: result.tier,
+            planName: activeSession.planName,
+            durationDays: result.durationDays || activeSession.durationDays,
+            paymentId: result.paymentId,
+            gateway: 'cashfree',
+          });
+        },
+        onError: (errMsg) => {
+          if (isSubscribed) setErrorMessage(errMsg);
+        },
+        onDismiss: () => {
+          // Dismissed
+        },
+      }).catch((err: any) => {
         if (isSubscribed) {
           setErrorMessage(err.message || 'Error embedding Cashfree checkout frame');
         }
-      } finally {
+      });
+
+      // Dismiss loading overlay as soon as iframe begins loading
+      setTimeout(() => {
         if (isSubscribed) setIsMounting(false);
-      }
+      }, 700);
     }, 150);
 
     return () => {
@@ -288,7 +290,7 @@ export default function UpgradeModal({
         ) : activeSession ? (
           /* EMBEDDED CASHFREE CHECKOUT VIEW */
           <div className="p-6 sm:p-8 flex flex-col gap-6">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4 pr-12">
               <button
                 onClick={() => setActiveSession(null)}
                 className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1.5 font-semibold transition-colors cursor-pointer"
@@ -385,7 +387,7 @@ export default function UpgradeModal({
                 </div>
 
                 {isMounting && (
-                  <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3">
+                  <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3 pointer-events-none transition-opacity duration-300">
                     <div className="w-8 h-8 border-3 border-sky-400/30 border-t-sky-400 rounded-full animate-spin" />
                     <span className="text-xs text-slate-300">Rendering Cashfree payment interface...</span>
                   </div>
@@ -394,7 +396,7 @@ export default function UpgradeModal({
                 {/* Target DOM Element for Cashfree SDK */}
                 <div
                   id="cashfree-embedded-frame"
-                  className="w-full flex-1 min-h-[520px] bg-slate-950 flex flex-col"
+                  className="w-full flex-1 min-h-[560px] bg-slate-950 flex flex-col items-center justify-center overflow-hidden"
                 />
               </div>
             </div>
