@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   X,
   Check,
@@ -17,8 +17,6 @@ import {
   Clock,
   Calendar,
   CheckCircle2,
-  ArrowLeft,
-  ExternalLink,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { User } from '../types/plan';
@@ -29,11 +27,7 @@ import {
   hasActiveSubscription,
   getSubscriptionRemainingText,
 } from '../services/subscriptionService';
-import {
-  createCashfreeOrder,
-  mountCashfreeCheckout,
-  CreateCashfreeOrderResult,
-} from '../services/cashfreeClient';
+import { initiateCashfreeCheckout } from '../services/cashfreeClient';
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -52,9 +46,6 @@ export default function UpgradeModal({
 }: UpgradeModalProps) {
   const [isLoadingPlan, setIsLoadingPlan] = useState<PlanId | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [activeSession, setActiveSession] = useState<CreateCashfreeOrderResult | null>(null);
-  const [isMounting, setIsMounting] = useState(false);
-  const [checkoutMode, setCheckoutMode] = useState<'embedded' | 'modal'>('embedded');
 
   const [successInfo, setSuccessInfo] = useState<{
     tier: string;
@@ -64,6 +55,8 @@ export default function UpgradeModal({
     gateway: 'cashfree';
     paymentMethod?: string;
   } | null>(null);
+
+  if (!isOpen) return null;
 
   const isActive = hasActiveSubscription(currentUser);
   const remainingText = getSubscriptionRemainingText(currentUser);
@@ -88,85 +81,14 @@ export default function UpgradeModal({
     const durationDays = planConfig?.durationDays || (planId === 'trial_2days' ? 2 : planId === 'yearly' ? 365 : 30);
 
     try {
-      const orderData = await createCashfreeOrder(planId, currentUser);
-      setIsLoadingPlan(null);
-
-      if (checkoutMode === 'modal') {
-        // Direct modal checkout
-        await mountCashfreeCheckout({
-          paymentSessionId: orderData.paymentSessionId,
-          orderId: orderData.orderId,
-          planId,
-          user: currentUser,
-          redirectTarget: '_modal',
-          environment: orderData.environment,
-          onSuccess: (result) => {
-            triggerConfetti();
-            if (currentUser) {
-              const updated = saveSubscriptionLocally(
-                currentUser,
-                result.tier,
-                result.paymentId,
-                result.subscriptionToken,
-                result.orderId,
-                result.durationDays || durationDays,
-                planId as any,
-                'cashfree'
-              );
-              if (onUserUpdated) onUserUpdated(updated);
-            }
-            setSuccessInfo({
-              tier: result.tier,
-              planName: planConfig?.name || 'Studio Access Pass',
-              durationDays: result.durationDays || durationDays,
-              paymentId: result.paymentId,
-              gateway: 'cashfree',
-            });
-          },
-          onError: (errMsg) => {
-            setErrorMessage(errMsg);
-          },
-          onDismiss: () => {
-            setIsLoadingPlan(null);
-          },
-        });
-      } else {
-        // Transition into embedded view
-        setActiveSession(orderData);
-      }
-    } catch (err: any) {
-      setIsLoadingPlan(null);
-      setErrorMessage(err.message || 'Failed to initialize Cashfree payment order.');
-    }
-  };
-
-  // Mount Cashfree into the embedded DOM container whenever activeSession is set
-  useEffect(() => {
-    if (!activeSession || checkoutMode !== 'embedded' || !isOpen) return;
-
-    let isSubscribed = true;
-    setIsMounting(true);
-
-    const timer = setTimeout(() => {
-      const container = document.getElementById('cashfree-embedded-frame');
-      if (!container || !isSubscribed) return;
-
-      // Mount checkout into target container
-      mountCashfreeCheckout({
-        paymentSessionId: activeSession.paymentSessionId,
-        orderId: activeSession.orderId,
-        planId: activeSession.planName.toLowerCase().includes('trial')
-          ? 'trial_2days'
-          : activeSession.planName.toLowerCase().includes('annual')
-          ? 'yearly'
-          : 'monthly',
+      await initiateCashfreeCheckout({
+        planId,
         user: currentUser,
-        redirectTarget: container,
-        environment: activeSession.environment,
+        redirectTarget: '_modal',
         onSuccess: (result) => {
-          if (!isSubscribed) return;
-          setActiveSession(null);
+          setIsLoadingPlan(null);
           triggerConfetti();
+
           if (currentUser) {
             const updated = saveSubscriptionLocally(
               currentUser,
@@ -174,59 +96,43 @@ export default function UpgradeModal({
               result.paymentId,
               result.subscriptionToken,
               result.orderId,
-              result.durationDays || activeSession.durationDays,
-              (activeSession.planName.toLowerCase().includes('trial')
-                ? 'trial_2days'
-                : activeSession.planName.toLowerCase().includes('annual')
-                ? 'yearly'
-                : 'monthly') as any,
+              result.durationDays || durationDays,
+              planId as any,
               'cashfree'
             );
-            if (onUserUpdated) onUserUpdated(updated);
+            if (onUserUpdated) {
+              onUserUpdated(updated);
+            }
           }
+
           setSuccessInfo({
             tier: result.tier,
-            planName: activeSession.planName,
-            durationDays: result.durationDays || activeSession.durationDays,
+            planName: planConfig?.name || 'Studio Access Pass',
+            durationDays: result.durationDays || durationDays,
             paymentId: result.paymentId,
             gateway: 'cashfree',
           });
         },
         onError: (errMsg) => {
-          if (isSubscribed) setErrorMessage(errMsg);
+          setIsLoadingPlan(null);
+          setErrorMessage(errMsg);
         },
         onDismiss: () => {
-          // Dismissed
+          setIsLoadingPlan(null);
         },
-      }).catch((err: any) => {
-        if (isSubscribed) {
-          setErrorMessage(err.message || 'Error embedding Cashfree checkout frame');
-        }
       });
-
-      // Dismiss loading overlay as soon as iframe begins loading
-      setTimeout(() => {
-        if (isSubscribed) setIsMounting(false);
-      }, 700);
-    }, 150);
-
-    return () => {
-      isSubscribed = false;
-      clearTimeout(timer);
-    };
-  }, [activeSession, checkoutMode, isOpen]);
-
-  if (!isOpen) return null;
+    } catch (err: any) {
+      setIsLoadingPlan(null);
+      setErrorMessage(err.message || 'Failed to initialize Cashfree payment.');
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
       <div className="relative w-full max-w-5xl max-h-[94vh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl text-slate-100 flex flex-col">
         {/* Close Button */}
         <button
-          onClick={() => {
-            setActiveSession(null);
-            onClose();
-          }}
+          onClick={onClose}
           className="absolute top-4 right-4 z-10 p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-full transition-colors cursor-pointer"
           aria-label="Close pass modal"
         >
@@ -287,120 +193,6 @@ export default function UpgradeModal({
               Continue Designing in 3D Studio
             </button>
           </div>
-        ) : activeSession ? (
-          /* EMBEDDED CASHFREE CHECKOUT VIEW */
-          <div className="p-6 sm:p-8 flex flex-col gap-6">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4 pr-12">
-              <button
-                onClick={() => setActiveSession(null)}
-                className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1.5 font-semibold transition-colors cursor-pointer"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to All Plans
-              </button>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50" />
-                <span className="text-xs text-slate-300 font-medium">Cashfree Developer Mode (Sandbox)</span>
-              </div>
-            </div>
-
-            {/* Error Message if any during checkout */}
-            {errorMessage && (
-              <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center gap-3 text-rose-300 text-sm">
-                <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                <span>{errorMessage}</span>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              {/* Left Column: Order Summary & Inclusions */}
-              <div className="lg:col-span-5 bg-slate-800/60 border border-slate-700/80 rounded-2xl p-6 flex flex-col justify-between">
-                <div>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-sky-500/10 border border-sky-500/30 rounded-lg text-sky-400 text-xs font-semibold uppercase tracking-wider mb-4">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Selected Studio Pass
-                  </div>
-
-                  <h3 className="text-2xl font-bold text-white mb-2">
-                    {activeSession.planName}
-                  </h3>
-
-                  <div className="flex items-baseline gap-2 mb-4">
-                    <span className="text-4xl font-extrabold text-white">
-                      ₹{activeSession.amount.toLocaleString('en-IN')}
-                    </span>
-                    <span className="text-slate-400 text-sm">
-                      / {activeSession.durationDays} Days Pass
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-slate-300 leading-relaxed mb-6">
-                    Complete your payment with UPI (Google Pay, PhonePe, Paytm), Cards, or NetBanking to activate your unrestricted access immediately.
-                  </p>
-
-                  <div className="space-y-3 pt-4 border-t border-slate-700/70 text-xs text-slate-300">
-                    <div className="flex items-start gap-2.5">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Unlimited Multi-Floor Architecture & Levels</span>
-                    </div>
-                    <div className="flex items-start gap-2.5">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>4K Ultra Raytracing Snapshots</span>
-                    </div>
-                    <div className="flex items-start gap-2.5">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Client Bill of Materials (BOM) & Quotes in INR</span>
-                    </div>
-                    <div className="flex items-start gap-2.5">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Custom 3D Model Uploads (.OBJ / .GLTF)</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-8 pt-4 border-t border-slate-700/70 space-y-2 text-[11px] text-slate-400 font-mono">
-                  <div className="flex justify-between">
-                    <span>Order Reference:</span>
-                    <span className="text-slate-200">{activeSession.orderId}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Environment:</span>
-                    <span className="text-amber-400 font-semibold">{activeSession.environment}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Security:</span>
-                    <span className="text-emerald-400">HMAC-SHA256 Signed</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column: Embedded Cashfree Component Frame */}
-              <div className="lg:col-span-7 flex flex-col bg-slate-950/80 border border-slate-700/80 rounded-2xl overflow-hidden shadow-2xl relative min-h-[580px]">
-                <div className="px-5 py-3.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
-                    <CreditCard className="w-4 h-4 text-sky-400" />
-                    <span>Cashfree Embedded Payment Frame</span>
-                  </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-semibold uppercase tracking-wider">
-                    Official JS SDK v3
-                  </span>
-                </div>
-
-                {isMounting && (
-                  <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3 pointer-events-none transition-opacity duration-300">
-                    <div className="w-8 h-8 border-3 border-sky-400/30 border-t-sky-400 rounded-full animate-spin" />
-                    <span className="text-xs text-slate-300">Rendering Cashfree payment interface...</span>
-                  </div>
-                )}
-
-                {/* Target DOM Element for Cashfree SDK */}
-                <div
-                  id="cashfree-embedded-frame"
-                  className="w-full flex-1 min-h-[560px] bg-slate-950 flex flex-col items-center justify-center overflow-hidden"
-                />
-              </div>
-            </div>
-          </div>
         ) : (
           /* PASS PRICING VIEW */
           <div className="p-6 sm:p-8">
@@ -432,8 +224,8 @@ export default function UpgradeModal({
               )}
             </div>
 
-            {/* Exclusive Payment Gateway Badge & Mode Toggle */}
-            <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
+            {/* Exclusive Payment Gateway Badge: Cashfree Developer Mode */}
+            <div className="flex items-center justify-center gap-2 mb-8">
               <div className="px-4 py-2 rounded-2xl bg-[#0f172a] border border-purple-500/40 text-purple-200 text-xs font-bold flex items-center gap-2.5 shadow-md shadow-purple-500/10">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50" />
                 <span>Cashfree Payments</span>
@@ -443,32 +235,6 @@ export default function UpgradeModal({
                 <span className="text-[11px] text-slate-400">
                   • Official JS SDK v3
                 </span>
-              </div>
-
-              {/* Mode Selector */}
-              <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/80 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setCheckoutMode('embedded')}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
-                    checkoutMode === 'embedded'
-                      ? 'bg-sky-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Custom Embedded UI
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCheckoutMode('modal')}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
-                    checkoutMode === 'modal'
-                      ? 'bg-sky-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Popup Modal
-                </button>
               </div>
             </div>
 
@@ -500,23 +266,23 @@ export default function UpgradeModal({
                       <span className="text-4xl font-extrabold text-white">₹200</span>
                       <span className="text-slate-400 text-xs">/ 2 days (48 Hours)</span>
                     </div>
-                    <div className="text-[11px] text-slate-400 mt-1">
-                      Full access to try and complete quick designs
+                    <div className="text-[11px] text-amber-400/90 mt-1 font-medium">
+                      One-time payment • No auto-recurring charges
                     </div>
                   </div>
 
                   <p className="text-xs text-slate-300 mb-6">
-                    Perfect for completing a single floor plan, generating high-res renders, or trying the full platform.
+                    Perfect for a quick walkthrough, exploring all features, or rapid project creation.
                   </p>
 
                   <div className="space-y-3 mb-6">
                     <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span><strong>48 Hours (2 Days)</strong> Full Access</span>
+                      <span><strong>48 Hours Full Access</strong> to all features</span>
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Unlimited Multi-Floor Architecture</span>
+                      <span>Multi-Floor Architecture (Ground, 1st, 2nd)</span>
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
