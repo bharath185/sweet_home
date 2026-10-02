@@ -128,10 +128,10 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
 
             <button
               onClick={onLogout}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-500/10 hover:text-rose-400 text-xs font-medium text-slate-400 transition-colors border border-slate-700/60"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-rose-500/20 text-indigo-300 hover:text-rose-300 text-xs font-semibold transition-colors border border-indigo-500/30"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span>Sign Out</span>
+              <span>Sign Out / Switch Account</span>
             </button>
           </div>
         </div>

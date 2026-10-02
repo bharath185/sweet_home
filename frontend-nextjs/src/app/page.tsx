@@ -206,9 +206,14 @@ export default function HomeStudioPage() {
   const [returnVerificationMsg, setReturnVerificationMsg] = useState<string>('');
   const [isRefreshingStatus, setIsRefreshingStatus] = useState<boolean>(false);
 
-  // Sync user status with server-side payment store
+  const currentUserRef = useRef<User | null>(currentUser);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  // Sync user status with server-side payment store (stable callback, no infinite loops)
   const refreshUserPaymentStatus = useCallback(async (userToSync?: User | null) => {
-    const targetUser = userToSync || currentUser;
+    const targetUser = userToSync || currentUserRef.current;
     if (!targetUser) return;
     setIsRefreshingStatus(true);
     try {
@@ -238,7 +243,7 @@ export default function HomeStudioPage() {
     } finally {
       setIsRefreshingStatus(false);
     }
-  }, [currentUser]);
+  }, []);
 
   const userSubTier = getUserSubscriptionTier(currentUser);
   const hasPass = hasActiveSubscription(currentUser);
@@ -434,7 +439,7 @@ export default function HomeStudioPage() {
     };
 
     initData();
-  }, [refreshUserPaymentStatus]);
+  }, []);
 
   const collisionReport = useMemo(() => {
     return detectCollisions(plan.furniture, plan.walls, activeFloor);
