@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getTransactions, recordTransaction } from '@/lib/paymentStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -123,20 +124,21 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 2. Compute Aggregations
-    const totalRevenue = INITIAL_TRANSACTIONS.reduce((acc, tx) => acc + tx.amount, 0);
-    const cashfreeRevenue = INITIAL_TRANSACTIONS.filter((tx) => tx.gateway === 'cashfree').reduce(
+    // 2. Compute Aggregations from unified transaction ledger
+    const allTransactions = getTransactions();
+    const totalRevenue = allTransactions.reduce((acc, tx) => acc + tx.amount, 0);
+    const cashfreeRevenue = allTransactions.filter((tx) => tx.gateway === 'cashfree').reduce(
       (acc, tx) => acc + tx.amount,
       0
     );
-    const razorpayRevenue = INITIAL_TRANSACTIONS.filter((tx) => tx.gateway === 'razorpay').reduce(
+    const razorpayRevenue = allTransactions.filter((tx) => tx.gateway === 'razorpay').reduce(
       (acc, tx) => acc + tx.amount,
       0
     );
 
-    const trialCount = INITIAL_TRANSACTIONS.filter((tx) => tx.planId === 'trial_2days').length;
-    const monthlyCount = INITIAL_TRANSACTIONS.filter((tx) => tx.planId === 'monthly').length;
-    const yearlyCount = INITIAL_TRANSACTIONS.filter((tx) => tx.planId === 'yearly').length;
+    const trialCount = allTransactions.filter((tx) => tx.planId === 'trial_2days').length;
+    const monthlyCount = allTransactions.filter((tx) => tx.planId === 'monthly').length;
+    const yearlyCount = allTransactions.filter((tx) => tx.planId === 'yearly').length;
 
     const cfAppId = process.env.CASHFREE_APP_ID || process.env.NEXT_PUBLIC_CASHFREE_APP_ID;
     const cfEnv = process.env.CASHFREE_ENVIRONMENT || 'SANDBOX';
@@ -148,7 +150,7 @@ export async function GET(req: NextRequest) {
         totalRevenueINR: totalRevenue,
         cashfreeRevenueINR: cashfreeRevenue,
         razorpayRevenueINR: razorpayRevenue,
-        activePassesCount: INITIAL_TRANSACTIONS.length,
+        activePassesCount: allTransactions.length,
         breakdown: {
           trial: trialCount,
           monthly: monthlyCount,
@@ -177,7 +179,7 @@ export async function GET(req: NextRequest) {
         serverPriceProtection: 'Active (Tamper-Proof)',
         adminOnlyAccess: true,
       },
-      transactions: INITIAL_TRANSACTIONS,
+      transactions: allTransactions,
     });
   } catch (error: any) {
     console.error('Error fetching admin payments:', error);
@@ -190,15 +192,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const tx: PaymentTransaction = await req.json();
+    const tx = await req.json();
     if (tx && tx.orderId) {
-      // Check if duplicate
-      const exists = INITIAL_TRANSACTIONS.some((t) => t.orderId === tx.orderId);
-      if (!exists) {
-        INITIAL_TRANSACTIONS.unshift(tx);
-      }
+      recordTransaction(tx);
     }
-    return NextResponse.json({ success: true, count: INITIAL_TRANSACTIONS.length });
+    return NextResponse.json({ success: true, count: getTransactions().length });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Error recording transaction' }, { status: 500 });
   }

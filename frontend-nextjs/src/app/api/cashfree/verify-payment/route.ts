@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { setUserPaymentStatus, recordTransaction } from '@/lib/paymentStore';
 
 const SERVER_PLAN_CONFIG: Record<
   string,
@@ -93,16 +94,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Server-Side Verification: Ensure order amount matches configured plan price
+    const orderAmount = Math.round(Number(orderData.order_amount));
+    const expectedAmount = Math.round(Number(planConfig.priceINR));
+    if (orderAmount !== expectedAmount) {
+      return NextResponse.json(
+        {
+          error: `Order amount mismatch: Received ₹${orderAmount}, but expected ₹${expectedAmount} for ${planConfig.name}.`,
+          code: 'AMOUNT_MISMATCH',
+        },
+        { status: 400 }
+      );
+    }
+
     // 2. Generate Cryptographically Signed Subscription Token with precise duration
     const durationDays = planConfig.durationDays;
     const expiresAt = Date.now() + durationDays * 24 * 60 * 60 * 1000;
+    const paymentId = `cf_pay_${Date.now()}`;
+    const effectiveUserId = userId || orderData.customer_details?.customer_id || 'anonymous';
+    const customerEmail = orderData.customer_details?.customer_email;
+    const customerName = orderData.customer_details?.customer_name;
+
     const tokenPayload = {
-      userId: userId || 'anonymous',
+      userId: effectiveUserId,
+      email: customerEmail,
       gateway: 'cashfree',
       tier: planConfig.tier,
       planId,
       durationDays,
-      paymentId: `cf_pay_${Date.now()}`,
+      paymentId,
       orderId,
       issuedAt: Date.now(),
       expiresAt,
@@ -110,16 +130,52 @@ export async function POST(req: NextRequest) {
 
     const subscriptionToken = generateSubscriptionToken(tokenPayload, subSecret);
 
+    // 3. Mark User as Paid in Server-Side Store
+    setUserPaymentStatus({
+      userId: effectiveUserId,
+      email: customerEmail,
+      name: customerName,
+      payment_status: 'paid',
+      plan: planId,
+      paid_at: new Date().toISOString(),
+      expires_at: new Date(expiresAt).toISOString(),
+      cashfree_order_id: orderId,
+      cashfree_payment_id: paymentId,
+    });
+
+    // 4. Record Transaction in Ledger
+    recordTransaction({
+      id: `tx_${paymentId}`,
+      orderId,
+      paymentId,
+      userId: effectiveUserId,
+      customerName: customerName || 'SweetHome Customer',
+      customerEmail: customerEmail || 'customer@sweethome.io',
+      planId,
+      planName: planConfig.name,
+      amount: expectedAmount,
+      gateway: 'cashfree',
+      status: 'PAID',
+      paymentMethod: 'Cashfree PG',
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(expiresAt).toISOString(),
+      rawEvent: orderData,
+    });
+
     return NextResponse.json({
       success: true,
+      payment_status: 'paid',
+      plan: planId,
       tier: planConfig.tier,
       planId,
       durationDays,
       planName: planConfig.name,
-      paymentId: `cf_pay_${Date.now()}`,
+      paymentId,
       orderId,
       gateway: 'cashfree',
       subscriptionToken,
+      paid_at: new Date().toISOString(),
+      expires_at: new Date(expiresAt).toISOString(),
       expiresAt: new Date(expiresAt).toISOString(),
       message: `Cashfree payment verified successfully! Your ${planConfig.name} is active for ${durationDays} days.`,
     });

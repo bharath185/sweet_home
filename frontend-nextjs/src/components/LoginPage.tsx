@@ -121,6 +121,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
 
       if (matchedDemo) {
         if (cleanPassword === matchedDemo.password || cleanPassword === `${matchedDemo.password}123`) {
+          const isAdmin = matchedDemo.role === 'ADMIN';
           const userObj: UserType = {
             id: matchedDemo.role === 'ADMIN' ? 'u1' : matchedDemo.role === 'DESIGNER' ? 'u2' : 'u3',
             name: matchedDemo.name,
@@ -129,6 +130,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
             isOnline: true,
             assignedPlan: matchedDemo.assignedPlan,
             createdAt: 'Today',
+            payment_status: isAdmin ? 'paid' : 'unpaid',
+            subscriptionTier: isAdmin ? 'PRO' : 'FREE',
+            subscriptionStatus: isAdmin ? 'active' : 'inactive',
           };
           onLogin(userObj);
           setIsLoading(false);
@@ -186,6 +190,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
         isOnline: true,
         assignedPlan: inferredRole === 'CLIENT' ? 'plan-sarah-suite' : 'plan-david-villa',
         createdAt: 'Just now',
+        payment_status: inferredRole === 'ADMIN' ? 'paid' : 'unpaid',
+        subscriptionTier: inferredRole === 'ADMIN' ? 'PRO' : 'FREE',
+        subscriptionStatus: inferredRole === 'ADMIN' ? 'active' : 'inactive',
       };
       onLogin(generatedUser);
       setIsLoading(false);
@@ -242,10 +249,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
     setIsLoading(true);
 
     setTimeout(() => {
-      // Create user record with complimentary 2-Day Trial pass initialized
-      const trialDurationDays = 2;
-      const trialExpiresAt = new Date(Date.now() + trialDurationDays * 24 * 3600 * 1000).toISOString();
-
+      // Create user record with unpaid payment status requiring subscription pass
       let createdUser: UserType = {
         id: `u_${Date.now()}`,
         name: cleanName,
@@ -254,24 +258,28 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
         isOnline: true,
         assignedPlan: signUpRole === 'CLIENT' ? 'plan-sarah-suite' : 'plan-david-villa',
         createdAt: 'Just now',
-        subscriptionTier: 'TRIAL',
-        subscriptionStatus: 'trial',
-        subscriptionExpiresAt: trialExpiresAt,
-        subscriptionPlanId: 'trial_2days',
-        paymentGateway: 'cashfree',
+        payment_status: 'unpaid',
+        plan: null as any,
+        paid_at: null as any,
+        expires_at: null as any,
+        subscriptionTier: 'FREE',
+        subscriptionStatus: 'inactive',
       };
 
-      // Activate 2-day trial locally
-      createdUser = saveSubscriptionLocally(
-        createdUser,
-        'TRIAL',
-        `welcome_trial_${Date.now()}`,
-        `tok_welcome_${Date.now()}`,
-        `cf_trial_${Date.now()}`,
-        trialDurationDays,
-        'trial_2days',
-        'cashfree'
-      );
+      // Sync user payment status with backend store
+      try {
+        fetch('/api/user/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: createdUser.id,
+            email: createdUser.email,
+            name: createdUser.name,
+            role: createdUser.role,
+            payment_status: 'unpaid',
+          }),
+        }).catch(() => {});
+      } catch (e) {}
 
       // Store in registered users list in localStorage
       try {

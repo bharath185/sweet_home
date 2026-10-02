@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { recordPendingOrder, setUserPaymentStatus } from '@/lib/paymentStore';
 
 // Fixed server-side pricing in INR Rupees (Cashfree takes amounts in INR, not paise)
 const SERVER_PLAN_CONFIG: Record<
@@ -96,9 +97,29 @@ export async function POST(req: NextRequest) {
       const data = await cfRes.json();
 
       if (cfRes.ok && data.payment_session_id) {
+        const finalOrderId = data.order_id || cleanOrderId;
+
+        // Register pending order in server-side payment store for webhook & return correlation
+        recordPendingOrder(finalOrderId, {
+          userId: customerId,
+          userEmail: customerEmail,
+          userName: customerName,
+          planId,
+          amount: orderAmount,
+        });
+
+        setUserPaymentStatus({
+          userId: customerId,
+          email: customerEmail,
+          name: customerName,
+          payment_status: 'pending',
+          plan: planId,
+          cashfree_order_id: finalOrderId,
+        });
+
         return NextResponse.json({
           success: true,
-          orderId: data.order_id || cleanOrderId,
+          orderId: finalOrderId,
           cfOrderId: data.cf_order_id,
           paymentSessionId: data.payment_session_id,
           amount: orderAmount,

@@ -86,6 +86,13 @@ export async function createCashfreeOrder(
     throw new Error('Cashfree did not return a valid payment session ID. Please verify your credentials.');
   }
 
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('sweethome_last_checkout_plan', planId);
+      localStorage.setItem('sweethome_last_checkout_order', orderData.orderId);
+    } catch {}
+  }
+
   return orderData;
 }
 

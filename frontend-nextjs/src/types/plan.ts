@@ -1,6 +1,8 @@
 export type UserRole = 'ADMIN' | 'DESIGNER' | 'CLIENT';
 export type UnitSystem = 'cm' | 'm' | 'mm' | 'ft_in';
 
+export type PaymentStatus = 'unpaid' | 'pending' | 'paid' | 'failed' | 'expired';
+
 export interface User {
   id: string;
   name: string;
@@ -9,6 +11,12 @@ export interface User {
   isOnline: boolean;
   assignedPlan: string;
   createdAt: string;
+  payment_status?: PaymentStatus;
+  plan?: string;
+  paid_at?: string;
+  expires_at?: string;
+  cashfree_order_id?: string;
+  cashfree_payment_id?: string;
   subscriptionTier?: 'FREE' | 'TRIAL' | 'PRO' | 'ENTERPRISE';
   subscriptionStatus?: 'active' | 'inactive' | 'trial';
   subscriptionExpiresAt?: string;

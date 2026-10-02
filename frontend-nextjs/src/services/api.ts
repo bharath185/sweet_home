@@ -834,6 +834,28 @@ export async function fetchPlanById(planId: string): Promise<HomePlan> {
   return sarahPlan;
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (typeof window !== 'undefined') {
+    try {
+      const token = localStorage.getItem('sweethome_sub_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const userStr = localStorage.getItem('sweethome_current_user');
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u.id) headers['x-user-id'] = u.id;
+        if (u.email) headers['x-user-email'] = u.email;
+        if (u.role) headers['x-user-role'] = u.role;
+      }
+    } catch {}
+  }
+  return headers;
+}
+
 export async function savePlanToBackend(
   plan: HomePlan,
   authorName: string = 'User',
@@ -849,7 +871,7 @@ export async function savePlanToBackend(
 
     const res = await fetch(url.toString(), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(plan),
     });
     if (res.ok) {

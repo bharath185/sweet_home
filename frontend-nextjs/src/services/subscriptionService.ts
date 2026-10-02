@@ -112,19 +112,39 @@ export function hasActiveSubscription(user: User | null): boolean {
     return true;
   }
 
-  // 1. Check user state
-  if (user && (user.subscriptionTier === 'PRO' || user.subscriptionTier === 'TRIAL' || user.subscriptionTier === 'ENTERPRISE')) {
-    if (user.subscriptionExpiresAt) {
-      const expires = new Date(user.subscriptionExpiresAt).getTime();
-      if (Date.now() < expires) {
-        return true;
+  if (!user) {
+    return false;
+  }
+
+  // 1. Check explicit payment_status
+  if (user.payment_status) {
+    if (user.payment_status === 'unpaid' || user.payment_status === 'failed') {
+      return false;
+    }
+    if (user.payment_status === 'expired') {
+      return false;
+    }
+    if (user.payment_status === 'paid') {
+      const expStr = user.expires_at || user.subscriptionExpiresAt;
+      if (expStr) {
+        const expires = new Date(expStr).getTime();
+        return !isNaN(expires) && Date.now() < expires;
       }
-      return false; // Expired
+      return true;
+    }
+  }
+
+  // 2. Check user tier state
+  if (user.subscriptionTier === 'PRO' || user.subscriptionTier === 'TRIAL' || user.subscriptionTier === 'ENTERPRISE') {
+    const expStr = user.subscriptionExpiresAt || user.expires_at;
+    if (expStr) {
+      const expires = new Date(expStr).getTime();
+      return !isNaN(expires) && Date.now() < expires;
     }
     return true;
   }
 
-  // 2. Check localStorage verified token
+  // 3. Check localStorage verified token
   if (typeof window !== 'undefined') {
     try {
       const token = localStorage.getItem('sweethome_sub_token');
@@ -132,6 +152,7 @@ export function hasActiveSubscription(user: User | null): boolean {
         const parts = token.split('.');
         if (parts.length === 2) {
           const payload = JSON.parse(atob(parts[0]));
+          if (payload.role === 'ADMIN') return true;
           if (payload.expiresAt && Date.now() < payload.expiresAt) {
             return true;
           }
@@ -225,6 +246,12 @@ export function saveSubscriptionLocally(
   const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
   const updated: User = {
     ...user,
+    payment_status: 'paid',
+    plan: planId,
+    paid_at: new Date().toISOString(),
+    expires_at: expiresAt,
+    cashfree_order_id: gateway === 'cashfree' ? orderId : user.cashfree_order_id,
+    cashfree_payment_id: gateway === 'cashfree' ? paymentId : user.cashfree_payment_id,
     subscriptionTier: tier,
     subscriptionStatus: tier === 'TRIAL' ? 'trial' : 'active',
     subscriptionExpiresAt: expiresAt,

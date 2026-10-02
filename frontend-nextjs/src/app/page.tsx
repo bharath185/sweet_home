@@ -65,15 +65,19 @@ import {
   DollarSign,
   Wand2,
   Crown,
+  ShieldCheck,
+  AlertCircle,
 } from 'lucide-react';
 import { CostEstimatorModal } from '../components/CostEstimatorModal';
 import { AiStylerModal } from '../components/AiStylerModal';
 import UpgradeModal from '../components/UpgradeModal';
+import { SubscriptionPaywall } from '../components/SubscriptionPaywall';
 import {
   canAccessFeature,
   getUserSubscriptionTier,
   hasActiveSubscription,
   getSubscriptionRemainingText,
+  saveSubscriptionLocally,
 } from '../services/subscriptionService';
 
 export default function HomeStudioPage() {
@@ -196,6 +200,46 @@ export default function HomeStudioPage() {
     setIsUpgradeModalOpen(true);
   }, []);
 
+  // Return URL & Server Payment Verification States
+  const [isVerifyingReturnPayment, setIsVerifyingReturnPayment] = useState<boolean>(false);
+  const [returnVerificationStatus, setReturnVerificationStatus] = useState<'verifying' | 'success' | 'failed'>('verifying');
+  const [returnVerificationMsg, setReturnVerificationMsg] = useState<string>('');
+  const [isRefreshingStatus, setIsRefreshingStatus] = useState<boolean>(false);
+
+  // Sync user status with server-side payment store
+  const refreshUserPaymentStatus = useCallback(async (userToSync?: User | null) => {
+    const targetUser = userToSync || currentUser;
+    if (!targetUser) return;
+    setIsRefreshingStatus(true);
+    try {
+      const res = await fetch(
+        `/api/user/status?userId=${encodeURIComponent(targetUser.id)}&email=${encodeURIComponent(targetUser.email)}`,
+        { cache: 'no-store' }
+      );
+      const data = await res.json();
+      if (res.ok && data.success && data.user) {
+        const isServerPaid = data.isPaid || data.user.payment_status === 'paid';
+        const updatedUser: User = {
+          ...targetUser,
+          payment_status: data.user.payment_status,
+          plan: data.user.plan || targetUser.plan,
+          paid_at: data.user.paid_at || targetUser.paid_at,
+          expires_at: data.user.expires_at || targetUser.expires_at,
+          cashfree_order_id: data.user.cashfree_order_id || targetUser.cashfree_order_id,
+          cashfree_payment_id: data.user.cashfree_payment_id || targetUser.cashfree_payment_id,
+          subscriptionTier: isServerPaid ? 'PRO' : targetUser.subscriptionTier,
+          subscriptionStatus: isServerPaid ? 'active' : targetUser.subscriptionStatus,
+        };
+        setCurrentUser(updatedUser);
+        localStorage.setItem('sweethome_current_user', JSON.stringify(updatedUser));
+      }
+    } catch (e) {
+      // Ignored
+    } finally {
+      setIsRefreshingStatus(false);
+    }
+  }, [currentUser]);
+
   const userSubTier = getUserSubscriptionTier(currentUser);
   const hasPass = hasActiveSubscription(currentUser);
   const remainingPassText = getSubscriptionRemainingText(currentUser);
@@ -299,14 +343,77 @@ export default function HomeStudioPage() {
   // Initial Data Fetching & Auth Check
   useEffect(() => {
     const savedUser = localStorage.getItem('sweethome_current_user');
+    let loadedUser: User | null = null;
     if (savedUser) {
       try {
         const u = JSON.parse(savedUser);
+        loadedUser = u;
         setCurrentUser(u);
         setUserRole(u.role);
       } catch (e) {}
     }
     setIsAuthLoaded(true);
+
+    // Return URL verification for Cashfree payment callbacks
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const returnOrderId = params.get('cf_order_id') || params.get('order_id');
+
+      if (returnOrderId) {
+        setIsVerifyingReturnPayment(true);
+        setReturnVerificationStatus('verifying');
+        setReturnVerificationMsg('Verifying Cashfree payment securely with backend...');
+
+        const planId = localStorage.getItem('sweethome_last_checkout_plan') || 'trial_2days';
+
+        fetch('/api/cashfree/verify-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: returnOrderId,
+            planId,
+            userId: loadedUser?.id,
+          }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success) {
+              setReturnVerificationStatus('success');
+              setReturnVerificationMsg('Payment verified successfully! Welcome to SweetHome 3D Studio.');
+              if (loadedUser) {
+                const updated = saveSubscriptionLocally(
+                  loadedUser,
+                  data.tier || 'PRO',
+                  data.paymentId,
+                  data.subscriptionToken,
+                  data.orderId,
+                  data.durationDays || (planId === 'yearly' ? 365 : planId === 'trial_2days' ? 2 : 30),
+                  planId as any,
+                  'cashfree'
+                );
+                setCurrentUser(updated);
+              }
+              const cleanUrl = new URL(window.location.href);
+              cleanUrl.searchParams.delete('cf_order_id');
+              cleanUrl.searchParams.delete('order_id');
+              window.history.replaceState({}, document.title, cleanUrl.toString());
+
+              setTimeout(() => {
+                setIsVerifyingReturnPayment(false);
+              }, 1800);
+            } else {
+              setReturnVerificationStatus('failed');
+              setReturnVerificationMsg(data.error || 'Payment verification failed with Cashfree.');
+            }
+          })
+          .catch((err) => {
+            setReturnVerificationStatus('failed');
+            setReturnVerificationMsg(err.message || 'Error connecting to verification server.');
+          });
+      } else if (loadedUser) {
+        refreshUserPaymentStatus(loadedUser);
+      }
+    }
 
     const initData = async () => {
       try {
@@ -327,7 +434,7 @@ export default function HomeStudioPage() {
     };
 
     initData();
-  }, []);
+  }, [refreshUserPaymentStatus]);
 
   const collisionReport = useMemo(() => {
     return detectCollisions(plan.furniture, plan.walls, activeFloor);
@@ -337,6 +444,7 @@ export default function HomeStudioPage() {
     setCurrentUser(user);
     setUserRole(user.role);
     localStorage.setItem('sweethome_current_user', JSON.stringify(user));
+    refreshUserPaymentStatus(user);
     if (user.role === 'CLIENT') {
       setActiveView('customer');
     } else {
@@ -524,6 +632,57 @@ export default function HomeStudioPage() {
     setActiveView('split');
   };
 
+  // 1. Return URL Payment Verification Screen
+  if (isVerifyingReturnPayment) {
+    return (
+      <div className="h-screen w-screen bg-[#080d19] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 flex flex-col items-center text-center shadow-2xl">
+          {returnVerificationStatus === 'verifying' && (
+            <>
+              <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-6">
+                <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Verifying Payment</h2>
+              <p className="text-sm text-slate-400 mb-6">{returnVerificationMsg}</p>
+              <div className="flex items-center gap-2 text-xs text-indigo-400 bg-indigo-500/10 px-3.5 py-1.5 rounded-full border border-indigo-500/20">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Confirming with Cashfree API...</span>
+              </div>
+            </>
+          )}
+
+          {returnVerificationStatus === 'success' && (
+            <>
+              <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-6">
+                <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Payment Verified!</h2>
+              <p className="text-sm text-emerald-300 mb-4">{returnVerificationMsg}</p>
+              <p className="text-xs text-slate-400">Opening SweetHome 3D Studio...</p>
+            </>
+          )}
+
+          {returnVerificationStatus === 'failed' && (
+            <>
+              <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mb-6">
+                <AlertCircle className="w-10 h-10 text-rose-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Verification Notice</h2>
+              <p className="text-sm text-rose-300 mb-6">{returnVerificationMsg}</p>
+              <button
+                onClick={() => setIsVerifyingReturnPayment(false)}
+                className="w-full py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-sm transition-colors border border-slate-700"
+              >
+                Continue to Studio
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Loading state
   if (!isAuthLoaded) {
     return (
       <div className="h-screen w-screen bg-[#080d19] flex items-center justify-center text-slate-400">
@@ -535,6 +694,7 @@ export default function HomeStudioPage() {
     );
   }
 
+  // 3. Not logged in -> Login Page
   if (!currentUser) {
     return (
       <LoginPage
@@ -544,6 +704,22 @@ export default function HomeStudioPage() {
           setUsers((prev) => [newUser, ...prev]);
           handleLoginSuccess(newUser);
         }}
+      />
+    );
+  }
+
+  // 4. Strict Route Guard: If user is logged in, not ADMIN, and has not paid -> Subscription Paywall
+  if (currentUser.role !== 'ADMIN' && !hasActiveSubscription(currentUser)) {
+    return (
+      <SubscriptionPaywall
+        currentUser={currentUser}
+        onUserUpdated={(updated) => {
+          setCurrentUser(updated);
+        }}
+        onLogout={handleLogout}
+        onRefreshStatus={() => refreshUserPaymentStatus(currentUser)}
+        status={currentUser.payment_status || 'unpaid'}
+        isRefreshing={isRefreshingStatus}
       />
     );
   }
