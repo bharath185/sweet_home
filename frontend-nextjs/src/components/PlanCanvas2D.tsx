@@ -48,6 +48,7 @@ interface PlanCanvas2DProps {
   visitorCamera?: VisitorCameraState;
   onUpdateVisitorCamera?: (state: Partial<VisitorCameraState>) => void;
   isWalkMode?: boolean;
+  onToggleWalkMode?: () => void;
 }
 
 export type ToolMode =
@@ -95,6 +96,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   visitorCamera,
   onUpdateVisitorCamera,
   isWalkMode = false,
+  onToggleWalkMode,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const blueprintImgRef = useRef<HTMLImageElement | null>(null);
@@ -1350,7 +1352,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         ctx.stroke();
       }
 
-      // 8. Virtual Visitor Avatar & Conical Frustum in Walk Mode
+      // 8. Client View Pointer & Vision Cone in Tour / Walk Mode (Matching Reference CAD Reticle)
       if (isWalkMode && visitorCamera && (visitorCamera.floorLevel === undefined || visitorCamera.floorLevel === activeFloor)) {
         const vPos = planToScreen(visitorCamera.x, visitorCamera.y, activeFloor);
         const vAngle = visitorCamera.yaw || 0;
@@ -1359,35 +1361,93 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         ctx.translate(vPos.x, vPos.y);
 
         const fovRad = (65 * Math.PI) / 180;
-        const coneDistPx = 180 * scale;
+        const coneDistPx = Math.max(35, 180 * scale);
         const screenLookAngle = Math.atan2(-Math.cos(vAngle), Math.sin(vAngle));
 
-        const gradient = ctx.createRadialGradient(0, 0, 8, 0, 0, Math.max(25, coneDistPx));
-        gradient.addColorStop(0, 'rgba(16, 185, 129, 0.45)');
-        gradient.addColorStop(0.5, 'rgba(16, 185, 129, 0.18)');
-        gradient.addColorStop(1, 'rgba(16, 185, 129, 0.0)');
+        // Soft blue vision gradient frustum
+        const gradient = ctx.createRadialGradient(0, 0, 16, 0, 0, coneDistPx);
+        gradient.addColorStop(0, 'rgba(14, 165, 233, 0.35)');
+        gradient.addColorStop(0.5, 'rgba(56, 189, 248, 0.12)');
+        gradient.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
 
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.moveTo(0, 0);
-        ctx.arc(0, 0, Math.max(25, coneDistPx), screenLookAngle - fovRad / 2, screenLookAngle + fovRad / 2);
+        ctx.arc(0, 0, coneDistPx, screenLookAngle - fovRad / 2, screenLookAngle + fovRad / 2);
         ctx.closePath();
         ctx.fill();
 
-        // Person Avatar
-        ctx.fillStyle = '#059669';
+        // Outer frustum dashed guide rays
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
         ctx.beginPath();
-        ctx.arc(0, 0, 8.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(screenLookAngle - fovRad / 2) * coneDistPx, Math.sin(screenLookAngle - fovRad / 2) * coneDistPx);
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(screenLookAngle + fovRad / 2) * coneDistPx, Math.sin(screenLookAngle + fovRad / 2) * coneDistPx);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Client View Pointer Reticle (Exact match to CAD glowing reticle in media_1791085406444.png)
+        // 1. Glowing outer halo
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 14;
+        ctx.strokeStyle = '#0284c7';
+        ctx.lineWidth = 1.75;
+        ctx.beginPath();
+        ctx.arc(0, 0, 15.5, 0, Math.PI * 2);
         ctx.stroke();
 
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 9px system-ui';
+        // 2. Clear shadow for crisp inner crosshairs and dot
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+
+        // 3. Four crosshair tick marks pointing inward from perimeter
+        ctx.beginPath();
+        ctx.moveTo(0, -15.5);
+        ctx.lineTo(0, -9.5);
+        ctx.moveTo(0, 15.5);
+        ctx.lineTo(0, 9.5);
+        ctx.moveTo(-15.5, 0);
+        ctx.lineTo(-9.5, 0);
+        ctx.moveTo(15.5, 0);
+        ctx.lineTo(9.5, 0);
+        ctx.stroke();
+
+        // 4. Center Dot
+        ctx.fillStyle = '#0284c7';
+        ctx.beginPath();
+        ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 5. Directional Pointer Chevron along screenLookAngle
+        ctx.save();
+        ctx.rotate(screenLookAngle);
+        ctx.fillStyle = '#0284c7';
+        ctx.beginPath();
+        ctx.moveTo(16, 0);
+        ctx.lineTo(20.5, -4);
+        ctx.lineTo(20.5, 4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        // 6. Sleek Tooltip Pill: "Client View"
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.beginPath();
+        ctx.roundRect(-30, 22, 60, 18, 5);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = 'bold 9px system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('🚶', 0, 0);
+        ctx.fillText('Client View', 0, 31);
+
         ctx.restore();
       }
 
@@ -2110,6 +2170,26 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
           >
             <Hand className="w-3.5 h-3.5" />
           </button>
+
+          {/* Tour / Client View Pointer Toggle */}
+          {onToggleWalkMode && (
+            <>
+              <div className="w-[1px] h-4 bg-slate-200 mx-0.5" />
+              <button
+                onClick={onToggleWalkMode}
+                className={
+                  'px-2 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 border cursor-pointer ' +
+                  (isWalkMode
+                    ? 'bg-sky-500/15 border-sky-400 text-sky-700 shadow-xs ring-1 ring-sky-400/40'
+                    : 'text-slate-600 bg-white hover:bg-slate-100 border-slate-200')
+                }
+                title={isWalkMode ? 'Tour Active: Client View Pointer Visible (Click to Hide)' : 'Enable Tour: Show Client View Pointer'}
+              >
+                <span className={'w-2 h-2 rounded-full ' + (isWalkMode ? 'bg-sky-500 shadow-sm shadow-sky-500/80 animate-pulse' : 'bg-slate-300')} />
+                <span className="text-[11px] font-bold">{isWalkMode ? 'Tour Active' : 'Tour Pointer'}</span>
+              </button>
+            </>
+          )}
         </div>
 
         {/* Right: Layers & Professional Export Actions */}
@@ -2237,7 +2317,17 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onWheel={handleWheel}
-        className="w-full h-full flex-1 cursor-crosshair touch-none"
+        className={`w-full h-full flex-1 touch-none ${
+          isDraggingVisitor
+            ? 'cursor-grabbing'
+            : isPanning
+            ? 'cursor-grabbing'
+            : toolMode === 'pan' || isSpacePressed
+            ? 'cursor-grab'
+            : toolMode === 'select'
+            ? 'cursor-default'
+            : 'cursor-crosshair'
+        }`}
       />
 
       {/* Interactive Delete Button anchored directly near the Selected Room's Label */}

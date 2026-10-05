@@ -43,6 +43,7 @@ import {
   Plus
 } from 'lucide-react';
 import { HomePlan, FurnitureItem, Wall, Room, CatalogItem } from '../types/plan';
+import { ROYALE_PLAY_WALL_PRESETS, BRICK_WALL_PRESETS } from '../services/pbrTextures';
 import { isTabletopItem, findSupportingHost, findNearestSupportingSurface } from '../services/tabletopAttachment';
 import { fallbackCatalog } from '../services/api';
 import { Catalog3DPreviewModal } from './Catalog3DPreviewModal';
@@ -693,36 +694,67 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                     </p>
                   </div>
 
-                  {/* Wall Texture Presets */}
+                  {/* Asian Paints Royale Play Wall Textures */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      Wall Cladding & Textures
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-sky-400" />
+                        Royale Play Sponge Paints
+                      </label>
+                      <span className="text-[9px] font-semibold text-slate-400">Asian Paints</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {ROYALE_PLAY_WALL_PRESETS.map((rp) => (
+                        <button
+                          key={rp.id}
+                          onClick={() => updateWall({ texture: rp.id, color: rp.color })}
+                          className={`p-2 rounded-xl border text-left flex items-center gap-2 transition cursor-pointer ${
+                            selectedWall.texture === rp.id
+                              ? 'border-sky-500 ring-1 ring-sky-500 bg-sky-950/40 font-bold text-sky-300'
+                              : isDark
+                              ? 'bg-slate-900/60 hover:bg-slate-800 border-slate-800 text-slate-300'
+                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                          }`}
+                        >
+                          <span
+                            className="w-4 h-4 rounded-full border border-white/30 shrink-0 shadow-2xs"
+                            style={{ backgroundColor: rp.color }}
+                          />
+                          <span className="text-[10px] truncate leading-tight">{rp.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Exposed Brick & Architectural Cladding */}
+                  <div className="space-y-1.5 pt-2 border-t border-inherit">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                      <Box className="w-3 h-3 text-amber-500" />
+                      Bricks & Architectural Cladding
                     </label>
                     <div className="grid grid-cols-2 gap-1.5">
                       {[
-                        { id: '', name: 'Smooth Matte Paint', color: '#f8fafc' },
-                        { id: 'brick_modern', name: 'Exposed Loft Brick', color: '#b91c1c' },
+                        { id: '', name: 'Smooth Matte Wall', color: '#f8fafc' },
+                        ...BRICK_WALL_PRESETS,
                         { id: 'concrete_loft', name: 'Raw Architectural Concrete', color: '#94a3b8' },
-                        { id: 'hardwood_oak', name: 'Vertical Timber Slats', color: '#d4a373' },
                         { id: 'marble_carrara', name: 'Carrara Marble Wall', color: '#f8fafc' },
-                        { id: 'ceramic_tile_grid', name: 'Subway Ceramic Tile', color: '#e2e8f0' },
                       ].map((tex) => (
                         <button
                           key={tex.id}
                           onClick={() => updateWall({ texture: tex.id || undefined, color: tex.color })}
                           className={`p-2 rounded-xl border text-left flex items-center gap-2 transition cursor-pointer ${
                             (selectedWall.texture || '') === tex.id
-                              ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-950/30 font-bold'
+                              ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-950/30 font-bold text-indigo-300'
                               : isDark
-                              ? 'bg-slate-900/60 hover:bg-slate-800 border-slate-800'
-                              : 'bg-white hover:bg-slate-50 border-slate-200'
+                              ? 'bg-slate-900/60 hover:bg-slate-800 border-slate-800 text-slate-300'
+                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
                           }`}
                         >
                           <span
-                            className="w-4 h-4 rounded-full border border-white/20 shrink-0"
+                            className="w-4 h-4 rounded-full border border-white/30 shrink-0 shadow-2xs"
                             style={{ backgroundColor: tex.color }}
                           />
-                          <span className="text-[10px] truncate">{tex.name}</span>
+                          <span className="text-[10px] truncate leading-tight">{tex.name}</span>
                         </button>
                       ))}
                     </div>

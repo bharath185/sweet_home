@@ -1124,12 +1124,29 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const isSelected = selectedId === wall.id;
 
       const wallTex = wall.texture ? getProceduralTexture(wall.texture, wall.color) : null;
+      if (wallTex) {
+        wallTex.repeat.set(Math.max(1.5, length * 0.75), Math.max(1.5, height * 0.75));
+      }
+
       const mat = new THREE.MeshStandardMaterial({
         color: isSelected ? 0x38bdf8 : wall.color ? new THREE.Color(wall.color) : 0xf8fafc,
-        roughness: 0.85,
-        metalness: 0.02,
+        roughness: wall.texture?.includes('royale') ? 0.45 : 0.85,
+        metalness: wall.texture?.includes('royale') ? 0.12 : 0.02,
         map: wallTex || undefined,
       });
+
+      // Helper to attach clean crisp architectural edge lines to wall box meshes
+      const attachWallEdges = (targetMesh: THREE.Mesh) => {
+        const edgesGeom = new THREE.EdgesGeometry(targetMesh.geometry, 15);
+        const edgeMat = new THREE.LineBasicMaterial({
+          color: isSelected ? 0x0284c7 : 0x475569,
+          linewidth: isSelected ? 2 : 1,
+          transparent: true,
+          opacity: isSelected ? 0.95 : 0.45,
+        });
+        const edgeLines = new THREE.LineSegments(edgesGeom, edgeMat);
+        targetMesh.add(edgeLines);
+      };
 
       // Find any doors or windows placed along this wall
       const wallFloor = wall.floorLevel ?? 0;
@@ -1164,6 +1181,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         wallMesh.castShadow = true;
         wallMesh.receiveShadow = true;
         wallMesh.userData = { id: wall.id, type: 'wall', floorLevel: wallFloor };
+        attachWallEdges(wallMesh);
         group.add(wallMesh);
       } else {
         // Build wall segments with cutouts (Left sub-wall, Right sub-wall, and Top Lintel above opening)
@@ -1199,6 +1217,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             leftMesh.position.set(curPos + leftLen / 2, height / 2, 0);
             leftMesh.castShadow = true;
             leftMesh.receiveShadow = true;
+            attachWallEdges(leftMesh);
             wallGroup.add(leftMesh);
           }
 
@@ -1211,6 +1230,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             lintelMesh.position.set(op.start + openLen / 2, (op.elevation + op.height) + lintelH / 2, 0);
             lintelMesh.castShadow = true;
             lintelMesh.receiveShadow = true;
+            attachWallEdges(lintelMesh);
             wallGroup.add(lintelMesh);
           }
 
@@ -1221,6 +1241,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             sillMesh.position.set(op.start + openLen / 2, op.elevation / 2, 0);
             sillMesh.castShadow = true;
             sillMesh.receiveShadow = true;
+            attachWallEdges(sillMesh);
             wallGroup.add(sillMesh);
           }
 
@@ -1235,6 +1256,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           remMesh.position.set(curPos + remLen / 2, height / 2, 0);
           remMesh.castShadow = true;
           remMesh.receiveShadow = true;
+          attachWallEdges(remMesh);
           wallGroup.add(remMesh);
         }
 

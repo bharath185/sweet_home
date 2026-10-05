@@ -86,17 +86,18 @@ export default function HomeStudioPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [templates, setTemplates] = useState<FloorTemplate[]>([]);
 
-  // Theme Management (Dark & Light)
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  // Theme Management (Dark & Light) - Default to Light Mode
+  const [theme, setTheme] = useState<'dark' | 'light'>('light');
 
-  // Load theme preference on mount
+  // Load theme preference on mount (default to light)
   useEffect(() => {
     const savedTheme = localStorage.getItem('sweethome_theme') as 'dark' | 'light' | null;
     if (savedTheme) {
       setTheme(savedTheme);
       document.documentElement.classList.toggle('dark', savedTheme === 'dark');
     } else {
-      document.documentElement.classList.add('dark');
+      setTheme('light');
+      document.documentElement.classList.remove('dark');
     }
   }, []);
 
@@ -113,9 +114,9 @@ export default function HomeStudioPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthLoaded, setIsAuthLoaded] = useState<boolean>(false);
 
-  const [activeView, setActiveView] = useState<'split' | '2d' | '3d' | 'customer' | 'dashboard'>('dashboard');
-  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'catalog' | 'floors' | 'payments'>('overview');
-  const [userRole, setUserRole] = useState<UserRole>('ADMIN');
+  const [activeView, setActiveView] = useState<'split' | '2d' | '3d' | 'customer' | 'dashboard'>('split');
+  const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'catalog' | 'floors' | 'payments' | string>('overview');
+  const [userRole, setUserRole] = useState<UserRole>('DESIGNER');
   const [activeFloor, setActiveFloor] = useState<number>(0);
   const [floorMode, setFloorMode] = useState<'single' | 'sideBySide' | 'stacked'>('single');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -355,6 +356,11 @@ export default function HomeStudioPage() {
         loadedUser = u;
         setCurrentUser(u);
         setUserRole(u.role);
+        if (u.role === 'ADMIN') {
+          setActiveView('dashboard');
+        } else {
+          setActiveView('split');
+        }
       } catch (e) {}
     }
     setIsAuthLoaded(true);
@@ -384,7 +390,7 @@ export default function HomeStudioPage() {
           .then((data) => {
             if (data.success) {
               setReturnVerificationStatus('success');
-              setReturnVerificationMsg('Payment verified successfully! Welcome to SweetHome 3D Studio.');
+              setReturnVerificationMsg('Payment verified successfully! Welcome to DecoForge 3D Studio.');
               if (loadedUser) {
                 const updated = saveSubscriptionLocally(
                   loadedUser,
@@ -450,17 +456,19 @@ export default function HomeStudioPage() {
     setUserRole(user.role);
     localStorage.setItem('sweethome_current_user', JSON.stringify(user));
     refreshUserPaymentStatus(user);
-    if (user.role === 'CLIENT') {
+    if (user.role === 'ADMIN') {
+      setActiveView('dashboard');
+    } else if (user.role === 'CLIENT') {
       setActiveView('customer');
     } else {
-      setActiveView('dashboard');
+      setActiveView('split');
     }
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('sweethome_current_user');
-    setActiveView('dashboard');
+    setActiveView('split');
   };
 
   const handleAddItem = (catalogItem: CatalogItem) => {
@@ -663,7 +671,7 @@ export default function HomeStudioPage() {
               </div>
               <h2 className="text-xl font-bold text-white mb-2">Payment Verified!</h2>
               <p className="text-sm text-emerald-300 mb-4">{returnVerificationMsg}</p>
-              <p className="text-xs text-slate-400">Opening SweetHome 3D Studio...</p>
+              <p className="text-xs text-slate-400">Opening DecoForge 3D Studio...</p>
             </>
           )}
 
@@ -693,7 +701,7 @@ export default function HomeStudioPage() {
       <div className="h-screen w-screen bg-[#080d19] flex items-center justify-center text-slate-400">
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-          <span>Loading SweetHome 3D Studio...</span>
+          <span>Loading DecoForge 3D Studio...</span>
         </div>
       </div>
     );
@@ -732,7 +740,7 @@ export default function HomeStudioPage() {
   const isDark = theme === 'dark';
 
   return (
-    <div className={`flex flex-col h-screen w-screen overflow-hidden font-sans ${isDark ? 'bg-[#080d19] text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
+    <div className={`flex flex-col h-screen w-screen overflow-hidden font-sans ${isDark ? 'bg-[#0B0F17] text-slate-100' : 'bg-[#F8FAFC] text-slate-900'}`}>
       {/* Top Main Navigation Bar */}
       <Navbar
         plan={plan}
@@ -747,18 +755,22 @@ export default function HomeStudioPage() {
         currentUser={currentUser}
         onLogout={handleLogout}
         onOpenUpgradeModal={() => handleOpenUpgrade()}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
       />
 
       {/* Main Workspace Body */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* VIEW 1: Admin / Enterprise Dashboard */}
-        {activeView === 'dashboard' && (
+        {/* VIEW 1: Admin / Enterprise Dashboard (Admin Only) */}
+        {activeView === 'dashboard' && currentUser?.role === 'ADMIN' && (
           <AdminDashboard
             users={users}
             catalog={catalog}
             templates={templates}
             adminTab={adminTab}
             setAdminTab={setAdminTab}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
             onOpenStudioWithTemplate={(tplId) => {
               setActiveView('split');
             }}
@@ -817,6 +829,8 @@ export default function HomeStudioPage() {
             onFloorChange={setActiveFloor}
             floorMode={floorMode}
             onFloorModeChange={setFloorMode}
+            visitorCamera={visitorCamera}
+            onUpdateVisitorCamera={handleUpdateVisitorCamera}
           />
         )}
 
@@ -828,65 +842,83 @@ export default function HomeStudioPage() {
               isDark ? 'bg-[#0b1222]/90 border-slate-800/90 text-slate-200' : 'bg-white/95 border-slate-200 text-slate-800 shadow-xs'
             }`}>
               {/* Cluster 1: View Mode Pill Switcher */}
-              <div className={`flex items-center p-1 rounded-xl border ${
-                isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100 border-slate-200'
-              }`}>
-                <button
-                  onClick={() => setActiveView('2d')}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-                    activeView === '2d'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : isDark
-                      ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                  }`}
-                  title="2D CAD Architectural Floor Plan"
-                >
-                  <span>📐</span>
-                  <span>2D Plan</span>
-                </button>
+              <div className="flex items-center gap-1.5">
+                <div className={`flex items-center p-1 rounded-xl border ${
+                  isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100 border-slate-200'
+                }`}>
+                  <button
+                    onClick={() => setActiveView('2d')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                      activeView === '2d'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : isDark
+                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                    }`}
+                    title="2D CAD Architectural Floor Plan"
+                  >
+                    <span>📐</span>
+                    <span>2D Plan</span>
+                  </button>
 
-                <button
-                  onClick={() => setActiveView('3d')}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-                    activeView === '3d'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : isDark
-                      ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                  }`}
-                  title="3D WebGL Real-time Orbit Viewport"
-                >
-                  <span>🧊</span>
-                  <span>3D View</span>
-                </button>
+                  <button
+                    onClick={() => setActiveView('3d')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                      activeView === '3d'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : isDark
+                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                    }`}
+                    title="3D WebGL Real-time Orbit Viewport"
+                  >
+                    <span>🧊</span>
+                    <span>3D View</span>
+                  </button>
 
-                <button
-                  onClick={() => setActiveView('split')}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-                    activeView === 'split'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : isDark
-                      ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                  }`}
-                  title="Simultaneous 2D & 3D Split Screen"
-                >
-                  <Columns className="w-3.5 h-3.5" />
-                  <span>Split View</span>
-                </button>
+                  <button
+                    onClick={() => setActiveView('split')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                      activeView === 'split'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : isDark
+                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                    }`}
+                    title="Simultaneous 2D & 3D Split Screen"
+                  >
+                    <Columns className="w-3.5 h-3.5" />
+                    <span>Split View</span>
+                  </button>
 
+                  <button
+                    onClick={() => setActiveView('customer')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                      isDark
+                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                    }`}
+                    title="Interactive Client Walkthrough & Room Presentation"
+                  >
+                    <span>🚶</span>
+                    <span>Tour</span>
+                  </button>
+                </div>
+
+                {/* Quick Tour Walk Mode / Client Pointer Toggle */}
                 <button
-                  onClick={() => setActiveView('customer')}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-                    isDark
-                      ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                  onClick={() => setCameraMode3D((prev) => (prev === 'visitor' ? 'aerial' : 'visitor'))}
+                  className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer border shadow-2xs ${
+                    cameraMode3D === 'visitor'
+                      ? 'bg-sky-500/15 border-sky-400 text-sky-400 font-bold shadow-xs ring-1 ring-sky-400/40'
+                      : isDark
+                      ? 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                      : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
-                  title="Interactive Client Walkthrough & Room Presentation"
+                  title={cameraMode3D === 'visitor' ? 'Tour Mode Active: Client View Pointer Visible (Click to Disable)' : 'Enable Tour Mode to Display Client View Pointer'}
                 >
-                  <span>🚶</span>
-                  <span>Tour</span>
+                  <span className={`w-2 h-2 rounded-full ${cameraMode3D === 'visitor' ? 'bg-sky-400 shadow-sm shadow-sky-400/80 animate-pulse' : 'bg-slate-400'}`} />
+                  <span>{cameraMode3D === 'visitor' ? 'Tour Pointer Active' : 'Tour Pointer'}</span>
                 </button>
               </div>
 
@@ -1199,6 +1231,7 @@ export default function HomeStudioPage() {
                         visitorCamera={visitorCamera}
                         onUpdateVisitorCamera={handleUpdateVisitorCamera}
                         isWalkMode={cameraMode3D === 'visitor'}
+                        onToggleWalkMode={() => setCameraMode3D((prev) => (prev === 'visitor' ? 'aerial' : 'visitor'))}
                       />
                     </div>
                     <div className="w-1/2 h-full relative">
@@ -1246,6 +1279,7 @@ export default function HomeStudioPage() {
                       visitorCamera={visitorCamera}
                       onUpdateVisitorCamera={handleUpdateVisitorCamera}
                       isWalkMode={cameraMode3D === 'visitor'}
+                      onToggleWalkMode={() => setCameraMode3D((prev) => (prev === 'visitor' ? 'aerial' : 'visitor'))}
                     />
                   </div>
                 )}

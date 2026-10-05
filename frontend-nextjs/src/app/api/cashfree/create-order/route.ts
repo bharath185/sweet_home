@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
             customer_name: customerName,
           },
           order_meta: {
-            return_url: 'https://3dstudio.prigenix.com?cf_order_id={order_id}',
+            return_url: `${(req.headers.get('origin') || (req.headers.get('host')?.includes('localhost') ? `http://${req.headers.get('host')}` : 'https://3dstudio.prigenix.com'))}?cf_order_id={order_id}`,
             payment_methods: 'upi,cc,dc,nb,app',
           },
           order_note: `${planConfig.name} - SweetHome 3D Studio`,

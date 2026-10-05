@@ -33,9 +33,11 @@ import {
   Pin,
   Box,
   Search,
-  Hand
+  Hand,
+  Compass,
+  Navigation
 } from 'lucide-react';
-import { HomePlan, Room, CatalogItem, FurnitureItem, UserRole } from '../types/plan';
+import { HomePlan, Room, CatalogItem, FurnitureItem, UserRole, VisitorCameraState } from '../types/plan';
 import { isTabletopItem, findNearestSupportingSurface } from '../services/tabletopAttachment';
 import { Viewport3D } from './Viewport3D';
 
@@ -52,6 +54,8 @@ interface CustomerPresentationViewProps {
   onFloorChange: (floor: number) => void;
   floorMode?: 'single' | 'sideBySide' | 'stacked';
   onFloorModeChange?: (mode: 'single' | 'sideBySide' | 'stacked') => void;
+  visitorCamera?: VisitorCameraState;
+  onUpdateVisitorCamera?: (state: Partial<VisitorCameraState>) => void;
 }
 
 const CLIENT_PRESET_COLORS = [
@@ -73,6 +77,8 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
   onFloorChange,
   floorMode,
   onFloorModeChange,
+  visitorCamera,
+  onUpdateVisitorCamera,
 }) => {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(plan.rooms[0] || null);
   const [tourCameraMode, setTourCameraMode] = useState<'visitor' | 'aerial'>('visitor');
@@ -108,6 +114,165 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
     }
   }, [tourCameraMode]);
   const [catalogCategory, setCatalogCategory] = useState<string>('ALL');
+
+  // Interactive 2D Tour Mini-Map HUD with Glowing Client View Pointer
+  const [showMiniMap, setShowMiniMap] = useState<boolean>(true);
+  const miniMapCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = miniMapCanvasRef.current;
+    if (!canvas || !showMiniMap) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const width = canvas.width;
+    const height = canvas.height;
+    ctx.clearRect(0, 0, width, height);
+
+    // Compute active floor bounding box
+    const floorRooms = (plan.rooms || []).filter((r) => (r.floorLevel ?? 0) === activeFloor);
+    const floorWalls = (plan.walls || []).filter((w) => (w.floorLevel ?? 0) === activeFloor);
+
+    let minX = -350, maxX = 350, minY = -250, maxY = 250;
+    if (floorRooms.length > 0 || floorWalls.length > 0) {
+      minX = Infinity; maxX = -Infinity; minY = Infinity; maxY = -Infinity;
+      floorRooms.forEach((r) => r.points.forEach((p) => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }));
+      floorWalls.forEach((w) => { minX = Math.min(minX, w.xStart, w.xEnd); maxX = Math.max(maxX, w.xStart, w.xEnd); minY = Math.min(minY, w.yStart, w.yEnd); maxY = Math.max(maxY, w.yStart, w.yEnd); });
+    }
+    const pad = 50;
+    minX -= pad; maxX += pad; minY -= pad; maxY += pad;
+    const spanX = Math.max(80, maxX - minX);
+    const spanY = Math.max(80, maxY - minY);
+    const scale = Math.min((width - 20) / spanX, (height - 20) / spanY);
+
+    const toScreen = (x: number, y: number) => ({
+      x: 10 + (x - minX) * scale,
+      y: 10 + (y - minY) * scale,
+    });
+
+    // Background
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle grid
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x < width; x += 15) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); }
+    for (let y = 0; y < height; y += 15) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke(); }
+
+    // Rooms
+    floorRooms.forEach((r) => {
+      if (r.points.length < 3) return;
+      ctx.beginPath();
+      const p0 = toScreen(r.points[0].x, r.points[0].y);
+      ctx.moveTo(p0.x, p0.y);
+      for (let i = 1; i < r.points.length; i++) {
+        const pi = toScreen(r.points[i].x, r.points[i].y);
+        ctx.lineTo(pi.x, pi.y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = r.id === selectedRoom?.id ? 'rgba(14, 165, 233, 0.2)' : 'rgba(241, 245, 249, 0.85)';
+      ctx.fill();
+      ctx.strokeStyle = r.id === selectedRoom?.id ? '#0284c7' : '#cbd5e1';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+
+    // Walls
+    floorWalls.forEach((w) => {
+      const p1 = toScreen(w.xStart, w.yStart);
+      const p2 = toScreen(w.xEnd, w.yEnd);
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = Math.max(2, (w.thickness || 15) * scale * 0.9);
+      ctx.stroke();
+    });
+
+    // Client View Pointer Reticle in Tour Mode (Matching media_1791085406444.png)
+    const vCam = visitorCamera || { x: 0, y: 0, yaw: 0 };
+    const vp = toScreen(vCam.x, vCam.y);
+    const vAngle = vCam.yaw || 0;
+    const screenLookAngle = Math.atan2(-Math.cos(vAngle), Math.sin(vAngle));
+
+    ctx.save();
+    ctx.translate(vp.x, vp.y);
+
+    // Vision cone
+    const fovRad = (65 * Math.PI) / 180;
+    const coneDist = 28;
+    const grad = ctx.createRadialGradient(0, 0, 3, 0, 0, coneDist);
+    grad.addColorStop(0, 'rgba(14, 165, 233, 0.45)');
+    grad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, coneDist, screenLookAngle - fovRad / 2, screenLookAngle + fovRad / 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // Reticle halo & circle
+    ctx.shadowColor = '#38bdf8';
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = '#0284c7';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 9, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+
+    // 4 crosshairs
+    ctx.beginPath();
+    ctx.moveTo(0, -9); ctx.lineTo(0, -5.5);
+    ctx.moveTo(0, 9); ctx.lineTo(0, 5.5);
+    ctx.moveTo(-9, 0); ctx.lineTo(-5.5, 0);
+    ctx.moveTo(9, 0); ctx.lineTo(5.5, 0);
+    ctx.stroke();
+
+    // Center dot
+    ctx.fillStyle = '#0284c7';
+    ctx.beginPath();
+    ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }, [plan, activeFloor, visitorCamera, selectedRoom, showMiniMap]);
+
+  const handleMiniMapClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!onUpdateVisitorCamera) return;
+    const canvas = miniMapCanvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    const floorRooms = (plan.rooms || []).filter((r) => (r.floorLevel ?? 0) === activeFloor);
+    const floorWalls = (plan.walls || []).filter((w) => (w.floorLevel ?? 0) === activeFloor);
+
+    let minX = -350, maxX = 350, minY = -250, maxY = 250;
+    if (floorRooms.length > 0 || floorWalls.length > 0) {
+      minX = Infinity; maxX = -Infinity; minY = Infinity; maxY = -Infinity;
+      floorRooms.forEach((r) => r.points.forEach((p) => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }));
+      floorWalls.forEach((w) => { minX = Math.min(minX, w.xStart, w.xEnd); maxX = Math.max(maxX, w.xStart, w.xEnd); minY = Math.min(minY, w.yStart, w.yEnd); maxY = Math.max(maxY, w.yStart, w.yEnd); });
+    }
+    const pad = 50;
+    minX -= pad; maxX += pad; minY -= pad; maxY += pad;
+    const spanX = Math.max(80, maxX - minX);
+    const spanY = Math.max(80, maxY - minY);
+    const scale = Math.min((canvas.width - 20) / spanX, (canvas.height - 20) / spanY);
+
+    const planX = Math.round(minX + (clickX - 10) / scale);
+    const planY = Math.round(minY + (clickY - 10) / scale);
+
+    onUpdateVisitorCamera({
+      x: planX,
+      y: planY,
+      floorLevel: activeFloor,
+    });
+  };
 
   // Draggable & Collapsible Customizer Panel State
   const [panelPos, setPanelPos] = useState<{ x: number; y: number }>({ x: 24, y: 140 });
@@ -368,6 +533,8 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
           targetRoomToFocus={selectedRoom}
           toolModeProp={tourToolMode}
           onToolModeChangeProp={setTourToolMode}
+          visitorCameraProp={visitorCamera}
+          onVisitorCameraChange={onUpdateVisitorCamera}
         />
       </div>
 
@@ -1111,6 +1278,52 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
           </button>
         </div>
       )}
+
+      {/* Interactive 2D Tour Mini-Map HUD with Glowing Client View Pointer */}
+      <div className="absolute bottom-4 left-4 z-20 pointer-events-auto">
+        {showMiniMap ? (
+          <div className="bg-white/95 backdrop-blur-xl border border-slate-200/90 rounded-2xl shadow-2xl p-2.5 flex flex-col gap-2 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between gap-3 px-1">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-sky-500 shadow-sm shadow-sky-500/80 animate-pulse" />
+                <span className="text-[11px] font-bold text-slate-800 tracking-tight">Client Tour Radar</span>
+                <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">L{activeFloor}</span>
+              </div>
+              <button
+                onClick={() => setShowMiniMap(false)}
+                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition cursor-pointer"
+                title="Minimize Mini-Map"
+              >
+                <Minimize2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="relative border border-slate-200 rounded-xl overflow-hidden bg-slate-50 shadow-inner">
+              <canvas
+                ref={miniMapCanvasRef}
+                width={190}
+                height={150}
+                onClick={handleMiniMapClick}
+                className="block cursor-crosshair"
+                title="Click anywhere to teleport in 3D"
+              />
+              <div className="absolute bottom-1 right-1.5 text-[9px] font-semibold text-slate-400 pointer-events-none">
+                Click to Move
+              </div>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowMiniMap(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 hover:bg-white text-slate-700 rounded-xl shadow-lg border border-slate-200 backdrop-blur-xl text-xs font-bold transition hover:scale-105 active:scale-95 cursor-pointer ring-1 ring-black/5"
+            title="Open Tour Mini-Map"
+          >
+            <Compass className="w-3.5 h-3.5 text-sky-600" />
+            <span>Show Mini-Map</span>
+            <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse ml-0.5" />
+          </button>
+        )}
+      </div>
 
       {/* Floating Tour Guidance at Bottom */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-1.5 bg-white/95 rounded-full border border-slate-200 text-xs text-slate-700 shadow-md backdrop-blur-xl">

@@ -26,7 +26,7 @@ export interface PaymentTransactionRecord {
   planId: 'trial_2days' | 'monthly' | 'yearly' | string;
   planName: string;
   amount: number; // in INR
-  gateway: 'cashfree' | 'razorpay';
+  gateway: 'cashfree';
   status: 'PAID' | 'REFUNDED' | 'FAILED' | 'PENDING' | 'USER_DROPPED';
   paymentMethod: string;
   createdAt: string;
@@ -115,14 +115,14 @@ const transactions: PaymentTransactionRecord[] = [
     expiresAt: new Date(Date.now() + 29 * 24 * 3600 * 1000).toISOString(),
   },
   {
-    id: 'tx_rzp_103',
-    orderId: 'order_rzp_98412_a8bc',
+    id: 'tx_cf_103',
+    orderId: 'cf_year_98412_a8bc',
     customerName: 'Vikramaditya Rao',
     customerEmail: 'v.rao@urbanspaces.in',
     planId: 'yearly',
     planName: 'Annual Studio Pass (20% Off)',
     amount: 9590,
-    gateway: 'razorpay',
+    gateway: 'cashfree',
     status: 'PAID',
     paymentMethod: 'HDFC NetBanking',
     createdAt: new Date(Date.now() - 36 * 3600 * 1000).toISOString(),

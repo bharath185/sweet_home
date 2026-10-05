@@ -12,6 +12,9 @@ import {
   ChevronRight,
   Crown,
   CreditCard,
+  ShieldCheck,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { HomePlan, UserRole, User } from '../types/plan';
 import { hasActiveSubscription, getSubscriptionRemainingText } from '../services/subscriptionService';
@@ -29,6 +32,8 @@ interface NavbarProps {
   currentUser?: User | null;
   onLogout?: () => void;
   onOpenUpgradeModal?: () => void;
+  theme?: 'dark' | 'light';
+  onToggleTheme?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -43,189 +48,173 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   onLogout,
   onOpenUpgradeModal,
+  theme = 'light',
+  onToggleTheme,
 }) => {
-  // Determine active state for tabs
-  const isDashboardActive =
-    activeView === 'dashboard' &&
-    (adminTab === 'dashboard' || adminTab === 'overview' || adminTab === 'floors' || !adminTab);
-  const isStudioActive =
-    activeView === 'split' || activeView === '2d' || activeView === '3d' || activeView === 'customer';
-  const isCatalogActive = activeView === 'dashboard' && adminTab === 'catalog';
-  const isUsersActive = activeView === 'dashboard' && adminTab === 'users';
-  const isPaymentsActive = activeView === 'dashboard' && adminTab === 'payments';
+  const isDark = theme === 'dark';
+
+  const isAdmin = userRole === 'ADMIN' || currentUser?.role === 'ADMIN';
 
   return (
-    <header className="h-14 bg-[#0a1224] border-b border-slate-800/90 px-4 sm:px-6 flex items-center justify-between select-none z-30 shadow-xl relative text-white">
-      {/* 1. Left Brand & Active Plan Title */}
+    <header className={`h-14 px-4 sm:px-6 flex items-center justify-between select-none z-30 relative transition-colors duration-200 ${
+      isDark
+        ? 'bg-[#0B0F17]/95 backdrop-blur border-b border-slate-800 text-slate-100'
+        : 'bg-white/95 backdrop-blur border-b border-slate-200/80 text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.02)]'
+    }`}>
+      {/* 1. Left: Brand Mark */}
       <div className="flex items-center gap-3 min-w-[200px]">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 p-[1px] shadow-sm shadow-sky-500/30 shrink-0">
-          <div className="w-full h-full bg-[#091020] rounded-xl flex items-center justify-center text-sky-400">
-            <Layers className="w-4 h-4" />
-          </div>
+        <div className="w-8 h-8 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 flex items-center justify-center font-bold shadow-xs shrink-0">
+          <Layers className="w-4 h-4" />
         </div>
 
-        <div className="flex flex-col min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-extrabold text-white text-sm tracking-tight truncate">
-              Visual Rendered
-            </span>
-            <span
-              className={`text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded-full border shrink-0 ${
-                userRole === 'ADMIN'
-                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
-                  : userRole === 'DESIGNER'
-                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
-                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-              }`}
-            >
-              {userRole}
-            </span>
-          </div>
-
-          <span className="text-[10px] font-medium text-slate-400 truncate max-w-[170px]">
-            {plan.name || 'Untitled Plan'}
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-white">
+            DecoForge
+          </span>
+          <span className={`text-[10px] uppercase font-semibold px-2 py-0.5 rounded-md border tracking-wider ${
+            isAdmin
+              ? 'bg-indigo-50 text-indigo-700 border-indigo-200/80 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/60'
+              : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+          }`}>
+            {isAdmin ? 'Admin Console' : userRole}
           </span>
         </div>
       </div>
 
-      {/* 2. Center Navigation Tabs (EXACTLY: Dashboard | Design Studio | 3D Catalog | Users & Roles) */}
-      <nav className="flex items-center bg-slate-900/90 p-1 rounded-2xl border border-slate-800 shadow-inner">
-        {/* Tab 1: Dashboard */}
-        <button
-          onClick={() => {
-            setActiveView('dashboard');
-            if (setAdminTab) setAdminTab('overview');
-          }}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-            isDashboardActive
-              ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-          }`}
-          title="Enterprise Overview, Analytics & Recent Projects"
-        >
-          <LayoutDashboard className="w-3.5 h-3.5" />
-          <span>Dashboard</span>
-        </button>
-
-        {/* Tab 2: Design Studio */}
-        <button
-          onClick={() => {
-            setActiveView('split');
-          }}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-            isStudioActive
-              ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-          }`}
-          title="2D CAD Blueprint & 3D WebGL Studio Workspace"
-        >
-          <Palette className="w-3.5 h-3.5" />
-          <span>Design Studio</span>
-        </button>
-
-        {/* Tab 3: 3D Catalog */}
-        <button
-          onClick={() => {
-            setActiveView('dashboard');
-            if (setAdminTab) setAdminTab('catalog');
-          }}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-            isCatalogActive
-              ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-          }`}
-          title="3D Model Assets Library & Custom Furniture"
-        >
-          <Box className="w-3.5 h-3.5" />
-          <span>3D Catalog</span>
-        </button>
-
-        {/* Tab 4: Users & Roles */}
-        <button
-          onClick={() => {
-            setActiveView('dashboard');
-            if (setAdminTab) setAdminTab('users');
-          }}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-            isUsersActive
-              ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/20'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-          }`}
-          title="Team Roles, Client Portals & Permissions"
-        >
-          <Users className="w-3.5 h-3.5" />
-          <span>Users & Roles</span>
-        </button>
-
-        {/* Tab 5: Payments (STRICTLY ADMIN ONLY) */}
-        {(userRole === 'ADMIN' || currentUser?.role === 'ADMIN') && (
+      {/* 2. Center: Segmented Navigation Switcher */}
+      {isAdmin ? (
+        <nav className={`flex items-center p-1 rounded-xl border text-xs transition-colors ${
+          isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200/70'
+        }`}>
           <button
             onClick={() => {
               setActiveView('dashboard');
-              if (setAdminTab) setAdminTab('payments');
+              if (setAdminTab) setAdminTab('overview');
             }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-              isPaymentsActive
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            className={`px-3.5 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeView === 'dashboard'
+                ? isDark
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
+                : isDark
+                ? 'text-slate-400 hover:text-white'
+                : 'text-slate-500 hover:text-slate-900'
             }`}
-            title="Payments, Subscriptions & Revenue Dashboard (Admin Only)"
           >
-            <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Payments</span>
+            <LayoutDashboard className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Admin Control Center</span>
           </button>
-        )}
-      </nav>
 
-      {/* 3. Right Side: Cloud Sync & User Profile */}
-      <div className="flex items-center gap-3">
-        {/* Real-time PostgreSQL Cloud Sync Status Badge */}
+          <button
+            onClick={() => {
+              setActiveView('split');
+            }}
+            className={`px-3.5 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeView !== 'dashboard'
+                ? isDark
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
+                : isDark
+                ? 'text-slate-400 hover:text-white'
+                : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <Palette className="w-3.5 h-3.5 text-amber-500" />
+            <span>Design Studio</span>
+          </button>
+        </nav>
+      ) : (
+        /* Regular Designers & Clients: Clean View Switcher */
+        <nav className={`flex items-center p-1 rounded-xl border text-xs transition-colors ${
+          isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200/70'
+        }`}>
+          <button
+            onClick={() => setActiveView('split')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeView === 'split'
+                ? isDark
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
+                : isDark
+                ? 'text-slate-400 hover:text-white'
+                : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Split 2D / 3D</span>
+          </button>
+
+          <button
+            onClick={() => setActiveView('2d')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeView === '2d'
+                ? isDark
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
+                : isDark
+                ? 'text-slate-400 hover:text-white'
+                : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <span>2D CAD Blueprint</span>
+          </button>
+
+          <button
+            onClick={() => setActiveView('3d')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeView === '3d'
+                ? isDark
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
+                : isDark
+                ? 'text-slate-400 hover:text-white'
+                : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <span>3D Walkthrough</span>
+          </button>
+        </nav>
+      )}
+
+      {/* 3. Right: Telemetry Dot, Theme Toggle & Profile */}
+      <div className="flex items-center gap-2.5">
+        {/* Real-time Telemetry Dot */}
         <div
-          className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all ${
-            cloudSyncStatus === 'saving'
-              ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 animate-pulse'
-              : cloudSyncStatus === 'offline'
-              ? 'bg-slate-800 text-slate-400 border-slate-700'
-              : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-          }`}
+          className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium px-2 py-1 rounded-lg"
           title={
             cloudSyncStatus === 'saving'
-              ? 'Saving changes to cloud...'
+              ? 'Saving changes...'
               : cloudSyncStatus === 'offline'
-              ? 'Database offline - saving to local cache'
-              : `Cloud sync active${lastSyncedAt ? ' (Synced at ' + lastSyncedAt + ')' : ''}`
+              ? 'Database offline - using cache'
+              : `Connected to cloud sync${lastSyncedAt ? ' (' + lastSyncedAt + ')' : ''}`
           }
         >
           <span
             className={`w-2 h-2 rounded-full ${
               cloudSyncStatus === 'saving'
-                ? 'bg-amber-400 animate-ping'
+                ? 'bg-amber-500 animate-ping'
                 : cloudSyncStatus === 'offline'
-                ? 'bg-slate-500'
-                : 'bg-emerald-400'
+                ? 'bg-slate-400'
+                : 'bg-emerald-500'
             }`}
           />
-          <span>
-            {cloudSyncStatus === 'saving'
-              ? '💾 Auto-saving...'
-              : cloudSyncStatus === 'offline'
-              ? '⚠️ Local Cache'
-              : '☁️ Synced'}
+          <span className="text-[11px] font-medium">
+            {cloudSyncStatus === 'saving' ? 'Saving' : cloudSyncStatus === 'offline' ? 'Offline' : 'Live'}
           </span>
         </div>
 
-        {/* Universal Studio Pass Status & Trigger Button */}
-        {onOpenUpgradeModal && (
+        {/* Regular User Studio Pass (Hidden for Admins) */}
+        {!isAdmin && onOpenUpgradeModal && (
           <button
             onClick={onOpenUpgradeModal}
-            className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
               hasActiveSubscription(currentUser)
-                ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
-                : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-500/25'
+                ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800'
+                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs'
             }`}
-            title="SweetHome Studio Access Passes"
+            title="Studio Pass Subscription"
           >
-            <Crown className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+            <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" />
             <span>
               {hasActiveSubscription(currentUser)
                 ? getSubscriptionRemainingText(currentUser)
@@ -234,40 +223,46 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         )}
 
+        {/* Theme Switcher Toggle (Sun / Moon) */}
+        {onToggleTheme && (
+          <button
+            onClick={onToggleTheme}
+            className={`w-8 h-8 rounded-lg border flex items-center justify-center transition cursor-pointer ${
+              isDark
+                ? 'text-slate-400 hover:text-amber-400 hover:bg-slate-800 border-slate-800 bg-slate-900/60'
+                : 'text-slate-500 hover:text-amber-600 hover:bg-slate-100 border-slate-200/80 bg-slate-50'
+            }`}
+            title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            aria-label="Toggle theme"
+          >
+            {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+          </button>
+        )}
+
         {/* User profile & Logout */}
         {currentUser && (
-          <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
-            <div
-              onClick={onOpenUpgradeModal}
-              className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer hover:border-slate-700 transition"
-              title={`Logged in as ${currentUser.name} - Click to view subscription`}
-            >
-              <div
-                className={`w-5 h-5 rounded-lg flex items-center justify-center text-white text-[10px] font-bold ${
-                  currentUser.role === 'ADMIN'
-                    ? 'bg-sky-600'
-                    : currentUser.role === 'DESIGNER'
-                    ? 'bg-indigo-600'
-                    : 'bg-emerald-600'
-                }`}
-              >
+          <div className={`flex items-center gap-2 pl-2 border-l ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+            <div className={`flex items-center gap-2 px-2.5 py-1 rounded-lg border ${
+              isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-slate-100/70 border-slate-200/80 text-slate-800'
+            }`}>
+              <div className="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center font-bold text-[10px]">
                 {currentUser.name.charAt(0).toUpperCase()}
               </div>
-              <span className="hidden sm:inline text-xs font-bold text-slate-200 truncate max-w-[85px]">
+              <span className="hidden sm:inline text-xs font-semibold truncate max-w-[90px]">
                 {currentUser.name}
               </span>
-              {currentUser.subscriptionTier && currentUser.subscriptionTier !== 'FREE' && (
-                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-md">
-                  👑 {currentUser.subscriptionTier}
-                </span>
-              )}
             </div>
 
             {onLogout && (
               <button
                 onClick={onLogout}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-slate-800 bg-slate-900 transition"
-                title="Log out"
+                className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                  isDark
+                    ? 'text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 border-slate-800 bg-slate-900/60'
+                    : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50 border-slate-200/80 bg-slate-50'
+                }`}
+                title="Sign Out"
+                aria-label="Sign Out"
               >
                 <LogOut className="w-3.5 h-3.5" />
               </button>

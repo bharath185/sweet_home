@@ -11,7 +11,7 @@ export interface PaymentTransaction {
   planId: 'trial_2days' | 'monthly' | 'yearly';
   planName: string;
   amount: number; // in INR Rupees
-  gateway: 'cashfree' | 'razorpay';
+  gateway: 'cashfree';
   status: 'PAID' | 'REFUNDED' | 'FAILED';
   paymentMethod: string;
   createdAt: string;
@@ -48,14 +48,14 @@ const INITIAL_TRANSACTIONS: PaymentTransaction[] = [
     expiresAt: new Date(Date.now() + 29 * 24 * 3600 * 1000).toISOString(),
   },
   {
-    id: 'tx_rzp_103',
-    orderId: 'order_rzp_98412_a8bc',
+    id: 'tx_cf_103',
+    orderId: 'cf_year_98412_a8bc',
     customerName: 'Vikramaditya Rao',
     customerEmail: 'v.rao@urbanspaces.in',
     planId: 'yearly',
     planName: 'Annual Studio Pass (20% Off)',
     amount: 9590,
-    gateway: 'razorpay',
+    gateway: 'cashfree',
     status: 'PAID',
     paymentMethod: 'HDFC NetBanking',
     createdAt: new Date(Date.now() - 36 * 3600 * 1000).toISOString(),
@@ -90,14 +90,14 @@ const INITIAL_TRANSACTIONS: PaymentTransaction[] = [
     expiresAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
   },
   {
-    id: 'tx_rzp_106',
-    orderId: 'order_rzp_77401_ee44',
+    id: 'tx_cf_106',
+    orderId: 'cf_year_77401_ee44',
     customerName: 'Manish Chawla',
     customerEmail: 'm.chawla@apexbuild.in',
     planId: 'yearly',
     planName: 'Annual Studio Pass (20% Off)',
     amount: 9590,
-    gateway: 'razorpay',
+    gateway: 'cashfree',
     status: 'PAID',
     paymentMethod: 'ICICI Corporate Cards',
     createdAt: new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString(),
@@ -131,10 +131,6 @@ export async function GET(req: NextRequest) {
       (acc, tx) => acc + tx.amount,
       0
     );
-    const razorpayRevenue = allTransactions.filter((tx) => tx.gateway === 'razorpay').reduce(
-      (acc, tx) => acc + tx.amount,
-      0
-    );
 
     const trialCount = allTransactions.filter((tx) => tx.planId === 'trial_2days').length;
     const monthlyCount = allTransactions.filter((tx) => tx.planId === 'monthly').length;
@@ -142,14 +138,12 @@ export async function GET(req: NextRequest) {
 
     const cfAppId = process.env.CASHFREE_APP_ID || process.env.NEXT_PUBLIC_CASHFREE_APP_ID;
     const cfEnv = process.env.CASHFREE_ENVIRONMENT || 'SANDBOX';
-    const rzpKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
 
     return NextResponse.json({
       success: true,
       metrics: {
         totalRevenueINR: totalRevenue,
         cashfreeRevenueINR: cashfreeRevenue,
-        razorpayRevenueINR: razorpayRevenue,
         activePassesCount: allTransactions.length,
         breakdown: {
           trial: trialCount,
@@ -165,17 +159,10 @@ export async function GET(req: NextRequest) {
           version: '2023-08-01',
           supportedMethods: ['UPI', 'Debit/Credit Cards', 'NetBanking', 'EMI', 'Wallets'],
         },
-        razorpay: {
-          status: 'ONLINE',
-          environment: 'PRODUCTION / SANDBOX',
-          isConfigured: !!rzpKeyId,
-          version: 'v1 Standard',
-          supportedMethods: ['UPI', 'Credit/Debit Cards', 'NetBanking', 'Wallets'],
-        },
       },
       security: {
         sslEncryption: '256-Bit TLS 1.3 Bank Grade',
-        signatureAlgorithm: 'HMAC-SHA256 Constant-Time Validated',
+        signatureAlgorithm: 'RSA 2048 / HMAC-SHA256 Constant-Time Validated',
         serverPriceProtection: 'Active (Tamper-Proof)',
         adminOnlyAccess: true,
       },
