@@ -13,6 +13,10 @@ export interface UserPaymentRecord {
   expires_at?: string | null;
   cashfree_order_id?: string | null;
   cashfree_payment_id?: string | null;
+  trial_started_at?: string | null;
+  trial_expires_at?: string | null;
+  is_free_trial?: boolean;
+  has_completed_trial?: boolean;
   updated_at?: string;
 }
 
@@ -114,23 +118,54 @@ function normalizeKey(val?: string | null): string {
 }
 
 /**
- * Checks if a user's subscription is currently active (not expired)
+ * Checks if a user's subscription or 48-hour free trial is currently active (not expired)
  */
 export function isSubscriptionActive(record: UserPaymentRecord | null | undefined): boolean {
   if (!record) return false;
   if (record.role === 'ADMIN') return true;
-  if (record.payment_status !== 'paid') return false;
-  if (!record.expires_at) return true; // Lifetime or permanent paid
-  const expTime = new Date(record.expires_at).getTime();
-  return !isNaN(expTime) && Date.now() < expTime;
+
+  // 1. Genuine Paid Plan (Paid customer)
+  if (record.payment_status === 'paid' && !record.is_free_trial) {
+    if (!record.expires_at) return true; // Lifetime or permanent paid
+    const expTime = new Date(record.expires_at).getTime();
+    return !isNaN(expTime) && Date.now() < expTime;
+  }
+
+  // 2. 48-Hour Free Trial (Active window check)
+  if (record.is_free_trial || record.trial_expires_at) {
+    const trialExp = record.trial_expires_at ? new Date(record.trial_expires_at).getTime() : 0;
+    if (trialExp > 0 && Date.now() < trialExp) {
+      return true; // Trial active: studio unlocked!
+    }
+    // 48 hours is complete -> blocked!
+    return false;
+  }
+
+  return false;
 }
 
 /**
- * Computes effective payment status taking expiration into account
+ * Computes effective payment status taking 48-hour trial and expiration into account
  */
 export function getEffectivePaymentStatus(record: UserPaymentRecord | null | undefined): PaymentStatus {
   if (!record) return 'unpaid';
   if (record.role === 'ADMIN') return 'paid';
+
+  // Check 48-Hour Free Trial
+  if (record.is_free_trial || record.trial_expires_at) {
+    const trialExp = record.trial_expires_at ? new Date(record.trial_expires_at).getTime() : 0;
+    if (trialExp > 0) {
+      if (Date.now() < trialExp) {
+        return 'paid'; // Free trial active
+      } else {
+        record.has_completed_trial = true;
+        record.is_free_trial = false;
+        record.payment_status = 'expired';
+        return 'expired'; // Completed 48 hours -> blocked!
+      }
+    }
+  }
+
   if (record.payment_status === 'paid') {
     if (record.expires_at) {
       const expTime = new Date(record.expires_at).getTime();
@@ -141,6 +176,58 @@ export function getEffectivePaymentStatus(record: UserPaymentRecord | null | und
     return 'paid';
   }
   return record.payment_status || 'unpaid';
+}
+
+/**
+ * Grants or retrieves a 48-hour free trial for a user upon login
+ */
+export function startOrGet48HourFreeTrial(params: {
+  userId?: string | null;
+  email?: string | null;
+  name?: string;
+  role?: 'ADMIN' | 'DESIGNER' | 'CLIENT';
+}): UserPaymentRecord {
+  const existing = getUserPaymentStatus({ userId: params.userId, email: params.email });
+  if (existing) {
+    // If user already consumed their 48 hours: blocked!
+    if (existing.has_completed_trial) {
+      existing.payment_status = 'expired';
+      return existing;
+    }
+    if (existing.trial_expires_at) {
+      const exp = new Date(existing.trial_expires_at).getTime();
+      if (Date.now() >= exp) {
+        existing.has_completed_trial = true;
+        existing.is_free_trial = false;
+        existing.payment_status = 'expired';
+        return existing;
+      }
+      return existing; // Still inside active 48-hour trial window
+    }
+    // If user already paid for a real pass
+    if (existing.payment_status === 'paid' && !existing.is_free_trial) {
+      return existing;
+    }
+  }
+
+  // First-time login: grant 48-hour free trial!
+  const trialDurationMs = 48 * 60 * 60 * 1000;
+  const now = new Date();
+  const trialStartedAt = now.toISOString();
+  const trialExpiresAt = new Date(now.getTime() + trialDurationMs).toISOString();
+
+  return setUserPaymentStatus({
+    userId: params.userId,
+    email: params.email,
+    name: params.name,
+    role: params.role,
+    payment_status: 'paid',
+    plan: 'trial_48h',
+    trial_started_at: trialStartedAt,
+    trial_expires_at: trialExpiresAt,
+    expires_at: trialExpiresAt,
+    is_free_trial: true,
+  });
 }
 
 /**
@@ -200,6 +287,10 @@ export function setUserPaymentStatus(update: {
   expires_at?: string | null;
   cashfree_order_id?: string | null;
   cashfree_payment_id?: string | null;
+  trial_started_at?: string | null;
+  trial_expires_at?: string | null;
+  is_free_trial?: boolean;
+  has_completed_trial?: boolean;
 }): UserPaymentRecord {
   const existing = getUserPaymentStatus({ userId: update.userId, email: update.email });
   const id = update.userId || existing?.id || `u_${Date.now()}`;
@@ -217,6 +308,10 @@ export function setUserPaymentStatus(update: {
     expires_at: update.expires_at !== undefined ? update.expires_at : (existing?.expires_at ?? null),
     cashfree_order_id: update.cashfree_order_id !== undefined ? update.cashfree_order_id : (existing?.cashfree_order_id ?? null),
     cashfree_payment_id: update.cashfree_payment_id !== undefined ? update.cashfree_payment_id : (existing?.cashfree_payment_id ?? null),
+    trial_started_at: update.trial_started_at !== undefined ? update.trial_started_at : (existing?.trial_started_at ?? null),
+    trial_expires_at: update.trial_expires_at !== undefined ? update.trial_expires_at : (existing?.trial_expires_at ?? null),
+    is_free_trial: update.is_free_trial !== undefined ? update.is_free_trial : (existing?.is_free_trial ?? false),
+    has_completed_trial: update.has_completed_trial !== undefined ? update.has_completed_trial : (existing?.has_completed_trial ?? false),
     updated_at: new Date().toISOString(),
   };
 

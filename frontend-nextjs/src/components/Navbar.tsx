@@ -17,7 +17,7 @@ import {
   Moon,
 } from 'lucide-react';
 import { HomePlan, UserRole, User } from '../types/plan';
-import { hasActiveSubscription, getSubscriptionRemainingText } from '../services/subscriptionService';
+import { hasActiveSubscription, getSubscriptionRemainingText, isUserOnFreeTrial } from '../services/subscriptionService';
 
 interface NavbarProps {
   plan: HomePlan;
@@ -203,23 +203,37 @@ export const Navbar: React.FC<NavbarProps> = ({
           </span>
         </div>
 
-        {/* Regular User Studio Pass (Hidden for Admins) */}
+        {/* Regular User Studio Pass & Free Trial Upgrade Button */}
         {!isAdmin && onOpenUpgradeModal && (
           <button
             onClick={onOpenUpgradeModal}
-            className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-              hasActiveSubscription(currentUser)
-                ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800'
+            className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
+              isUserOnFreeTrial(currentUser)
+                ? 'bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-amber-500/15 text-amber-700 border-amber-500/40 hover:border-amber-500 dark:text-amber-300 dark:bg-amber-950/40 dark:border-amber-700/60 hover:scale-[1.02]'
+                : hasActiveSubscription(currentUser)
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
                 : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs'
             }`}
-            title="Studio Pass Subscription"
+            title="Studio Pass & Upgrade Options"
           >
-            <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-            <span>
-              {hasActiveSubscription(currentUser)
-                ? getSubscriptionRemainingText(currentUser)
-                : 'Get Pass (₹200 Trial)'}
-            </span>
+            {isUserOnFreeTrial(currentUser) ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <span>{getSubscriptionRemainingText(currentUser)}</span>
+                <span className="ml-1 px-1.5 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider">
+                  Upgrade
+                </span>
+              </>
+            ) : (
+              <>
+                <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span>
+                  {hasActiveSubscription(currentUser)
+                    ? getSubscriptionRemainingText(currentUser)
+                    : 'Upgrade to Pro'}
+                </span>
+              </>
+            )}
           </button>
         )}
 

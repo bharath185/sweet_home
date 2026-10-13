@@ -4,6 +4,7 @@ import {
   setUserPaymentStatus,
   isSubscriptionActive,
   getEffectivePaymentStatus,
+  startOrGet48HourFreeTrial,
 } from '@/lib/paymentStore';
 
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,7 @@ export async function GET(req: NextRequest) {
     const userId = searchParams.get('userId') || req.headers.get('x-user-id');
     const email = searchParams.get('email') || req.headers.get('x-user-email');
     const roleHeader = req.headers.get('x-user-role');
+    const autoTrial = searchParams.get('autoTrial') === 'true';
 
     if (!userId && !email) {
       return NextResponse.json(
@@ -22,7 +24,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const record = getUserPaymentStatus({ userId, email });
+    let record = getUserPaymentStatus({ userId, email });
 
     // If user is Admin (by role or seed email)
     const isAdmin =
@@ -48,32 +50,26 @@ export async function GET(req: NextRequest) {
         isPaid: true,
         isAdmin: true,
         canAccessStudio: true,
+        isFreeTrial: false,
       });
     }
 
+    // If non-admin user is logging in and has no record yet -> Grant 48-Hour Free Trial!
     if (!record) {
-      // Unpaid unknown user
-      return NextResponse.json({
-        success: true,
-        user: {
-          id: userId || 'anonymous',
-          email: email || '',
-          role: 'DESIGNER',
-          payment_status: 'unpaid',
-          plan: null,
-          paid_at: null,
-          expires_at: null,
-          cashfree_order_id: null,
-          cashfree_payment_id: null,
-        },
-        isPaid: false,
-        isAdmin: false,
-        canAccessStudio: false,
+      record = startOrGet48HourFreeTrial({
+        userId,
+        email,
+        role: 'DESIGNER',
       });
     }
 
     const effectiveStatus = getEffectivePaymentStatus(record);
-    const hasAccess = effectiveStatus === 'paid';
+    const hasAccess = isSubscriptionActive(record);
+    const isTrialActive = Boolean(
+      record.is_free_trial &&
+      record.trial_expires_at &&
+      Date.now() < new Date(record.trial_expires_at).getTime()
+    );
 
     return NextResponse.json({
       success: true,
@@ -84,6 +80,9 @@ export async function GET(req: NextRequest) {
       isPaid: hasAccess,
       isAdmin: false,
       canAccessStudio: hasAccess,
+      isFreeTrial: isTrialActive,
+      trialExpiresAt: record.trial_expires_at,
+      hasCompletedTrial: record.has_completed_trial || false,
     });
   } catch (error: any) {
     console.error('Error fetching user status:', error);
@@ -97,13 +96,29 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { userId, email, name, role, payment_status, plan } = body;
+    const { userId, email, name, role, payment_status, plan, action, is_free_trial, trial_started_at, trial_expires_at } = body;
 
     if (!userId && !email) {
       return NextResponse.json(
         { error: 'Missing userId or email in request body' },
         { status: 400 }
       );
+    }
+
+    if (action === 'start_trial' || is_free_trial) {
+      const trialRecord = startOrGet48HourFreeTrial({
+        userId,
+        email,
+        name,
+        role,
+      });
+      return NextResponse.json({
+        success: true,
+        user: trialRecord,
+        isPaid: isSubscriptionActive(trialRecord),
+        isFreeTrial: true,
+        trialExpiresAt: trialRecord.trial_expires_at,
+      });
     }
 
     const updated = setUserPaymentStatus({
@@ -113,6 +128,9 @@ export async function POST(req: NextRequest) {
       role,
       payment_status: payment_status || 'unpaid',
       plan,
+      trial_started_at,
+      trial_expires_at,
+      is_free_trial,
     });
 
     return NextResponse.json({

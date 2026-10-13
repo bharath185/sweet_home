@@ -90,6 +90,9 @@ import {
   hasActiveSubscription,
   getSubscriptionRemainingText,
   saveSubscriptionLocally,
+  isUserOnFreeTrial,
+  hasCompletedFreeTrial,
+  start48HourFreeTrialLocally,
 } from '../services/subscriptionService';
 
 export default function HomeStudioPage() {
@@ -254,6 +257,10 @@ export default function HomeStudioPage() {
       const data = await res.json();
       if (res.ok && data.success && data.user) {
         const isServerPaid = data.isPaid || data.user.payment_status === 'paid';
+        const isFreeTrial = Boolean(data.isFreeTrial ?? targetUser.isFreeTrial);
+        const trialExpiresAt = data.trialExpiresAt || data.user.trial_expires_at || targetUser.trialExpiresAt;
+        const hasCompletedTrial = Boolean(data.hasCompletedTrial ?? targetUser.hasCompletedTrial);
+
         const updatedUser: User = {
           ...targetUser,
           payment_status: data.user.payment_status,
@@ -262,8 +269,11 @@ export default function HomeStudioPage() {
           expires_at: data.user.expires_at || targetUser.expires_at,
           cashfree_order_id: data.user.cashfree_order_id || targetUser.cashfree_order_id,
           cashfree_payment_id: data.user.cashfree_payment_id || targetUser.cashfree_payment_id,
-          subscriptionTier: isServerPaid ? 'PRO' : targetUser.subscriptionTier,
-          subscriptionStatus: isServerPaid ? 'active' : targetUser.subscriptionStatus,
+          subscriptionTier: isServerPaid ? (isFreeTrial ? 'TRIAL' : 'PRO') : targetUser.subscriptionTier,
+          subscriptionStatus: isServerPaid ? (isFreeTrial ? 'trial' : 'active') : targetUser.subscriptionStatus,
+          isFreeTrial,
+          trialExpiresAt,
+          hasCompletedTrial,
         };
         setCurrentUser(updatedUser);
         localStorage.setItem('sweethome_current_user', JSON.stringify(updatedUser));
@@ -386,7 +396,10 @@ export default function HomeStudioPage() {
     let loadedUser: User | null = null;
     if (savedUser) {
       try {
-        const u = JSON.parse(savedUser);
+        let u = JSON.parse(savedUser);
+        if (u.role !== 'ADMIN' && !u.paid_at && !u.trialExpiresAt) {
+          u = start48HourFreeTrialLocally(u);
+        }
         loadedUser = u;
         setCurrentUser(u);
         setUserRole(u.role);
@@ -491,11 +504,14 @@ export default function HomeStudioPage() {
   }, [plan.furniture, plan.walls, activeFloor]);
 
   const handleLoginSuccess = (user: User) => {
-    setCurrentUser(user);
-    setUserRole(user.role);
-    localStorage.setItem('sweethome_current_user', JSON.stringify(user));
-    refreshUserPaymentStatus(user);
-    const projs = getUserProjects(user.id);
+    const userToSet = (user.role !== 'ADMIN' && !user.paid_at && !user.trialExpiresAt)
+      ? start48HourFreeTrialLocally(user)
+      : user;
+    setCurrentUser(userToSet);
+    setUserRole(userToSet.role);
+    localStorage.setItem('sweethome_current_user', JSON.stringify(userToSet));
+    refreshUserPaymentStatus(userToSet);
+    const projs = getUserProjects(userToSet.id);
     setUserProjects(projs);
 
     if (user.role === 'ADMIN') {
@@ -891,6 +907,33 @@ export default function HomeStudioPage() {
         theme={theme}
         onToggleTheme={handleToggleTheme}
       />
+
+      {/* 48-Hour Free Trial Active Banner with Upgrade Button */}
+      {currentUser.role !== 'ADMIN' && isUserOnFreeTrial(currentUser) && (
+        <div className={`px-4 py-1.5 flex items-center justify-between text-xs z-30 select-none border-b transition-colors ${
+          isDark
+            ? 'bg-gradient-to-r from-amber-500/10 via-orange-500/15 to-amber-500/10 border-amber-500/20 text-amber-300'
+            : 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border-amber-200 text-amber-900'
+        }`}>
+          <div className="flex items-center gap-2">
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+            </span>
+            <span className="font-bold">48-Hour Free Trial Active:</span>
+            <span className="font-normal opacity-90">
+              Full 2D blueprint drafting, 3D walking & custom layout features are unlocked ({getSubscriptionRemainingText(currentUser).replace(' • Upgrade', '')}).
+            </span>
+          </div>
+          <button
+            onClick={() => handleOpenUpgrade()}
+            className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[11px] shadow-xs transition flex items-center gap-1 cursor-pointer"
+          >
+            <span>Upgrade to Pro</span>
+            <ArrowRight className="w-3 h-3" />
+          </button>
+        </div>
+      )}
 
       {/* Main Workspace Body */}
       <div className="flex-1 flex overflow-hidden relative">

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { UserRole, User as UserType } from '../types/plan';
 import { LoginSimulator3D } from './LoginSimulator3D';
+import { start48HourFreeTrialLocally } from '../services/subscriptionService';
 
 interface LoginPageProps {
   onLogin: (user: UserType) => void;
@@ -213,7 +214,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
             subscriptionTier: isAdmin ? 'PRO' : 'FREE',
             subscriptionStatus: isAdmin ? 'active' : 'inactive',
           };
-          onLogin(userObj);
+          const finalUser = isAdmin ? userObj : start48HourFreeTrialLocally(userObj);
+          onLogin(finalUser);
           setIsLoading(false);
           return;
         } else {
@@ -238,7 +240,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
 
       if (matchedRegistered) {
         if (matchedRegistered.passwordHash === cleanPassword) {
-          onLogin(matchedRegistered.user);
+          const finalUser = matchedRegistered.user.role === 'ADMIN'
+            ? matchedRegistered.user
+            : start48HourFreeTrialLocally(matchedRegistered.user);
+          onLogin(finalUser);
           setIsLoading(false);
           return;
         } else {
@@ -256,7 +261,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
       );
 
       if (matchedAvailable) {
-        onLogin(matchedAvailable);
+        const finalUser = matchedAvailable.role === 'ADMIN'
+          ? matchedAvailable
+          : start48HourFreeTrialLocally(matchedAvailable);
+        onLogin(finalUser);
         setIsLoading(false);
         return;
       }
@@ -449,14 +457,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
         console.warn('LocalStorage save error:', e);
       }
 
-      setSuccessMessage(`Account created! Your login password has been sent to ${cleanEmail}. Redirecting to pass selection...`);
+      setSuccessMessage(`Account created! Your 48-Hour Free Trial is active. Redirecting to 3D Studio...`);
 
       setTimeout(() => {
         setIsLoading(false);
+        const trialUser = start48HourFreeTrialLocally(newUser);
         if (onSignUp) {
-          onSignUp(newUser);
+          onSignUp(trialUser);
         } else {
-          onLogin(newUser);
+          onLogin(trialUser);
         }
       }, 700);
     }, 400);

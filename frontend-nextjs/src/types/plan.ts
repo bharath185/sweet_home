@@ -26,6 +26,10 @@ export interface User {
   razorpayPaymentId?: string;
   razorpayOrderId?: string;
   subscriptionToken?: string;
+  trialStartedAt?: string;
+  trialExpiresAt?: string;
+  isFreeTrial?: boolean;
+  hasCompletedTrial?: boolean;
 }
 
 export interface Wall {

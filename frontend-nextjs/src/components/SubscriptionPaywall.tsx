@@ -199,9 +199,15 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
           <div className="w-full bg-orange-500/10 border border-orange-500/30 rounded-2xl p-5 mb-8 flex items-start gap-4 text-orange-300">
             <Clock className="w-6 h-6 shrink-0 mt-0.5 text-orange-400" />
             <div className="flex-1">
-              <h3 className="font-semibold text-base text-orange-200">Subscription Pass Expired</h3>
+              <h3 className="font-semibold text-base text-orange-200">
+                {currentUser.hasCompletedTrial || currentUser.isFreeTrial || currentUser.plan === 'trial_48h'
+                  ? '48-Hour Free Trial Completed'
+                  : 'Subscription Pass Expired'}
+              </h3>
               <p className="text-sm text-orange-300/80 mt-1">
-                Your pass expired {formattedExpiry ? `on ${formattedExpiry}` : 'recently'}. Please renew your pass to regain access to multi-floor drafting, raytrace renders, and blueprints.
+                {currentUser.hasCompletedTrial || currentUser.isFreeTrial || currentUser.plan === 'trial_48h'
+                  ? 'Your complimentary 48-hour free trial has ended. Select an access pass below to continue drafting multi-floor blueprints, 3D walkthroughs, and project exports.'
+                  : `Your pass expired ${formattedExpiry ? `on ${formattedExpiry}` : 'recently'}. Please renew your pass to regain access to multi-floor drafting, raytrace renders, and blueprints.`}
               </p>
               <div className="mt-3">
                 <button
@@ -209,7 +215,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                   className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-lg shadow-orange-500/20"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  Renew Pass Now
+                  Upgrade to Studio Pass
                 </button>
               </div>
             </div>

@@ -130,8 +130,36 @@ export async function fetchActivePricingPlans(): Promise<Record<string, PlanDeta
 }
 
 /**
- * Checks if the user has an active pass (Trial, Monthly, or Yearly) that has not expired.
- * All features are fully accessible as long as the user has an active pass.
+ * Checks if the user is currently on an active 48-Hour Free Trial.
+ */
+export function isUserOnFreeTrial(user: User | null): boolean {
+  if (!user || user.role === 'ADMIN') return false;
+  if (!user.isFreeTrial && !user.trialExpiresAt && user.plan !== 'trial_48h') return false;
+
+  const trialExpStr = user.trialExpiresAt || user.subscriptionExpiresAt || user.expires_at;
+  if (!trialExpStr) return false;
+  const trialExp = new Date(trialExpStr).getTime();
+  return !isNaN(trialExp) && Date.now() < trialExp;
+}
+
+/**
+ * Checks if the user has already finished/exhausted their 48-Hour Free Trial.
+ */
+export function hasCompletedFreeTrial(user: User | null): boolean {
+  if (!user || user.role === 'ADMIN') return false;
+  if (user.hasCompletedTrial) return true;
+  const trialExpStr = user.trialExpiresAt || user.subscriptionExpiresAt || user.expires_at;
+  if (trialExpStr && (user.isFreeTrial || user.plan === 'trial_48h')) {
+    const trialExp = new Date(trialExpStr).getTime();
+    return !isNaN(trialExp) && Date.now() >= trialExp;
+  }
+  return false;
+}
+
+/**
+ * Checks if the user has an active pass or active 48-hour free trial that has not expired.
+ * Studio tools remain 100% accessible during the 48 hours or active paid subscription.
+ * When the 48 hours is complete without payment, this returns false (blocks studio).
  */
 export function hasActiveSubscription(user: User | null): boolean {
   if (user && user.role === 'ADMIN') {
@@ -142,26 +170,33 @@ export function hasActiveSubscription(user: User | null): boolean {
     return false;
   }
 
-  // 1. Check explicit payment_status
-  if (user.payment_status) {
-    if (user.payment_status === 'unpaid' || user.payment_status === 'failed') {
-      return false;
-    }
-    if (user.payment_status === 'expired') {
-      return false;
-    }
-    if (user.payment_status === 'paid') {
-      const expStr = user.expires_at || user.subscriptionExpiresAt;
-      if (expStr) {
-        const expires = new Date(expStr).getTime();
-        return !isNaN(expires) && Date.now() < expires;
-      }
-      return true;
-    }
+  // 1. Check Active 48-Hour Free Trial
+  if (isUserOnFreeTrial(user)) {
+    return true; // Unlocked during 48-hour trial window
   }
 
-  // 2. Check user tier state
-  if (user.subscriptionTier === 'PRO' || user.subscriptionTier === 'TRIAL' || user.subscriptionTier === 'ENTERPRISE') {
+  // If trial was started and 48 hours is now complete -> blocked unless genuine payment exists!
+  if (hasCompletedFreeTrial(user) && (!user.paid_at || user.isFreeTrial)) {
+    return false; // 48-hour trial is over, blocked!
+  }
+
+  // 2. Check Genuine Paid Pass (Customer paid through Cashfree/Razorpay)
+  if (user.payment_status === 'paid' && !user.isFreeTrial && user.plan !== 'trial_48h') {
+    const expStr = user.expires_at || user.subscriptionExpiresAt;
+    if (expStr) {
+      const expires = new Date(expStr).getTime();
+      return !isNaN(expires) && Date.now() < expires;
+    }
+    return true;
+  }
+
+  // 3. Explicit non-paid statuses
+  if (user.payment_status === 'unpaid' || user.payment_status === 'failed' || user.payment_status === 'expired') {
+    return false;
+  }
+
+  // 4. Check user tier state
+  if (user.subscriptionTier === 'PRO' || user.subscriptionTier === 'ENTERPRISE') {
     const expStr = user.subscriptionExpiresAt || user.expires_at;
     if (expStr) {
       const expires = new Date(expStr).getTime();
@@ -170,7 +205,7 @@ export function hasActiveSubscription(user: User | null): boolean {
     return true;
   }
 
-  // 3. Check localStorage verified token
+  // 5. Check localStorage verified token
   if (typeof window !== 'undefined') {
     try {
       const token = localStorage.getItem('sweethome_sub_token');
@@ -193,7 +228,7 @@ export function hasActiveSubscription(user: User | null): boolean {
 }
 
 /**
- * Access check: All studio features are accessible when the user has an active pass.
+ * Access check: All studio features are accessible when the user has an active pass or free trial.
  */
 export function canAccessFeature(user: User | null, _feature?: string): boolean {
   if (user && user.role === 'ADMIN') return true;
@@ -207,6 +242,10 @@ export function getUserSubscriptionTier(user: User | null): 'FREE' | 'TRIAL' | '
   if (!user) return 'FREE';
   if (user.role === 'ADMIN') return 'PRO';
 
+  if (isUserOnFreeTrial(user)) {
+    return 'TRIAL';
+  }
+
   if (hasActiveSubscription(user)) {
     return user.subscriptionTier || 'PRO';
   }
@@ -215,14 +254,34 @@ export function getUserSubscriptionTier(user: User | null): 'FREE' | 'TRIAL' | '
 }
 
 /**
- * Formats a clean human-readable countdown of remaining pass access.
+ * Formats a clean human-readable countdown of remaining pass or trial access.
  */
 export function getSubscriptionRemainingText(user: User | null): string {
   if (user && user.role === 'ADMIN') return 'Admin (Lifetime)';
 
+  // 1. Free Trial Countdown
+  if (isUserOnFreeTrial(user)) {
+    const trialExpStr = user.trialExpiresAt || user.subscriptionExpiresAt || user.expires_at;
+    const trialExp = trialExpStr ? new Date(trialExpStr).getTime() : 0;
+    const diffMs = trialExp - Date.now();
+    if (diffMs <= 0) return 'Trial Expired';
+
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    if (hours >= 1) {
+      return `${hours}h Free Trial Left • Upgrade`;
+    }
+    const mins = Math.max(1, Math.floor(diffMs / (1000 * 60)));
+    return `${mins}m Free Trial Left • Upgrade`;
+  }
+
+  if (hasCompletedFreeTrial(user) && (!user.paid_at || user.isFreeTrial)) {
+    return 'Trial Expired (Upgrade Required)';
+  }
+
+  // 2. Paid Pass Countdown
   let expiresAt: number | null = null;
-  if (user?.subscriptionExpiresAt) {
-    expiresAt = new Date(user.subscriptionExpiresAt).getTime();
+  if (user?.subscriptionExpiresAt || user?.expires_at) {
+    expiresAt = new Date(user.subscriptionExpiresAt || user.expires_at!).getTime();
   } else if (typeof window !== 'undefined') {
     try {
       const token = localStorage.getItem('sweethome_sub_token');
@@ -254,6 +313,79 @@ export function getSubscriptionRemainingText(user: User | null): string {
 
   const minutes = Math.max(1, Math.floor(diffMs / (1000 * 60)));
   return `${minutes} mins left`;
+}
+
+/**
+ * Initializes and grants a 48-Hour Free Trial for a user upon login
+ */
+export function start48HourFreeTrialLocally(user: User): User {
+  // If user already has an active trial or paid pass, preserve it
+  if (user.role === 'ADMIN') return user;
+  if (user.trialExpiresAt && Date.now() < new Date(user.trialExpiresAt).getTime()) {
+    return user;
+  }
+  if (user.paid_at && !user.isFreeTrial) {
+    return user;
+  }
+
+  // If user already completed trial previously
+  if (user.hasCompletedTrial || (user.trialExpiresAt && Date.now() >= new Date(user.trialExpiresAt).getTime())) {
+    const expiredUser: User = {
+      ...user,
+      hasCompletedTrial: true,
+      isFreeTrial: false,
+      payment_status: 'expired',
+      subscriptionStatus: 'inactive',
+    };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sweethome_current_user', JSON.stringify(expiredUser));
+    }
+    return expiredUser;
+  }
+
+  // Fresh 48-Hour Free Trial!
+  const trialDurationMs = 48 * 60 * 60 * 1000;
+  const now = new Date();
+  const trialStartedAt = now.toISOString();
+  const trialExpiresAt = new Date(now.getTime() + trialDurationMs).toISOString();
+
+  const trialUser: User = {
+    ...user,
+    payment_status: 'paid',
+    plan: 'trial_48h',
+    trialStartedAt,
+    trialExpiresAt,
+    expires_at: trialExpiresAt,
+    subscriptionExpiresAt: trialExpiresAt,
+    isFreeTrial: true,
+    hasCompletedTrial: false,
+    subscriptionTier: 'TRIAL',
+    subscriptionStatus: 'trial',
+  };
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('sweethome_current_user', JSON.stringify(trialUser));
+  }
+
+  // Also sync asynchronously to server
+  if (typeof fetch !== 'undefined') {
+    fetch('/api/user/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        action: 'start_trial',
+        is_free_trial: true,
+        trial_started_at: trialStartedAt,
+        trial_expires_at: trialExpiresAt,
+      }),
+    }).catch(() => {});
+  }
+
+  return trialUser;
 }
 
 /**
