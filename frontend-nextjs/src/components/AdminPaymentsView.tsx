@@ -18,6 +18,12 @@ import {
   ArrowUpRight,
   TrendingUp,
   FileSpreadsheet,
+  Key,
+  Save,
+  Settings,
+  Trash2,
+  AlertCircle,
+  Check,
 } from 'lucide-react';
 import { User } from '../types/plan';
 import { PaymentTransaction } from '../app/api/admin/payments/route';
@@ -31,14 +37,47 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
   const isAdmin = currentUser?.role === 'ADMIN';
   const isLight = theme !== 'dark';
 
+  const [activeSubTab, setActiveSubTab] = useState<'ledger' | 'settings'>('ledger');
   const [transactions, setTransactions] = useState<PaymentTransaction[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  // Remove gateway state since Cashfree PG is sole provider
   const [selectedPlan, setSelectedPlan] = useState<'all' | 'trial_2days' | 'monthly' | 'yearly'>('all');
   const [selectedTx, setSelectedTx] = useState<PaymentTransaction | null>(null);
 
-  // Fetch admin payments data with authorization header
+  // Gateway Settings State
+  const [gatewaySettings, setGatewaySettings] = useState<{
+    activeGateway: 'cashfree' | 'razorpay';
+    environment: 'PRODUCTION' | 'SANDBOX';
+    cashfreeAppId: string;
+    cashfreeSecretKey: string;
+    cashfreeSecretKeyMasked: string;
+    isConfigured: boolean;
+  }>({
+    activeGateway: 'cashfree',
+    environment: 'SANDBOX',
+    cashfreeAppId: '',
+    cashfreeSecretKey: '',
+    cashfreeSecretKeyMasked: '',
+    isConfigured: false,
+  });
+
+  // Dynamic Plans Settings State
+  const [plansSettings, setPlansSettings] = useState<Record<string, {
+    priceINR: number;
+    name: string;
+    durationDays: number;
+    badge?: string;
+  }>>({
+    trial_2days: { priceINR: 200, name: '2-Day Full Access Trial', durationDays: 2, badge: 'Quick Test' },
+    monthly: { priceINR: 999, name: 'Monthly Pro Pass', durationDays: 30, badge: 'Most Popular' },
+    yearly: { priceINR: 9590, name: 'Annual Pro Pass', durationDays: 365, badge: 'Save 20%' },
+  });
+
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [isPurging, setIsPurging] = useState(false);
+
+  // Fetch admin payments data
   const loadPayments = async () => {
     if (!isAdmin) return;
     setIsLoading(true);
@@ -59,8 +98,37 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
     }
   };
 
+  // Fetch admin payment gateway & plans configuration
+  const loadConfig = async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await fetch('/api/admin/payment-config', {
+        headers: { 'x-user-role': currentUser?.role || 'CLIENT' },
+      });
+      const data = await res.json();
+      if (res.ok && data.config) {
+        if (data.config.gateway) {
+          setGatewaySettings({
+            activeGateway: data.config.gateway.activeGateway || 'cashfree',
+            environment: data.config.gateway.environment || 'SANDBOX',
+            cashfreeAppId: data.config.gateway.cashfreeAppId || '',
+            cashfreeSecretKey: '',
+            cashfreeSecretKeyMasked: data.config.gateway.cashfreeSecretKeyMasked || '',
+            isConfigured: data.config.gateway.isConfigured || false,
+          });
+        }
+        if (data.config.plans) {
+          setPlansSettings(data.config.plans);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load payment config:', e);
+    }
+  };
+
   useEffect(() => {
     loadPayments();
+    loadConfig();
   }, [isAdmin, currentUser?.role]);
 
   // Format currency in Indian standard format (₹ en-IN)
@@ -68,7 +136,7 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
     return `₹${amount.toLocaleString('en-IN')}`;
   };
 
-  // Filtered transactions (Cashfree Payments PG)
+  // Filtered transactions
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
       const matchPlan = selectedPlan === 'all' || tx.planId === selectedPlan;
@@ -87,7 +155,68 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
     return transactions.reduce((acc, tx) => acc + tx.amount, 0);
   }, [transactions]);
 
-  // CSV Export for Accountant / Financial Ledger
+  // Save Gateway & Plan Pricing Settings
+  const handleSaveSettings = async () => {
+    setIsSavingSettings(true);
+    setStatusMsg(null);
+    try {
+      const res = await fetch('/api/admin/payment-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': currentUser?.role || 'CLIENT',
+        },
+        body: JSON.stringify({
+          gateway: {
+            activeGateway: gatewaySettings.activeGateway,
+            environment: gatewaySettings.environment,
+            cashfreeAppId: gatewaySettings.cashfreeAppId,
+            cashfreeSecretKey: gatewaySettings.cashfreeSecretKey || undefined,
+          },
+          plans: plansSettings,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setStatusMsg({ text: 'Gateway keys and plan amounts saved successfully! Prices are live on paywall.', type: 'success' });
+        loadConfig();
+      } else {
+        setStatusMsg({ text: data.error || 'Failed to save settings', type: 'error' });
+      }
+    } catch (err: any) {
+      setStatusMsg({ text: err.message || 'Error saving settings', type: 'error' });
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  // Purge all non-admin test users
+  const handlePurgeTestUsers = async () => {
+    if (!confirm('Are you sure you want to purge all non-admin client accounts? Admin accounts (admin@sweethome3d.io / admin@visualrendered.io) will retain lifetime access. All regular visitors will be required to make real payments.')) {
+      return;
+    }
+    setIsPurging(true);
+    setStatusMsg(null);
+    try {
+      const res = await fetch('/api/admin/payment-config', {
+        method: 'DELETE',
+        headers: { 'x-user-role': currentUser?.role || 'CLIENT' },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setStatusMsg({ text: data.message || 'Purged test accounts successfully!', type: 'success' });
+        loadPayments();
+      } else {
+        setStatusMsg({ text: data.error || 'Failed to purge accounts', type: 'error' });
+      }
+    } catch (err: any) {
+      setStatusMsg({ text: err.message || 'Error purging accounts', type: 'error' });
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
+  // CSV Export for Ledger
   const handleExportCSV = () => {
     let csv = 'Order ID,Customer Name,Customer Email,Plan Name,Amount (INR),Gateway,Payment Method,Status,Date,Expires At\n';
     filteredTransactions.forEach((tx) => {
@@ -97,12 +226,12 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `SweetHome_Cashfree_Payments_Ledger_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `SweetHome_Payments_Ledger_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
-  // 1. STRICT ACCESS DENIED SCREEN IF NON-ADMIN
+  // STRICT ACCESS DENIED SCREEN IF NON-ADMIN
   if (!isAdmin) {
     return (
       <div className="flex-1 flex items-center justify-center p-8 bg-[#080d19] text-slate-100 select-none">
@@ -113,13 +242,8 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
           <h2 className="text-xl font-extrabold text-white">Access Restricted</h2>
           <p className="mt-2 text-xs text-slate-300 leading-relaxed">
             The <strong>Payments & Revenue Dashboard</strong> is strictly reserved for users with{' '}
-            <strong className="text-amber-400">ADMIN</strong> clearance. Your current account role does not have
-            authorization to inspect client transactions, gateway sessions, or financial statements.
+            <strong className="text-amber-400">ADMIN</strong> clearance.
           </p>
-          <div className="mt-6 p-3 bg-slate-950 rounded-xl border border-slate-800 text-[11px] text-slate-400 text-left font-mono">
-            <div>Current Role: <span className="text-rose-400 font-bold">{currentUser?.role || 'CLIENT'}</span></div>
-            <div>Security Level: <span className="text-slate-300">Enforced by RBAC</span></div>
-          </div>
         </div>
       </div>
     );
@@ -129,348 +253,612 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
     <div className={`flex-1 flex flex-col h-full overflow-hidden p-4 sm:p-5 gap-3 select-none font-sans ${
       isLight ? 'bg-slate-50 text-slate-800' : 'bg-[#080d19] text-slate-100'
     }`}>
-      {/* 1. Header with Security Clearance Badge */}
+      {/* 1. Header with Clearance & Sub-Tabs */}
       <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b shrink-0 ${
         isLight ? 'border-slate-200' : 'border-slate-800'
       }`}>
         <div>
           <div className="flex items-center gap-2 mb-0.5">
-            <div className="px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-500 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3 text-sky-500" />
-              <span>Cashfree PG Central • Admin Protected</span>
+            <div className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3 text-emerald-500" />
+              <span>Real Gateway Central • {gatewaySettings.environment} MODE</span>
             </div>
           </div>
           <h1 className={`text-xl sm:text-2xl font-extrabold tracking-tight flex items-center gap-2 ${
             isLight ? 'text-slate-900' : 'text-white'
           }`}>
-            <span>Payments & Revenue Ledger</span>
+            <span>Payments & Gateway Management</span>
           </h1>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={loadPayments}
-            disabled={isLoading}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 ${
-              isLight
-                ? 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-xs'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-            }`}
-            title="Refresh Ledger"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>Sync</span>
-          </button>
-
-          <button
-            onClick={handleExportCSV}
-            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95"
-            title="Export CSV to Excel"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Export CSV</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 2. Top Metric Cards (Cashfree Only) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
-        {/* Total Gross Revenue */}
-        <div className={`border rounded-2xl p-4 shadow-xs transition ${
-          isLight ? 'bg-white border-slate-200 hover:border-amber-400' : 'bg-[#0e1628] border-slate-800 hover:border-amber-500/40'
-        }`}>
-          <div className="flex items-center justify-between mb-1">
-            <span className={`text-[11px] font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Gross Revenue</span>
-            <div className="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
-              <TrendingUp className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <div className={`text-xl font-black ${isLight ? 'text-slate-900' : 'text-white'}`}>{formatINR(totalRevenue)}</div>
-            <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-              100% Cashfree
-            </span>
-          </div>
-        </div>
-
-        {/* Cashfree PG Status */}
-        <div className={`border rounded-2xl p-4 shadow-xs transition ${
-          isLight ? 'bg-white border-slate-200 hover:border-sky-400' : 'bg-[#0e1628] border-slate-800 hover:border-sky-500/40'
-        }`}>
-          <div className="flex items-center justify-between mb-1">
-            <span className={`text-[11px] font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Gateway Provider</span>
-            <div className="w-6 h-6 rounded-lg bg-sky-500/15 text-sky-500 flex items-center justify-center font-bold text-xs">
-              CF
-            </div>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <div className={`text-xl font-black text-sky-500`}>Cashfree PG</div>
-            <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-sky-500/10 text-sky-500 border border-sky-500/20">
-              UPI & Cards
-            </span>
-          </div>
-        </div>
-
-        {/* Active Subscriptions Count */}
-        <div className={`border rounded-2xl p-4 shadow-xs transition ${
-          isLight ? 'bg-white border-slate-200 hover:border-emerald-400' : 'bg-[#0e1628] border-slate-800 hover:border-emerald-500/40'
-        }`}>
-          <div className="flex items-center justify-between mb-1">
-            <span className={`text-[11px] font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Verified Passes</span>
-            <div className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-              <Crown className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <div className={`text-xl font-black ${isLight ? 'text-slate-900' : 'text-white'}`}>{transactions.length} Active</div>
-            <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-              Auto-Settled
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Filter Toolbar & Search */}
-      <div className={`border rounded-2xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0 ${
-        isLight ? 'bg-white border-slate-200 shadow-xs' : 'bg-[#0e1628] border-slate-800'
-      }`}>
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <Search className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${isLight ? 'text-slate-400' : 'text-slate-500'}`} />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search customer, email, or Cashfree order ID..."
-            className={`w-full pl-9 pr-3 py-1.5 rounded-xl text-xs focus:outline-none focus:border-sky-500 border transition ${
-              isLight
-                ? 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'
-                : 'bg-slate-900 border-slate-700/80 text-white placeholder-slate-500'
-            }`}
-          />
-        </div>
-
-        {/* Pass Type Filter */}
-        <div className={`flex items-center p-0.5 rounded-xl border ${
-          isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-700'
-        }`}>
-          <button
-            onClick={() => setSelectedPlan('all')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-              selectedPlan === 'all'
-                ? (isLight ? 'bg-slate-800 text-white' : 'bg-slate-700 text-white')
-                : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            All Passes
-          </button>
-          <button
-            onClick={() => setSelectedPlan('trial_2days')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-              selectedPlan === 'trial_2days'
-                ? 'bg-amber-600 text-white'
-                : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Trial (₹200)
-          </button>
-          <button
-            onClick={() => setSelectedPlan('monthly')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-              selectedPlan === 'monthly'
-                ? 'bg-sky-600 text-white'
-                : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Monthly (₹999)
-          </button>
-          <button
-            onClick={() => setSelectedPlan('yearly')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-              selectedPlan === 'yearly'
-                ? 'bg-emerald-600 text-white'
-                : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Annual (₹9,590)
-          </button>
-        </div>
-      </div>
-
-      {/* 4. Payments Transaction Table (Takes Remaining Vertical Height cleanly) */}
-      <div className={`flex-1 min-h-0 border rounded-2xl overflow-hidden shadow-xs ${
-        isLight ? 'bg-white border-slate-200' : 'bg-[#0e1628] border-slate-800'
-      }`}>
-        <div className="h-full overflow-y-auto custom-scrollbar">
-          <table className={`w-full text-left text-xs ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
-            <thead className={`uppercase text-[10px] font-bold tracking-wider border-b sticky top-0 z-10 ${
-              isLight
-                ? 'bg-slate-50 text-slate-500 border-slate-200'
-                : 'bg-slate-900 text-slate-400 border-slate-800'
-            }`}>
-              <tr>
-                <th className="py-3 px-4">Cashfree Order ID & Date</th>
-                <th className="py-3 px-4">Customer</th>
-                <th className="py-3 px-4">Pass Tier</th>
-                <th className="py-3 px-4">Amount</th>
-                <th className="py-3 px-4">Gateway</th>
-                <th className="py-3 px-4">Payment Method</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
-              {filteredTransactions.map((tx) => (
-                <tr key={tx.id} className={`transition ${isLight ? 'hover:bg-slate-50' : 'hover:bg-slate-800/40'}`}>
-                  {/* Order ID */}
-                  <td className="py-3 px-4">
-                    <div className={`font-mono font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{tx.orderId}</div>
-                    <div className="text-[10px] text-slate-400">{new Date(tx.createdAt).toLocaleString()}</div>
-                  </td>
-
-                  {/* Customer */}
-                  <td className="py-3 px-4">
-                    <div className={`font-semibold ${isLight ? 'text-slate-900' : 'text-white'}`}>{tx.customerName}</div>
-                    <div className="text-[10px] text-slate-400">{tx.customerEmail}</div>
-                  </td>
-
-                  {/* Pass Tier */}
-                  <td className="py-3 px-4">
-                    <span
-                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                        tx.planId === 'trial_2days'
-                          ? 'bg-amber-500/10 text-amber-500 border-amber-500/30'
-                          : tx.planId === 'yearly'
-                          ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
-                          : 'bg-sky-500/10 text-sky-500 border-sky-500/30'
-                      }`}
-                    >
-                      {tx.planId === 'trial_2days' ? (
-                        <Zap className="w-3 h-3 text-amber-500" />
-                      ) : tx.planId === 'yearly' ? (
-                        <Crown className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <Calendar className="w-3 h-3 text-sky-500" />
-                      )}
-                      <span>{tx.planName}</span>
-                    </span>
-                  </td>
-
-                  {/* Amount */}
-                  <td className="py-3 px-4">
-                    <span className={`font-mono font-bold text-xs ${isLight ? 'text-slate-900' : 'text-white'}`}>{formatINR(tx.amount)}</span>
-                  </td>
-
-                  {/* Gateway */}
-                  <td className="py-3 px-4">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-sky-500/15 text-sky-600 border border-sky-500/30">
-                      Cashfree PG
-                    </span>
-                  </td>
-
-                  {/* Payment Method */}
-                  <td className="py-3 px-4 text-slate-500 dark:text-slate-400 font-medium text-[11px]">
-                    {tx.paymentMethod}
-                  </td>
-
-                  {/* Status */}
-                  <td className="py-3 px-4">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">
-                      <CheckCircle2 className="w-3 h-3" />
-                      <span>PAID</span>
-                    </span>
-                  </td>
-
-                  {/* Action */}
-                  <td className="py-3 px-4 text-right">
-                    <button
-                      onClick={() => setSelectedTx(tx)}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer border ${
-                        isLight
-                          ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-xs'
-                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border-slate-700'
-                      }`}
-                    >
-                      Audit
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* 5. Inspection Modal */}
-      {selectedTx && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md">
-          <div className={`border rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl ${
-            isLight ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-900 border-slate-700 text-slate-200'
+          {/* Sub Tab Switcher */}
+          <div className={`flex items-center p-1 rounded-xl border ${
+            isLight ? 'bg-slate-200/80 border-slate-300' : 'bg-slate-900 border-slate-700'
           }`}>
-            <div className={`flex items-center justify-between pb-3 border-b ${
-              isLight ? 'border-slate-200' : 'border-slate-800'
-            }`}>
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-emerald-500" />
-                <h3 className={`font-bold text-base ${isLight ? 'text-slate-900' : 'text-white'}`}>Cashfree PG Audit Proof</h3>
-              </div>
-              <button
-                onClick={() => setSelectedTx(null)}
-                className={`p-1 rounded-lg transition cursor-pointer ${
-                  isLight ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-100' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className={`space-y-2 text-xs font-mono p-4 rounded-2xl border ${
-              isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-800'
-            }`}>
-              <div className="flex justify-between">
-                <span className={isLight ? 'text-slate-500' : 'text-slate-500'}>Cashfree Order ID:</span>
-                <span className={`font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{selectedTx.orderId}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className={isLight ? 'text-slate-500' : 'text-slate-500'}>Gateway:</span>
-                <span className="text-sky-500 uppercase font-bold">Cashfree Payments PG</span>
-              </div>
-              <div className="flex justify-between">
-                <span className={isLight ? 'text-slate-500' : 'text-slate-500'}>Amount Paid:</span>
-                <span className="text-emerald-500 font-bold">{formatINR(selectedTx.amount)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className={isLight ? 'text-slate-500' : 'text-slate-500'}>Customer:</span>
-                <span className={isLight ? 'text-slate-800' : 'text-slate-200'}>{selectedTx.customerName} ({selectedTx.customerEmail})</span>
-              </div>
-              <div className="flex justify-between">
-                <span className={isLight ? 'text-slate-500' : 'text-slate-500'}>Plan Activated:</span>
-                <span className="text-amber-500 font-semibold">{selectedTx.planName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className={isLight ? 'text-slate-500' : 'text-slate-500'}>Payment Status:</span>
-                <span className="text-emerald-500 font-bold">VERIFIED_PAID</span>
-              </div>
-              <div className="flex justify-between">
-                <span className={isLight ? 'text-slate-500' : 'text-slate-500'}>Access Expiry:</span>
-                <span className={isLight ? 'text-slate-700' : 'text-slate-300'}>{new Date(selectedTx.expiresAt).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className={isLight ? 'text-slate-500' : 'text-slate-500'}>Webhook Signature:</span>
-                <span className="text-emerald-500">VERIFIED (Cashfree RSA 2048)</span>
-              </div>
-            </div>
-
             <button
-              onClick={() => setSelectedTx(null)}
-              className="w-full py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl text-xs transition cursor-pointer"
+              onClick={() => setActiveSubTab('ledger')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                activeSubTab === 'ledger'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+              }`}
             >
-              Close Audit View
+              <CreditCard className="w-3.5 h-3.5" />
+              <span>Real Ledger ({transactions.length})</span>
+            </button>
+            <button
+              onClick={() => setActiveSubTab('settings')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                activeSubTab === 'settings'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>Gateway & Plan Pricing</span>
             </button>
           </div>
+
+          {activeSubTab === 'ledger' && (
+            <>
+              <button
+                onClick={loadPayments}
+                disabled={isLoading}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 ${
+                  isLight
+                    ? 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-xs'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                }`}
+                title="Sync Transactions"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                <span>Sync</span>
+              </button>
+              <button
+                onClick={handleExportCSV}
+                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                title="Export CSV to Excel"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Export CSV</span>
+              </button>
+            </>
+          )}
         </div>
+      </div>
+
+      {/* Status Notifications */}
+      {statusMsg && (
+        <div className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
+          statusMsg.type === 'success'
+            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+            : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300'
+        }`}>
+          <div className="flex items-center gap-2">
+            {statusMsg.type === 'success' ? <Check className="w-4 h-4 text-emerald-500" /> : <AlertCircle className="w-4 h-4 text-rose-500" />}
+            <span>{statusMsg.text}</span>
+          </div>
+          <button onClick={() => setStatusMsg(null)} className="text-slate-400 hover:text-slate-600 text-xs font-bold">✕</button>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* SUB-TAB 1: GATEWAY KEYS & DYNAMIC PLAN PRICING CONFIG    */}
+      {/* ======================================================== */}
+      {activeSubTab === 'settings' && (
+        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1">
+          {/* Card 1: Live Payment Gateway Keys */}
+          <div className={`border rounded-2xl p-4 sm:p-5 shadow-xs ${
+            isLight ? 'bg-white border-slate-200' : 'bg-[#0e1628] border-slate-800'
+          }`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+                  <Key className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm sm:text-base font-bold">Payment Gateway Credentials</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Configure your live Cashfree credentials for collecting customer payments
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
+                  gatewaySettings.isConfigured
+                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+                    : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+                }`}>
+                  {gatewaySettings.isConfigured ? '🟢 Live Ready' : '🟡 Needs Keys'}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Environment (Production vs Sandbox) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Environment Mode
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setGatewaySettings((s) => ({ ...s, environment: 'PRODUCTION' }))}
+                    className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                      gatewaySettings.environment === 'PRODUCTION'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : isLight ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-slate-900 border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    <span>🔴 PRODUCTION (Live)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGatewaySettings((s) => ({ ...s, environment: 'SANDBOX' }))}
+                    className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                      gatewaySettings.environment === 'SANDBOX'
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                        : isLight ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-slate-900 border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    <span>🧪 SANDBOX (Testing)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Provider */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Active Provider
+                </label>
+                <div className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-between ${
+                  isLight ? 'bg-slate-100 border-slate-200 text-slate-800' : 'bg-slate-900 border-slate-800 text-slate-200'
+                }`}>
+                  <span>Cashfree Payments PG</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-500 font-bold">UPI, Cards, NetBanking</span>
+                </div>
+              </div>
+
+              {/* Cashfree App ID */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                  <span>Cashfree App ID (Client ID)</span>
+                  <span className="text-[10px] font-normal text-slate-400">e.g. 14430251...</span>
+                </label>
+                <input
+                  type="text"
+                  value={gatewaySettings.cashfreeAppId}
+                  onChange={(e) => setGatewaySettings((s) => ({ ...s, cashfreeAppId: e.target.value }))}
+                  placeholder="e.g. 14430251a388dbe1368bfe972915203441"
+                  className={`w-full px-3 py-2 rounded-xl border text-xs font-mono transition focus:outline-none focus:ring-2 focus:ring-amber-500 ${
+                    isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-white'
+                  }`}
+                />
+                {gatewaySettings.cashfreeAppId?.startsWith('cfsk_') && (
+                  <p className="mt-1 text-[11px] text-amber-500 font-medium">
+                    ⚠️ Note: Keys starting with <code>cfsk_</code> are Secret Keys. The system will auto-swap this for you.
+                  </p>
+                )}
+              </div>
+
+              {/* Cashfree Secret Key */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                  <span>Cashfree Secret Key</span>
+                  {gatewaySettings.cashfreeSecretKeyMasked && (
+                    <span className="text-[10px] font-mono text-emerald-400 font-semibold">Active: {gatewaySettings.cashfreeSecretKeyMasked}</span>
+                  )}
+                </label>
+                <input
+                  type="password"
+                  value={gatewaySettings.cashfreeSecretKey}
+                  onChange={(e) => setGatewaySettings((s) => ({ ...s, cashfreeSecretKey: e.target.value }))}
+                  placeholder={gatewaySettings.cashfreeSecretKeyMasked ? 'Key configured (leave blank to keep current)' : 'cfsk_ma_prod_... paste secret key here'}
+                  className={`w-full px-3 py-2 rounded-xl border text-xs font-mono transition focus:outline-none focus:ring-2 focus:ring-amber-500 ${
+                    isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-white'
+                  }`}
+                />
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Starts with <code>cfsk_ma_prod_</code> in Production or <code>cfsk_ma_test_</code> in Sandbox.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Dynamic Plan Pricing Configuration */}
+          <div className={`border rounded-2xl p-4 sm:p-5 shadow-xs ${
+            isLight ? 'bg-white border-slate-200' : 'bg-[#0e1628] border-slate-800'
+          }`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm sm:text-base font-bold">Plan Pricing Configuration</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Set the exact price amounts for each plan. Changes immediately display on the paywall and charge through the gateway.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Plan 1: 2-Day Trial */}
+              <div className={`p-4 rounded-xl border ${
+                isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950/60 border-slate-800'
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-extrabold uppercase text-amber-500">Plan 1: Trial Pass</span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500">
+                    {plansSettings.trial_2days?.durationDays || 2} Days
+                  </span>
+                </div>
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">Price in INR (₹)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs font-bold text-slate-400">₹</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={plansSettings.trial_2days?.priceINR ?? 200}
+                        onChange={(e) => setPlansSettings((s) => ({
+                          ...s,
+                          trial_2days: { ...s.trial_2days, priceINR: Number(e.target.value) }
+                        }))}
+                        className={`w-full pl-7 pr-3 py-1.5 rounded-lg border text-xs font-bold ${
+                          isLight ? 'bg-white border-slate-300' : 'bg-slate-900 border-slate-700 text-white'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">Display Title</label>
+                    <input
+                      type="text"
+                      value={plansSettings.trial_2days?.name || '2-Day Full Access Trial'}
+                      onChange={(e) => setPlansSettings((s) => ({
+                        ...s,
+                        trial_2days: { ...s.trial_2days, name: e.target.value }
+                      }))}
+                      className={`w-full px-2.5 py-1.5 rounded-lg border text-xs ${
+                        isLight ? 'bg-white border-slate-300' : 'bg-slate-900 border-slate-700 text-white'
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">Badge Tag</label>
+                    <input
+                      type="text"
+                      value={plansSettings.trial_2days?.badge || 'Quick Test'}
+                      onChange={(e) => setPlansSettings((s) => ({
+                        ...s,
+                        trial_2days: { ...s.trial_2days, badge: e.target.value }
+                      }))}
+                      className={`w-full px-2.5 py-1.5 rounded-lg border text-xs ${
+                        isLight ? 'bg-white border-slate-300' : 'bg-slate-900 border-slate-700 text-white'
+                      }`}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Plan 2: Monthly Pro */}
+              <div className={`p-4 rounded-xl border ${
+                isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950/60 border-slate-800'
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-extrabold uppercase text-indigo-500">Plan 2: Monthly Pass</span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-500">
+                    {plansSettings.monthly?.durationDays || 30} Days
+                  </span>
+                </div>
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">Price in INR (₹)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs font-bold text-slate-400">₹</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={plansSettings.monthly?.priceINR ?? 999}
+                        onChange={(e) => setPlansSettings((s) => ({
+                          ...s,
+                          monthly: { ...s.monthly, priceINR: Number(e.target.value) }
+                        }))}
+                        className={`w-full pl-7 pr-3 py-1.5 rounded-lg border text-xs font-bold ${
+                          isLight ? 'bg-white border-slate-300' : 'bg-slate-900 border-slate-700 text-white'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">Display Title</label>
+                    <input
+                      type="text"
+                      value={plansSettings.monthly?.name || 'Monthly Pro Pass'}
+                      onChange={(e) => setPlansSettings((s) => ({
+                        ...s,
+                        monthly: { ...s.monthly, name: e.target.value }
+                      }))}
+                      className={`w-full px-2.5 py-1.5 rounded-lg border text-xs ${
+                        isLight ? 'bg-white border-slate-300' : 'bg-slate-900 border-slate-700 text-white'
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">Badge Tag</label>
+                    <input
+                      type="text"
+                      value={plansSettings.monthly?.badge || 'Most Popular'}
+                      onChange={(e) => setPlansSettings((s) => ({
+                        ...s,
+                        monthly: { ...s.monthly, badge: e.target.value }
+                      }))}
+                      className={`w-full px-2.5 py-1.5 rounded-lg border text-xs ${
+                        isLight ? 'bg-white border-slate-300' : 'bg-slate-900 border-slate-700 text-white'
+                      }`}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Plan 3: Annual Pro */}
+              <div className={`p-4 rounded-xl border ${
+                isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950/60 border-slate-800'
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-extrabold uppercase text-emerald-500">Plan 3: Annual Pass</span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500">
+                    {plansSettings.yearly?.durationDays || 365} Days
+                  </span>
+                </div>
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">Price in INR (₹)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs font-bold text-slate-400">₹</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={plansSettings.yearly?.priceINR ?? 9590}
+                        onChange={(e) => setPlansSettings((s) => ({
+                          ...s,
+                          yearly: { ...s.yearly, priceINR: Number(e.target.value) }
+                        }))}
+                        className={`w-full pl-7 pr-3 py-1.5 rounded-lg border text-xs font-bold ${
+                          isLight ? 'bg-white border-slate-300' : 'bg-slate-900 border-slate-700 text-white'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">Display Title</label>
+                    <input
+                      type="text"
+                      value={plansSettings.yearly?.name || 'Annual Pro Pass'}
+                      onChange={(e) => setPlansSettings((s) => ({
+                        ...s,
+                        yearly: { ...s.yearly, name: e.target.value }
+                      }))}
+                      className={`w-full px-2.5 py-1.5 rounded-lg border text-xs ${
+                        isLight ? 'bg-white border-slate-300' : 'bg-slate-900 border-slate-700 text-white'
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">Badge Tag</label>
+                    <input
+                      type="text"
+                      value={plansSettings.yearly?.badge || 'Save 20%'}
+                      onChange={(e) => setPlansSettings((s) => ({
+                        ...s,
+                        yearly: { ...s.yearly, badge: e.target.value }
+                      }))}
+                      className={`w-full px-2.5 py-1.5 rounded-lg border text-xs ${
+                        isLight ? 'bg-white border-slate-300' : 'bg-slate-900 border-slate-700 text-white'
+                      }`}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <div className="mt-5 flex items-center justify-end">
+              <button
+                onClick={handleSaveSettings}
+                disabled={isSavingSettings}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-xs shadow-md transition flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                <span>{isSavingSettings ? 'Saving Settings...' : 'Save Gateway Keys & Plan Pricing'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Card 3: Database Maintenance (Reset Test Users) */}
+          <div className={`border rounded-2xl p-4 sm:p-5 shadow-xs ${
+            isLight ? 'bg-rose-50/50 border-rose-200' : 'bg-rose-950/20 border-rose-900/40'
+          }`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
+                  <Trash2 className="w-4 h-4 text-rose-500" />
+                  <span>Purge Non-Admin Test Accounts & Start Fresh</span>
+                </h3>
+                <p className="text-xs text-rose-600/80 dark:text-rose-400/80 mt-1">
+                  Removes all non-admin client test accounts from memory. Admin Superusers (<code>admin@sweethome3d.io</code> and <code>admin@visualrendered.io</code>) retain permanent free access. All regular visitors will be required to make real payments.
+                </p>
+              </div>
+              <button
+                onClick={handlePurgeTestUsers}
+                disabled={isPurging}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition cursor-pointer shrink-0 disabled:opacity-50 shadow-xs"
+              >
+                {isPurging ? 'Purging...' : 'Reset Test Accounts'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* SUB-TAB 2: REAL PAYMENTS LEDGER & TRANSACTIONS TABLE     */}
+      {/* ======================================================== */}
+      {activeSubTab === 'ledger' && (
+        <>
+          {/* Top Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
+            {/* Total Gross Revenue */}
+            <div className={`border rounded-2xl p-4 shadow-xs transition ${
+              isLight ? 'bg-white border-slate-200 hover:border-amber-400' : 'bg-[#0e1628] border-slate-800 hover:border-amber-500/40'
+            }`}>
+              <div className="flex items-center justify-between mb-1">
+                <span className={`text-[11px] font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Gross Revenue</span>
+                <div className="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <div className={`text-xl font-black ${isLight ? 'text-slate-900' : 'text-white'}`}>{formatINR(totalRevenue)}</div>
+                <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                  Real Settled
+                </span>
+              </div>
+            </div>
+
+            {/* Gateway Status */}
+            <div className={`border rounded-2xl p-4 shadow-xs transition ${
+              isLight ? 'bg-white border-slate-200 hover:border-sky-400' : 'bg-[#0e1628] border-slate-800 hover:border-sky-500/40'
+            }`}>
+              <div className="flex items-center justify-between mb-1">
+                <span className={`text-[11px] font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Gateway Provider</span>
+                <div className="w-6 h-6 rounded-lg bg-sky-500/15 text-sky-500 flex items-center justify-center font-bold text-xs">
+                  CF
+                </div>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <div className={`text-xl font-black text-sky-500`}>Cashfree PG</div>
+                <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-sky-500/10 text-sky-500 border border-sky-500/20">
+                  {gatewaySettings.environment}
+                </span>
+              </div>
+            </div>
+
+            {/* Active Subscriptions Count */}
+            <div className={`border rounded-2xl p-4 shadow-xs transition ${
+              isLight ? 'bg-white border-slate-200 hover:border-emerald-400' : 'bg-[#0e1628] border-slate-800 hover:border-emerald-500/40'
+            }`}>
+              <div className="flex items-center justify-between mb-1">
+                <span className={`text-[11px] font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Verified Passes</span>
+                <div className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                  <Crown className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <div className={`text-xl font-black ${isLight ? 'text-slate-900' : 'text-white'}`}>{transactions.length} Verified</div>
+                <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                  Live
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Search & Plan Filter */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by customer, email or order ID..."
+                className={`w-full pl-9 pr-3 py-1.5 rounded-xl border text-xs transition focus:outline-none focus:ring-1 focus:ring-amber-500 ${
+                  isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-900 border-slate-700 text-white'
+                }`}
+              />
+            </div>
+
+            <div className="flex items-center gap-1">
+              {(['all', 'trial_2days', 'monthly', 'yearly'] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setSelectedPlan(p)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition capitalize cursor-pointer ${
+                    selectedPlan === p
+                      ? 'bg-amber-500 text-slate-950 shadow-2xs'
+                      : isLight ? 'bg-white text-slate-600 border border-slate-200' : 'bg-slate-900 text-slate-400 border border-slate-800'
+                  }`}
+                >
+                  {p === 'all' ? 'All Plans' : p === 'trial_2days' ? 'Trial' : p === 'monthly' ? 'Monthly' : 'Yearly'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Transactions Table or Clean Slate Message */}
+          <div className={`flex-1 border rounded-2xl overflow-hidden flex flex-col shadow-xs ${
+            isLight ? 'bg-white border-slate-200' : 'bg-[#0e1628] border-slate-800'
+          }`}>
+            {isLoading ? (
+              <div className="flex-1 flex items-center justify-center p-8">
+                <RefreshCw className="w-6 h-6 animate-spin text-amber-500" />
+              </div>
+            ) : filteredTransactions.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-3">
+                  <CreditCard className="w-6 h-6" />
+                </div>
+                <h3 className="text-sm font-bold">Ledger is Clean & Ready</h3>
+                <p className="text-xs text-slate-500 max-w-sm mt-1">
+                  All mock records removed. As real customers purchase access passes through the payment gateway, their live transaction records, order IDs, and activation dates will appear here automatically.
+                </p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-auto custom-scrollbar">
+                <table className="w-full text-left text-xs">
+                  <thead className={`border-b text-[11px] font-bold uppercase tracking-wider sticky top-0 z-10 ${
+                    isLight ? 'bg-slate-100/90 border-slate-200 text-slate-600' : 'bg-slate-900/90 border-slate-800 text-slate-400'
+                  }`}>
+                    <tr>
+                      <th className="p-3">Order ID</th>
+                      <th className="p-3">Customer</th>
+                      <th className="p-3">Plan</th>
+                      <th className="p-3">Amount</th>
+                      <th className="p-3">Method</th>
+                      <th className="p-3">Date</th>
+                      <th className="p-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                    {filteredTransactions.map((tx) => (
+                      <tr key={tx.id} className="hover:bg-amber-50/20 dark:hover:bg-slate-800/40 transition">
+                        <td className="p-3 font-mono text-[11px] text-sky-600 dark:text-sky-400 font-semibold">{tx.orderId}</td>
+                        <td className="p-3">
+                          <div className="font-bold">{tx.customerName}</div>
+                          <div className="text-[10px] text-slate-400">{tx.customerEmail}</div>
+                        </td>
+                        <td className="p-3 font-semibold">{tx.planName}</td>
+                        <td className="p-3 font-black text-emerald-600 dark:text-emerald-400">{formatINR(tx.amount)}</td>
+                        <td className="p-3 text-[11px] text-slate-500">{tx.paymentMethod}</td>
+                        <td className="p-3 text-[11px] text-slate-400">{new Date(tx.createdAt).toLocaleDateString()}</td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                            {tx.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
 };
-

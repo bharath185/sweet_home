@@ -84,51 +84,27 @@ for (const admin of ADMIN_USERS) {
   usersMap.set(admin.email.toLowerCase(), { ...admin });
 }
 
-// Transaction Ledger (initialized with seed transactions for dashboard)
-const transactions: PaymentTransactionRecord[] = [
-  {
-    id: 'tx_cf_101',
-    orderId: 'cf_trial_m9023_8ab12',
-    customerName: 'Karan Sharma',
-    customerEmail: 'karan.sharma@designstudio.in',
-    planId: 'trial_2days',
-    planName: '2-Day Studio Trial Pass',
-    amount: 200,
-    gateway: 'cashfree',
-    status: 'PAID',
-    paymentMethod: 'UPI (Google Pay)',
-    createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
-    expiresAt: new Date(Date.now() + 46 * 3600 * 1000).toISOString(),
-  },
-  {
-    id: 'tx_cf_102',
-    orderId: 'cf_month_m8911_33ef1',
-    customerName: 'Ananya Verma',
-    customerEmail: 'ananya@vermaarchitects.com',
-    planId: 'monthly',
-    planName: 'Monthly Studio Pass',
-    amount: 999,
-    gateway: 'cashfree',
-    status: 'PAID',
-    paymentMethod: 'UPI (PhonePe)',
-    createdAt: new Date(Date.now() - 14 * 3600 * 1000).toISOString(),
-    expiresAt: new Date(Date.now() + 29 * 24 * 3600 * 1000).toISOString(),
-  },
-  {
-    id: 'tx_cf_103',
-    orderId: 'cf_year_98412_a8bc',
-    customerName: 'Vikramaditya Rao',
-    customerEmail: 'v.rao@urbanspaces.in',
-    planId: 'yearly',
-    planName: 'Annual Studio Pass (20% Off)',
-    amount: 9590,
-    gateway: 'cashfree',
-    status: 'PAID',
-    paymentMethod: 'HDFC NetBanking',
-    createdAt: new Date(Date.now() - 36 * 3600 * 1000).toISOString(),
-    expiresAt: new Date(Date.now() + 363 * 24 * 3600 * 1000).toISOString(),
-  },
-];
+// Transaction Ledger (initialized empty so only REAL live payments appear)
+const transactions: PaymentTransactionRecord[] = [];
+
+/**
+ * Purges all non-admin test users from memory, retaining only Admin Superusers
+ */
+export function purgeNonAdminUsers(): { purgedCount: number; adminsRetained: number } {
+  let purgedCount = 0;
+  for (const [key, user] of usersMap.entries()) {
+    if (user.role !== 'ADMIN') {
+      usersMap.delete(key);
+      purgedCount++;
+    }
+  }
+  // Re-ensure admin users are loaded
+  for (const admin of ADMIN_USERS) {
+    usersMap.set(admin.id.toLowerCase(), { ...admin });
+    usersMap.set(admin.email.toLowerCase(), { ...admin });
+  }
+  return { purgedCount, adminsRetained: ADMIN_USERS.length };
+}
 
 /**
  * Normalizes lookup key (trimmed lowercase)

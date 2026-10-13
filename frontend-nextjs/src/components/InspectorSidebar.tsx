@@ -199,22 +199,19 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
   const [selectedCatalogCategory, setSelectedCatalogCategory] = useState<string>('All');
   const [previewCatalogItem, setPreviewCatalogItem] = useState<CatalogItem | null>(null);
 
-  // If in Walk mode, force collapse properties and finish panels
+  // When entering Walk mode initially, collapse panels to give clear view, but allow reopening catalog to add items
   useEffect(() => {
     if (isWalkMode) {
-      setActiveTab(null);
+      setActiveTab((prev) => (prev === 'transform' ? null : prev));
     }
   }, [isWalkMode]);
 
-  // Automatically open Properties panel when any item, wall, or room is selected (in Orbit / 2D mode),
-  // and collapse the properties/finish panel when deselected (e.g. in Walk mode or clicking background)
+  // Automatically open Properties panel when any item, wall, or room is selected (in Orbit / 2D mode)
   useEffect(() => {
-    if (isWalkMode) {
-      setActiveTab(null);
-      return;
-    }
     if (selectedFurniture || selectedWall || selectedRoom) {
-      setActiveTab('transform');
+      if (!isWalkMode) {
+        setActiveTab('transform');
+      }
     } else if (!selectedId) {
       setActiveTab((prev) => (prev === 'transform' || prev === 'design' ? null : prev));
     }
@@ -423,6 +420,8 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                       ? `Properties: ${selectedFurniture.name}`
                       : selectedWall
                       ? 'Properties: Selected Wall'
+                      : selectedRoom
+                      ? `Properties: ${selectedRoom.name || 'Room'}`
                       : 'Object Properties'}
                   </span>
                 </>
@@ -1050,12 +1049,12 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
               ===================================================================== */}
           {activeTab === 'transform' && (
             <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar text-xs">
-              {!selectedFurniture && !selectedWall ? (
+              {!selectedFurniture && !selectedWall && !selectedRoom ? (
                 <div className="text-center py-12 text-slate-400 space-y-2">
                   <Maximize className="w-8 h-8 mx-auto text-slate-500 opacity-60" />
                   <p className="font-semibold">No Object Selected</p>
                   <p className="text-[11px] text-slate-500">
-                    Click any furniture, wall, or fixture on the canvas to inspect its exact dimensions, position, and orientation.
+                    Click any furniture, wall, or room on the canvas to inspect its exact dimensions, position, and orientation.
                   </p>
                 </div>
               ) : selectedFurniture ? (
@@ -1269,6 +1268,98 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                     </button>
                   </div>
                 </>
+              ) : selectedRoom ? (
+                /* Room Selected Properties */
+                <div className="space-y-3">
+                  <div className="p-2.5 rounded-sm bg-indigo-950/20 border border-indigo-500/30">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 block mb-1">
+                      Room Configuration
+                    </span>
+                    <p className="text-sm font-bold">
+                      {selectedRoom.name || 'Selected Room'}
+                    </p>
+                    <p className="text-xs text-slate-400 font-mono">
+                      Floor Area: {selectedRoom.areaSquareMeters || 18} m² ({Math.round((selectedRoom.areaSquareMeters || 18) * 10.7639)} sq ft)
+                    </p>
+                  </div>
+
+                  {/* Room Name */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Room Name
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedRoom.name || ''}
+                      onChange={(e) => updateRoom({ name: e.target.value })}
+                      placeholder="e.g. Master Bedroom, Living Room"
+                      className={`w-full px-2.5 py-1.5 text-xs font-semibold rounded-sm border focus:outline-none ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-800 text-white'
+                          : 'bg-white border-slate-200 text-slate-900'
+                      }`}
+                    />
+                  </div>
+
+                  {/* Ceiling Height & Floor Level */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block mb-0.5">Ceiling Height (cm)</span>
+                      <input
+                        type="number"
+                        value={selectedRoom.ceilingHeight || 280}
+                        onChange={(e) => updateRoom({ ceilingHeight: parseInt(e.target.value) || 280 })}
+                        className={`w-full px-2 py-1 text-xs font-mono rounded-sm border ${
+                          isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block mb-0.5">Floor Level</span>
+                      <input
+                        type="number"
+                        value={selectedRoom.floorLevel ?? 0}
+                        onChange={(e) => updateRoom({ floorLevel: parseInt(e.target.value) || 0 })}
+                        className={`w-full px-2 py-1 text-xs font-mono rounded-sm border ${
+                          isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Ceiling Paint Color */}
+                  <div className="space-y-1.5 pt-2 border-t border-inherit">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Ceiling Paint Color
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={selectedRoom.ceilingColor || '#ffffff'}
+                        onChange={(e) => updateRoom({ ceilingColor: e.target.value })}
+                        className="w-8 h-8 rounded-sm border-0 cursor-pointer bg-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={selectedRoom.ceilingColor || '#ffffff'}
+                        onChange={(e) => updateRoom({ ceilingColor: e.target.value })}
+                        className={`flex-1 px-2.5 py-1 text-xs font-mono rounded-sm border focus:outline-none ${
+                          isDark
+                            ? 'bg-slate-900 border-slate-800 text-white'
+                            : 'bg-white border-slate-200 text-slate-900'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleDelete}
+                    className="w-full py-1.5 rounded-sm bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs flex items-center justify-center gap-1 transition shadow-2xs cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Room</span>
+                  </button>
+                </div>
               ) : (
                 /* Wall Selected Properties */
                 <div className="space-y-3">
@@ -1304,6 +1395,31 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                         onChange={(e) => updateWall({ height: parseInt(e.target.value) || 280 })}
                         className={`w-full px-2 py-1 text-xs font-mono rounded-sm border ${
                           isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Wall Color / Tint */}
+                  <div className="space-y-1.5 pt-2 border-t border-inherit">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Wall Color
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={selectedWall?.color || '#f8fafc'}
+                        onChange={(e) => updateWall({ color: e.target.value })}
+                        className="w-8 h-8 rounded-sm border-0 cursor-pointer bg-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={selectedWall?.color || '#f8fafc'}
+                        onChange={(e) => updateWall({ color: e.target.value })}
+                        className={`flex-1 px-2.5 py-1 text-xs font-mono rounded-sm border focus:outline-none ${
+                          isDark
+                            ? 'bg-slate-900 border-slate-800 text-white'
+                            : 'bg-white border-slate-200 text-slate-900'
                         }`}
                       />
                     </div>

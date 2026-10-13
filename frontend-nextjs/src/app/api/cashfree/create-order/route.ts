@@ -1,49 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { recordPendingOrder, setUserPaymentStatus } from '@/lib/paymentStore';
-
-// Fixed server-side pricing in INR Rupees (Cashfree takes amounts in INR, not paise)
-const SERVER_PLAN_CONFIG: Record<
-  string,
-  { priceINR: number; durationDays: number; tier: 'TRIAL' | 'PRO'; name: string }
-> = {
-  trial_2days: { priceINR: 200, durationDays: 2, tier: 'TRIAL', name: '2-Day Studio Trial Pass' },
-  monthly: { priceINR: 999, durationDays: 30, tier: 'PRO', name: 'Monthly Studio Pass' },
-  yearly: { priceINR: 9590, durationDays: 365, tier: 'PRO', name: 'Annual Studio Pass (20% Off)' },
-  // Backward compatibility aliases
-  pro_monthly: { priceINR: 999, durationDays: 30, tier: 'PRO', name: 'Monthly Studio Pass' },
-  pro_yearly: { priceINR: 9590, durationDays: 365, tier: 'PRO', name: 'Annual Studio Pass (20% Off)' },
-};
+import { getPlanConfig, getActiveCashfreeCredentials } from '@/lib/paymentConfigStore';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { planId, userId, userEmail, userName, userPhone } = body;
 
-    if (!planId || !SERVER_PLAN_CONFIG[planId]) {
+    const planConfig = getPlanConfig(planId);
+    if (!planId || !planConfig) {
       return NextResponse.json(
-        { error: 'Invalid planId. Must be one of trial_2days, monthly, or yearly.' },
+        { error: `Invalid planId: ${planId}. Plan must be configured in system.` },
         { status: 400 }
       );
     }
 
-    const planConfig = SERVER_PLAN_CONFIG[planId];
     const orderAmount = planConfig.priceINR;
     const orderCurrency = 'INR';
 
-    const appId =
-      process.env.CASHFREE_APP_ID ||
-      process.env.NEXT_PUBLIC_CASHFREE_APP_ID ||
-      process.env.CASHFREE_CLIENT_ID;
-    const secretKey = process.env.CASHFREE_SECRET_KEY;
-    const env = (process.env.CASHFREE_ENVIRONMENT || 'SANDBOX').toUpperCase();
-
-    const isLiveConfigured =
-      appId &&
-      secretKey &&
-      !appId.includes('TEST_CF_APP_ID') &&
-      !secretKey.includes('TEST_CF_SECRET_KEY') &&
-      !appId.includes('your_cashfree');
+    const { appId, secretKey, environment, isConfigured } = getActiveCashfreeCredentials();
 
     const cleanOrderId = `cf_${planId.slice(0, 6)}_${Date.now().toString(36)}_${crypto.randomBytes(3).toString('hex')}`;
     const customerId = (userId || `cust_${Date.now().toString(36)}`).replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -52,19 +28,26 @@ export async function POST(req: NextRequest) {
     const customerName = userName || 'SweetHome Architect';
 
     const baseUrl =
-      env === 'PRODUCTION'
+      environment === 'PRODUCTION'
         ? 'https://api.cashfree.com/pg/orders'
         : 'https://sandbox.cashfree.com/pg/orders';
 
     // 1. Live Cashfree API Order Creation
-    if (!appId || !secretKey || appId.includes('your_cashfree')) {
+    if (!isConfigured) {
       return NextResponse.json(
         {
-          error: 'Cashfree API keys are not configured on Vercel. Please provide CASHFREE_APP_ID and CASHFREE_SECRET_KEY to enable live Cashfree payments.',
+          error: 'Cashfree API keys are not configured. Please provide CASHFREE_APP_ID and CASHFREE_SECRET_KEY in Admin Control Center or environment to enable live Cashfree payments.',
           code: 'MISSING_CASHFREE_KEYS',
         },
         { status: 400 }
       );
+    }
+
+    // Cashfree Production strictly enforces HTTPS for return_url
+    let returnUrl = (req.headers.get('origin') || 'https://sweethome3d.io') + '?cf_order_id={order_id}';
+    if (environment === 'PRODUCTION' && returnUrl.startsWith('http://')) {
+      // Localhost or insecure HTTP origin in production mode must use HTTPS fallback
+      returnUrl = `https://sweethome3d.io?cf_order_id={order_id}`;
     }
 
     try {
@@ -87,7 +70,7 @@ export async function POST(req: NextRequest) {
             customer_name: customerName,
           },
           order_meta: {
-            return_url: `${(req.headers.get('origin') || (req.headers.get('host')?.includes('localhost') ? `http://${req.headers.get('host')}` : 'https://3dstudio.prigenix.com'))}?cf_order_id={order_id}`,
+            return_url: returnUrl,
             payment_methods: 'upi,cc,dc,nb,app',
           },
           order_note: `${planConfig.name} - SweetHome 3D Studio`,
@@ -127,7 +110,7 @@ export async function POST(req: NextRequest) {
           planName: planConfig.name,
           tier: planConfig.tier,
           durationDays: planConfig.durationDays,
-          environment: env,
+          environment,
           isTestMode: false,
         });
       } else {

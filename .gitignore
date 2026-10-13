@@ -37,3 +37,6 @@ backup_sweethome_*/
 build/
 dist/
 tmp/
+projects/work/
+*.tsbuildinfo
+frontend-nextjs/data/

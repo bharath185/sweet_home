@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
   Sun,
   Rotate3d,
@@ -27,13 +28,20 @@ import {
   ZoomIn,
   ZoomOut,
   Hand,
-  MousePointer
+  MousePointer,
+  Building2,
+  Gamepad2,
+  Volume2,
+  VolumeX,
+  Eye,
 } from 'lucide-react';
 import { HomePlan, FurnitureItem, Wall, Room, CatalogItem, VisitorCameraState } from '../types/plan';
 import { isTabletopItem, autoAttachToTabletop } from '../services/tabletopAttachment';
 import { loadObjModel } from '../services/objParser';
 import { loadGltfModel, getLocalModelBlob } from '../services/modelLoader';
 import { buildSubPartMaterials, mapObjGroupToPartId } from '../services/partMaterials';
+import { soundEngine } from '../services/soundEffects';
+import { PubgGameHud } from './PubgGameHud';
 import {
   buildTableMeshGroup,
   buildChairMeshGroup,
@@ -48,6 +56,11 @@ import {
   buildInteriorDecorMeshGroup,
   buildCustomPrimitivesMeshGroup,
   buildStairsMeshGroup,
+  buildTvUnitMeshGroup,
+  buildRadiatorMeshGroup,
+  buildCookerMeshGroup,
+  buildSanitaryMeshGroup,
+  buildDeskMeshGroup,
 } from '../services/proceduralFurniture';
 import { getProceduralTexture } from '../services/pbrTextures';
 import { RenderStudioModal, RenderSnapshotSettings } from './RenderStudioModal';
@@ -87,11 +100,44 @@ function buildSmartArchetypeFallback(
   const lowerCatId = (item.catalogId || '').toLowerCase();
 
   try {
-    if (lowerName.includes('chair') || lowerName.includes('armchair') || lowerCatId.includes('chair')) {
+    // 1. TV Unit & Television
+    if (lowerName.includes('tv') || lowerName.includes('television') || lowerCatId.includes('tv')) {
+      return buildTvUnitMeshGroup(item.width, item.depth, item.height, itemMat, partMats);
+    }
+
+    // 2. Wall Radiators / Heaters
+    if (lowerName.includes('radiator') || lowerName.includes('heater') || lowerCatId.includes('radiator')) {
+      return buildRadiatorMeshGroup(item.width, item.depth, item.height);
+    }
+
+    // 3. Stoves / Ranges / Cookers
+    if (lowerName.includes('cooker') || lowerName.includes('stove') || lowerName.includes('range') || lowerCatId.includes('cooker')) {
+      return buildCookerMeshGroup(item.width, item.depth, item.height);
+    }
+
+    // 4. Sanitary Fixtures (Bath, Toilet, Sink)
+    if (lowerName.includes('bath') && !lowerName.includes('mat')) {
+      return buildSanitaryMeshGroup('bath', item.width, item.depth, item.height);
+    }
+    if (lowerName.includes('toilet') || lowerName.includes('bidet') || lowerName.includes('wc') || lowerCatId.includes('toilet')) {
+      return buildSanitaryMeshGroup('toilet', item.width, item.depth, item.height);
+    }
+    if (lowerName.includes('sink') || lowerName.includes('washbasin') || lowerCatId.includes('washbasin')) {
+      return buildSanitaryMeshGroup('sink', item.width, item.depth, item.height);
+    }
+
+    // 5. Desks
+    if (lowerName.includes('desk') || lowerCatId.includes('desk')) {
+      return buildDeskMeshGroup(item.width, item.depth, item.height, itemMat);
+    }
+
+    // 6. Chairs (Spindle slat back for dining chairs, cushioned wingback for armchairs)
+    if (lowerName.includes('chair') || lowerName.includes('armchair') || lowerName.includes('stool') || lowerCatId.includes('chair')) {
+      const isDining = lowerName.includes('dining') || (!lowerName.includes('armchair') && !lowerName.includes('lounge'));
       return buildChairMeshGroup(
         {
           seatType: 'cushioned',
-          backrestStyle: lowerName.includes('armchair') ? 'wingback' : 'solid_panel',
+          backrestStyle: lowerName.includes('armchair') ? 'wingback' : (isDining ? 'spindle_slats' : 'solid_panel'),
           legStyle: 'straight_4',
           width: item.width,
           depth: item.depth,
@@ -103,10 +149,11 @@ function buildSmartArchetypeFallback(
       );
     }
 
+    // 7. Sofas & Couches
     if (lowerName.includes('sofa') || lowerName.includes('couch') || lowerName.includes('lounge') || lowerCatId.includes('sofa')) {
       return buildSofaMeshGroup(
         {
-          type: 'straight_2_seater',
+          type: lowerName.includes('l-shape') || lowerName.includes('corner') ? 'l_shape_left' : 'straight_2_seater',
           cushionStyle: 'plump',
           armStyle: 'track_arm',
           legStyle: 'wooden_pegs',
@@ -119,11 +166,14 @@ function buildSmartArchetypeFallback(
       );
     }
 
-    if (lowerName.includes('table') || lowerName.includes('desk') || lowerCatId.includes('table')) {
+    // 8. Tables (Supporting oval, round, and rectangular dining tables)
+    if (lowerName.includes('table') || lowerCatId.includes('table')) {
+      const isOval = lowerName.includes('oval') || (lowerName.includes('round') && Math.abs(item.width - item.depth) >= 15);
+      const isRound = lowerName.includes('round') && Math.abs(item.width - item.depth) < 15;
       return buildTableMeshGroup(
         {
-          shape: lowerName.includes('round') ? 'round' : 'rectangular',
-          legStyle: '4_legs_corner',
+          shape: isOval ? 'oval' : (isRound ? 'round' : 'rectangular'),
+          legStyle: isRound ? 'pedestal_column' : '4_legs_corner',
           topThickness: 4,
           legThickness: 5,
           bevel: true,
@@ -136,6 +186,7 @@ function buildSmartArchetypeFallback(
       );
     }
 
+    // 9. Beds
     if (lowerName.includes('bed') || lowerCat === 'bedroom' || lowerCatId.includes('bed')) {
       return buildBedMeshGroup(
         {
@@ -151,10 +202,11 @@ function buildSmartArchetypeFallback(
       );
     }
 
-    if (lowerCat === 'kitchen' || lowerName.includes('cabinet') || lowerName.includes('wardrobe') || lowerCatId.includes('cabinet')) {
+    // 10. Cabinets & Storage
+    if (lowerCat === 'kitchen' || lowerName.includes('cabinet') || lowerName.includes('wardrobe') || lowerCatId.includes('cabinet') || lowerName.includes('dresser')) {
       return buildCabinetMeshGroup(
         {
-          columns: 2,
+          columns: item.width > 90 ? 2 : 1,
           rows: 2,
           doorType: 'solid_doors',
           width: item.width,
@@ -167,10 +219,12 @@ function buildSmartArchetypeFallback(
       );
     }
 
+    // 11. Lighting
     if (lowerCat === 'lighting' || lowerName.includes('lamp') || lowerCatId.includes('lamp')) {
+      const isPendant = lowerName.includes('pendant') || lowerName.includes('hanging') || lowerName.includes('dome') || lowerName.includes('chandelier');
       return buildLampMeshGroup(
         {
-          type: 'table_lamp',
+          type: isPendant ? 'pendant_dome' : 'table_lamp',
           shadeWidth: item.width,
           shadeHeight: item.depth,
           totalHeight: item.height,
@@ -180,6 +234,7 @@ function buildSmartArchetypeFallback(
       );
     }
 
+    // 12. Doors & Windows
     if (lowerCat === 'doors & windows' || lowerName.includes('door') || lowerName.includes('window')) {
       if (lowerName.includes('window')) {
         return buildWindowMeshGroup(
@@ -194,7 +249,7 @@ function buildSmartArchetypeFallback(
       }
       return buildDoorMeshGroup(
         {
-          type: 'modern_flush',
+          type: lowerName.includes('french') ? 'glass_french' : (lowerName.includes('barn') ? 'barn_sliding' : 'modern_flush'),
           width: item.width,
           depth: item.depth,
           height: item.height,
@@ -204,10 +259,28 @@ function buildSmartArchetypeFallback(
       );
     }
 
-    if (lowerCat === 'stairs' || lowerName.includes('stair') || lowerCatId.includes('stair')) {
+    // 13. Stairs
+    if (lowerCat === 'stairs' || lowerName.includes('stair') || lowerCatId.includes('stair') || lowerName.includes('steps')) {
+      let stairType: 'straight' | 'open_riser' | 'floating' | 'l_shape' | 'spiral' | 'outdoor_concrete' | 'outdoor_deck' | 'outdoor_metal' = 'straight';
+      if (lowerName.includes('concrete') || lowerName.includes('stone') || lowerName.includes('entry step') || lowerName.includes('stoop')) {
+        stairType = 'outdoor_concrete';
+      } else if (lowerName.includes('deck') || lowerName.includes('porch') || lowerName.includes('timber') || lowerName.includes('patio')) {
+        stairType = 'outdoor_deck';
+      } else if (lowerName.includes('floating') || lowerName.includes('cantilever') || lowerName.includes('glass')) {
+        stairType = 'floating';
+      } else if (lowerName.includes('l-shape') || lowerName.includes('l_shape') || lowerName.includes('landing') || lowerName.includes('corner')) {
+        stairType = 'l_shape';
+      } else if (lowerName.includes('metal') || lowerName.includes('fire escape') || lowerName.includes('industrial')) {
+        stairType = 'outdoor_metal';
+      } else if (lowerName.includes('spiral') || lowerName.includes('helical') || lowerName.includes('curved')) {
+        stairType = 'spiral';
+      } else if (lowerName.includes('duplex') || lowerName.includes('open')) {
+        stairType = 'open_riser';
+      }
+
       return buildStairsMeshGroup(
         {
-          type: lowerName.includes('spiral') ? 'spiral' : 'straight',
+          type: stairType,
           width: item.width,
           depth: item.depth,
           height: item.height,
@@ -308,6 +381,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     }
   };
 
+  // Next Floor Attachment Gap in Stacked/Duplex mode: 0 = attached flush, >0 = exploded gap (e.g. 0.8m, 1.6m)
+  const [nextFloorGap, setNextFloorGap] = useState<number>(0);
+  const nextFloorGapRef = useRef(nextFloorGap);
+  nextFloorGapRef.current = nextFloorGap;
+
   // Camera Mode: 'aerial' (orbit) or 'visitor' (human eye level walkthrough at 160cm)
   const [localCameraMode, setLocalCameraMode] = useState<'aerial' | 'visitor'>(
     cameraModeProp || (isCustomerMode ? 'visitor' : 'aerial')
@@ -320,6 +398,9 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     }
     if (onCameraModeChangeProp) onCameraModeChangeProp(m);
   };
+
+  // Top View / Ceiling Toggle: false = removed top (interior cutaway view), true = keep top (enclosed ceiling)
+  const [showCeiling, setShowCeiling] = useState<boolean>(false);
   // Sync external 2D visitor camera position into 3D
   useEffect(() => {
     if (visitorCameraProp && cameraMode === 'visitor') {
@@ -393,7 +474,9 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const mid = (allFloors.length - 1) / 2;
       return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
     } else {
-      return { x: 0, y: level * 2.5, z: 0 };
+      const baseH = 2.5;
+      const gap = nextFloorGapRef.current || 0;
+      return { x: 0, y: level * (baseH + gap), z: 0 };
     }
   };
 
@@ -404,6 +487,25 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const visitorPitchRef = useRef(0);
   const keysPressedRef = useRef<{ [key: string]: boolean }>({});
 
+  // PUBG Game Tour State (First-Person Game Walkthrough, kinematics, procedural audio, drag-look directions)
+  const [isDraggingLookState, setIsDraggingLookState] = useState(false);
+
+  const [isCrouching, setIsCrouching] = useState(false);
+  const isCrouchingRef = useRef(false);
+  isCrouchingRef.current = isCrouching;
+
+  const [isSprintingState, setIsSprintingState] = useState(false);
+  const [isMovingState, setIsMovingState] = useState(false);
+  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+
+  const [nearbyDoorPrompt, setNearbyDoorPrompt] = useState<{ name: string; isOpen: boolean } | null>(null);
+  const [hudYaw, setHudYaw] = useState(0);
+  const [hudPitch, setHudPitch] = useState(0);
+
+  const visitorVerticalVelocityRef = useRef(0);
+  const visitorJumpOffsetRef = useRef(0);
+  const visitorGroundYRef = useRef(0);
+
   // Initialize Three.js WebGL Scene ONCE
   useEffect(() => {
     const mount = canvasMountRef.current;
@@ -413,8 +515,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const height = mount.clientHeight || window.innerHeight;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#e2e8f0');
-    scene.fog = new THREE.FogExp2('#e2e8f0', 0.012);
+    scene.background = new THREE.Color('#eef5fb');
+    scene.fog = new THREE.FogExp2('#eef5fb', 0.007);
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(55, width / height, 0.02, 1000);
@@ -431,18 +533,30 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    renderer.toneMappingExposure = 1.08;
     rendererRef.current = renderer;
+
+    // Photorealistic PBR Image-Based Lighting & Environmental Reflections
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+    const envScene = new RoomEnvironment();
+    const envMap = pmremGenerator.fromScene(envScene, 0.04);
+    scene.environment = envMap.texture;
 
     mount.innerHTML = '';
     mount.appendChild(renderer.domElement);
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x94a3b8, 0.85);
+    const hemiLight = new THREE.HemisphereLight(0xe2f1fc, 0x829ab1, 0.75);
     hemiLight.position.set(0, 50, 0);
     scene.add(hemiLight);
     hemiLightRef.current = hemiLight;
 
-    const dirLight = new THREE.DirectionalLight(0xfff8eb, 1.7);
+    // Architectural Warm Interior Bounce Fill (simulates light bouncing off floors into ceilings)
+    const bounceLight = new THREE.DirectionalLight(0xffeedb, 0.45);
+    bounceLight.position.set(-15, 20, -15);
+    scene.add(bounceLight);
+
+    const dirLight = new THREE.DirectionalLight(0xfff8eb, 1.6);
     dirLight.position.set(15, 25, 15);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 2048;
@@ -454,14 +568,15 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     dirLight.shadow.camera.top = 20;
     dirLight.shadow.camera.bottom = -20;
     dirLight.shadow.bias = -0.0005;
+    dirLight.shadow.radius = 2.8; // Soft diffused natural sun penumbra
     scene.add(dirLight);
     dirLightRef.current = dirLight;
 
-    const groundGeom = new THREE.PlaneGeometry(100, 100);
+    const groundGeom = new THREE.PlaneGeometry(160, 160);
     const groundMat = new THREE.MeshStandardMaterial({
-      color: 0xf1f5f9,
-      roughness: 0.85,
-      metalness: 0.05,
+      color: 0x487922,
+      roughness: 0.95,
+      metalness: 0.01,
     });
     const ground = new THREE.Mesh(groundGeom, groundMat);
     ground.rotation.x = -Math.PI / 2;
@@ -469,8 +584,13 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     ground.receiveShadow = true;
     scene.add(ground);
 
-    const gridHelper = new THREE.GridHelper(60, 60, 0x0284c7, 0xcbd5e1);
-    gridHelper.position.y = 0;
+    const gridHelper = new THREE.GridHelper(60, 60, 0x3d661e, 0x55882b);
+    gridHelper.position.y = 0.001;
+    if (gridHelper.material instanceof THREE.Material) {
+      gridHelper.material.opacity = 0.35;
+      gridHelper.material.transparent = true;
+    }
+    scene.add(gridHelper);
     scene.add(gridHelper);
 
     const meshesGroup = new THREE.Group();
@@ -488,10 +608,17 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         return;
       }
 
-      // Spacebar for Free Hand Pan Mode
+      // Spacebar: in visitor mode -> Jump; in aerial mode -> Free Hand Pan
       if (e.code === 'Space' && !e.repeat) {
-        isSpacePressedRef.current = true;
-        setIsSpacePressed(true);
+        if (cameraModeRef.current === 'visitor') {
+          e.preventDefault();
+          if (visitorJumpOffsetRef.current === 0) {
+            visitorVerticalVelocityRef.current = 4.2; // PUBG jump impulse
+          }
+        } else {
+          isSpacePressedRef.current = true;
+          setIsSpacePressed(true);
+        }
       }
       // 'H' key toggles Free Hand tool
       if (e.code === 'KeyH') {
@@ -499,8 +626,45 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         toolModeRef.current = next;
         setToolMode(next);
       }
-      // 'V' key or Escape returns to Select tool
-      if (e.code === 'KeyV' || e.code === 'Escape') {
+      // 'V' key returns to Select tool
+      if (e.code === 'KeyV') {
+        toolModeRef.current = 'select';
+        setToolMode('select');
+      }
+      // 'C' key: in visitor mode -> toggle crouch
+      if (e.code === 'KeyC' && cameraModeRef.current === 'visitor') {
+        e.preventDefault();
+        setIsCrouching((prev) => !prev);
+      }
+      // 'M' key: in visitor mode -> toggle footsteps audio
+      if (e.code === 'KeyM' && cameraModeRef.current === 'visitor') {
+        e.preventDefault();
+        setIsSoundEnabled(soundEngine.toggle());
+      }
+      // 'F' key: in visitor mode -> interact with closest door or window
+      if (e.code === 'KeyF' && cameraModeRef.current === 'visitor') {
+        e.preventDefault();
+        const vp = visitorPosRef.current;
+        let nearestDoorPart: any = null;
+        let minD = 2.4;
+        const wPos = new THREE.Vector3();
+        meshesGroup.traverse((obj) => {
+          if (obj.userData && obj.userData.isInteractive) {
+            obj.getWorldPosition(wPos);
+            const d = Math.hypot(vp.x - wPos.x, vp.z - wPos.z);
+            if (d < minD) {
+              minD = d;
+              nearestDoorPart = obj;
+            }
+          }
+        });
+        if (nearestDoorPart) {
+          nearestDoorPart.userData.isOpenManually = !nearestDoorPart.userData.isOpenManually;
+          soundEngine.playDoor(nearestDoorPart.userData.isOpenManually);
+        }
+      }
+      // Escape returns to Select tool
+      if (e.code === 'Escape') {
         toolModeRef.current = 'select';
         setToolMode('select');
       }
@@ -645,10 +809,32 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const mode = cameraModeRef.current;
 
       if (mode === 'visitor') {
-        // Continuous keyboard movement in Virtual Visitor mode
-        const speed = keysPressedRef.current['ShiftLeft'] ? 6.0 : 3.0; // m/s
-        const moveDist = speed * delta;
+        // Continuous keyboard movement in PUBG Game Walkthrough mode
+        const isShift = Boolean(keysPressedRef.current['ShiftLeft'] || keysPressedRef.current['ShiftRight']);
+        const isCrouched = Boolean(isCrouchingRef.current);
+        const baseSpeed = isCrouched ? 1.6 : isShift ? 5.6 : 2.8; // m/s (Crouch sneak vs Sprint vs Walk)
+        const moveDist = baseSpeed * delta;
 
+        let moveForward = 0;
+        let moveRight = 0;
+
+        if (keysPressedRef.current['KeyW'] || keysPressedRef.current['ArrowUp']) moveForward += 1;
+        if (keysPressedRef.current['KeyS'] || keysPressedRef.current['ArrowDown']) moveForward -= 1;
+        if (keysPressedRef.current['KeyA']) moveRight -= 1;
+        if (keysPressedRef.current['KeyD']) moveRight += 1;
+
+        // Smooth keyboard turn keys (ArrowLeft / ArrowRight / Q / E)
+        if (keysPressedRef.current['ArrowLeft'] || keysPressedRef.current['KeyQ']) {
+          visitorYawRef.current += 2.0 * delta;
+        }
+        if (keysPressedRef.current['ArrowRight'] || keysPressedRef.current['KeyE']) {
+          visitorYawRef.current -= 2.0 * delta;
+        }
+
+        const isCurrentlyMoving = moveForward !== 0 || moveRight !== 0;
+        const isCurrentlySprinting = isCurrentlyMoving && isShift && !isCrouched;
+
+        // Camera horizontal vectors
         const forward = new THREE.Vector3(
           Math.sin(visitorYawRef.current),
           0,
@@ -660,71 +846,184 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           Math.sin(visitorYawRef.current)
         );
 
-        if (keysPressedRef.current['KeyW'] || keysPressedRef.current['ArrowUp']) {
-          visitorPosRef.current.addScaledVector(forward, moveDist);
-        }
-        if (keysPressedRef.current['KeyS'] || keysPressedRef.current['ArrowDown']) {
-          visitorPosRef.current.addScaledVector(forward, -moveDist);
-        }
-        if (keysPressedRef.current['KeyA']) {
-          visitorPosRef.current.addScaledVector(right, -moveDist);
-        }
-        if (keysPressedRef.current['KeyD']) {
-          visitorPosRef.current.addScaledVector(right, moveDist);
-        }
-        if (keysPressedRef.current['ArrowLeft'] || keysPressedRef.current['KeyQ']) {
-          visitorYawRef.current += 1.8 * delta;
-        }
-        if (keysPressedRef.current['ArrowRight'] || keysPressedRef.current['KeyE']) {
-          visitorYawRef.current -= 1.8 * delta;
-        }
+        // Desired velocity vector
+        const moveVec = new THREE.Vector3();
+        if (moveForward !== 0) moveVec.addScaledVector(forward, moveForward);
+        if (moveRight !== 0) moveVec.addScaledVector(right, moveRight);
+        if (moveVec.lengthSq() > 0) moveVec.normalize();
 
-        // Apply Visitor Camera Position & Look Direction with exact 3D Floor Offset strictly on activeFloor
+        const moveYaw = moveVec.lengthSq() > 0
+          ? Math.atan2(moveVec.x, -moveVec.z)
+          : visitorYawRef.current;
+
+        // Proposed candidate position
+        let nextX = visitorPosRef.current.x + moveVec.x * moveDist;
+        let nextZ = visitorPosRef.current.z + moveVec.z * moveDist;
+
+        // ----------------------------------------------------
+        // ----------------------------------------------------
+        // WALL COLLISION & DOOR-ONLY ENTRY PHYSICS
+        // ----------------------------------------------------
         const curLevel = activeFloorRef.current ?? 0;
-        const curOffset = getFloor3DOffset(curLevel);
+        const currentWalls = planRef.current.walls.filter((w) => (w.floorLevel ?? 0) === curLevel);
 
-        // Clamp visitor position within active floor boundary in 3D
-        const flRooms = planRef.current.rooms.filter((r) => (r.floorLevel ?? 0) === curLevel);
-        const flWalls = planRef.current.walls.filter((w) => (w.floorLevel ?? 0) === curLevel);
-        let fMinX = -3.8, fMaxX = 3.8, fMinZ = -2.8, fMaxZ = 2.8;
-        if (flRooms.length > 0 || flWalls.length > 0) {
-          fMinX = Infinity; fMaxX = -Infinity; fMinZ = Infinity; fMaxZ = -Infinity;
-          flRooms.forEach((r) => {
-            r.points.forEach((p) => {
-              fMinX = Math.min(fMinX, p.x * 0.01);
-              fMaxX = Math.max(fMaxX, p.x * 0.01);
-              fMinZ = Math.min(fMinZ, p.y * 0.01);
-              fMaxZ = Math.max(fMaxZ, p.y * 0.01);
+        // Strict door detection (strictly doors, completely excluding windows!)
+        const isDoor = (f: FurnitureItem) => {
+          const n = (f.name || '').toLowerCase();
+          const c = (f.catalogId || '').toLowerCase();
+          const m = (f.model || '').toLowerCase();
+          return (n.includes('door') || c.includes('door') || m.includes('procedural:door')) && !n.includes('window') && !c.includes('window');
+        };
+
+        const doorsOnFloor = planRef.current.furniture.filter(
+          (f) => (f.floorLevel ?? 0) === curLevel && isDoor(f)
+        );
+
+        // Check if an interactive door is currently open
+        const isDoorOpen = (doorItem: FurnitureItem) => {
+          let open = false;
+          meshesGroup.traverse((obj) => {
+            if (obj.userData && obj.userData.id === doorItem.id && Array.isArray(obj.userData.animParts)) {
+              obj.userData.animParts.forEach((part: THREE.Object3D) => {
+                if (part.userData && (part.userData.currentProgress > 0.35 || part.userData.targetProgress > 0.5)) {
+                  open = true;
+                }
+              });
+            }
+          });
+          return open;
+        };
+
+        const playerRadius = 0.28; // 28cm player collision capsule
+
+        for (const wall of currentWalls) {
+          const wX1 = wall.xStart * 0.01;
+          const wZ1 = wall.yStart * 0.01;
+          const wX2 = wall.xEnd * 0.01;
+          const wZ2 = wall.yEnd * 0.01;
+
+          const segX = wX2 - wX1;
+          const segZ = wZ2 - wZ1;
+          const segLenSq = segX * segX + segZ * segZ;
+          if (segLenSq < 0.0001) continue;
+
+          const t = Math.max(0, Math.min(1, ((nextX - wX1) * segX + (nextZ - wZ1) * segZ) / segLenSq));
+          const closestX = wX1 + t * segX;
+          const closestZ = wZ1 + t * segZ;
+
+          const distX = nextX - closestX;
+          const distZ = nextZ - closestZ;
+          const dist = Math.hypot(distX, distZ);
+
+          if (dist < playerRadius) {
+            // "entry only with doors": check if contact point aligns with an actual door AND that door is open
+            const passingDoor = doorsOnFloor.find((d) => {
+              const dX = d.x * 0.01;
+              const dZ = d.y * 0.01;
+              const doorWidthM = (d.width || 90) * 0.01;
+              return Math.hypot(closestX - dX, closestZ - dZ) < (doorWidthM * 0.55);
             });
-          });
-          flWalls.forEach((w) => {
-            fMinX = Math.min(fMinX, w.xStart * 0.01, w.xEnd * 0.01);
-            fMaxX = Math.max(fMaxX, w.xStart * 0.01, w.xEnd * 0.01);
-            fMinZ = Math.min(fMinZ, w.yStart * 0.01, w.yEnd * 0.01);
-            fMaxZ = Math.max(fMaxZ, w.yStart * 0.01, w.yEnd * 0.01);
-          });
-          fMinX -= 0.2; fMaxX += 0.2; fMinZ -= 0.2; fMaxZ += 0.2;
-        }
 
-        const rawVx = visitorPosRef.current.x;
-        const rawVz = visitorPosRef.current.z;
-        const clampedVx = Math.max(fMinX, Math.min(fMaxX, rawVx));
-        const clampedVz = Math.max(fMinZ, Math.min(fMaxZ, rawVz));
+            const canPassThrough = passingDoor && isDoorOpen(passingDoor);
 
-        if (clampedVx !== rawVx || clampedVz !== rawVz) {
-          visitorPosRef.current.x = clampedVx;
-          visitorPosRef.current.z = clampedVz;
-          if (!walkWarningRef.current) {
-            triggerWalkWarning(`⚠️ Walk View locked to ${curLevel === 0 ? 'Ground Floor' : '1st Floor'}. Please switch floor in top bar to walk other levels.`);
+            if (!canPassThrough) {
+              const overlap = playerRadius - dist;
+              const nx = dist > 0.0001 ? distX / dist : 1;
+              const nz = dist > 0.0001 ? distZ / dist : 0;
+              nextX += nx * overlap;
+              nextZ += nz * overlap;
+            }
           }
         }
 
-        const vp = visitorPosRef.current;
-        camera.position.set(
-          vp.x + curOffset.x,
-          curOffset.y + 1.6,
-          vp.z + curOffset.z
+        // Clamp inside architectural parcel boundary
+        nextX = Math.max(-6.5, Math.min(6.5, nextX));
+        nextZ = Math.max(-5.0, Math.min(5.0, nextZ));
+
+        visitorPosRef.current.x = nextX;
+        visitorPosRef.current.z = nextZ;
+
+        // ----------------------------------------------------
+        // DUPLEX STAIRCASE CLIMBING & ELEVATION PHYSICS
+        // ----------------------------------------------------
+        const baseOffset = getFloor3DOffset(curLevel);
+        let targetGroundY = baseOffset.y;
+
+        const allStairs = planRef.current.furniture.filter(
+          (f) =>
+            f.catalogId.toLowerCase().includes('stair') ||
+            f.name.toLowerCase().includes('stair') ||
+            f.category?.toLowerCase().includes('stair') ||
+            f.model?.includes('procedural:stairs')
         );
+
+        for (const st of allStairs) {
+          if ((st.height || 0) < 160) continue; // Skip small entry stoops
+
+          const sw = (st.width || 100) * 0.01;
+          const sd = (st.depth || 240) * 0.01;
+          const sMinX = st.x * 0.01 - sw / 2;
+          const sMaxX = st.x * 0.01 + sw / 2;
+          const sMinZ = st.y * 0.01 - sd / 2;
+          const sMaxZ = st.y * 0.01 + sd / 2;
+
+          if (
+            nextX >= sMinX - 0.25 &&
+            nextX <= sMaxX + 0.25 &&
+            nextZ >= sMinZ - 0.25 &&
+            nextZ <= sMaxZ + 0.25
+          ) {
+            // Progress from bottom to top along stair flight
+            const stairProgress = Math.max(0, Math.min(1, (nextZ - sMinZ) / Math.max(0.1, sMaxZ - sMinZ)));
+            const floorHeightGap = 2.5 + (nextFloorGapRef.current || 0);
+            targetGroundY = stairProgress * floorHeightGap;
+
+            // Automatically switch active floor level when reaching upper mezzanine or ground floor
+            if (stairProgress >= 0.82 && activeFloorRef.current !== 1) {
+              activeFloorRef.current = 1;
+              if (onFloorChange) onFloorChange(1);
+            } else if (stairProgress <= 0.18 && activeFloorRef.current !== 0) {
+              activeFloorRef.current = 0;
+              if (onFloorChange) onFloorChange(0);
+            }
+            break;
+          }
+        }
+
+        // Smooth elevation spring
+        visitorGroundYRef.current = THREE.MathUtils.lerp(
+          visitorGroundYRef.current,
+          targetGroundY,
+          Math.min(1.0, delta * 12.0)
+        );
+
+        // Jump physics with gravity
+        if (visitorJumpOffsetRef.current > 0 || visitorVerticalVelocityRef.current > 0) {
+          visitorVerticalVelocityRef.current -= 14.0 * delta;
+          visitorJumpOffsetRef.current += visitorVerticalVelocityRef.current * delta;
+          if (visitorJumpOffsetRef.current <= 0) {
+            visitorJumpOffsetRef.current = 0;
+            visitorVerticalVelocityRef.current = 0;
+          }
+        }
+
+        // Procedural footstep audio
+        if (isCurrentlyMoving && visitorJumpOffsetRef.current === 0) {
+          soundEngine.playFootstep(isCurrentlySprinting, isCrouched);
+        }
+
+        const totalPlayerY = visitorGroundYRef.current + visitorJumpOffsetRef.current;
+        const vp = visitorPosRef.current;
+
+        // ----------------------------------------------------
+        // FIRST-PERSON IMMERSIVE GAME CAMERA (No human body, 100% clean unobstructed view)
+        // ----------------------------------------------------
+        const eyeH = isCrouched ? 1.1 : 1.65;
+        const headBob = isCurrentlyMoving
+          ? Math.sin(clock.getElapsedTime() * (isCurrentlySprinting ? 14 : 9)) * (isCurrentlySprinting ? 0.03 : 0.015)
+          : 0;
+
+        camera.position.set(vp.x, totalPlayerY + eyeH + headBob, vp.z);
 
         const lookDir = new THREE.Vector3(
           Math.sin(visitorYawRef.current) * Math.cos(visitorPitchRef.current),
@@ -732,6 +1031,17 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           -Math.cos(visitorYawRef.current) * Math.cos(visitorPitchRef.current)
         );
         camera.lookAt(camera.position.clone().add(lookDir));
+
+        // Dynamic Sprint FOV
+        const targetFov = isCurrentlySprinting ? 63 : 55;
+        camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, delta * 7);
+        camera.updateProjectionMatrix();
+
+        // Update HUD Compass & Pitch State
+        setHudYaw(visitorYawRef.current);
+        setHudPitch(visitorPitchRef.current);
+        setIsMovingState(isCurrentlyMoving);
+        setIsSprintingState(isCurrentlySprinting);
 
         // Real-time synchronization to 2D Floorplan view
         if (onVisitorCameraChange) {
@@ -769,13 +1079,23 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const isVisitorMode = mode === 'visitor';
       const camPos = camera.position;
       const worldPosVec = new THREE.Vector3();
+      let closestInteractiveDoor: { name: string; isOpen: boolean } | null = null;
+      let minInteractiveDist = 2.4;
 
       meshesGroup.traverse((obj) => {
         if (obj.userData && obj.userData.isInteractive && Array.isArray(obj.userData.animParts)) {
           obj.getWorldPosition(worldPosVec);
           const dist = Math.hypot(camPos.x - worldPosVec.x, camPos.z - worldPosVec.z);
-          // Trigger when camera is within 2.3 meters in Virtual Tour mode
-          const shouldBeOpen = isVisitorMode && dist < 2.3;
+          // Trigger when camera is within 2.3 meters in Virtual Tour mode OR clicked directly to open
+          const shouldBeOpen = (isVisitorMode && dist < 2.3) || Boolean(obj.userData.isOpenManually);
+
+          if (isVisitorMode && dist < minInteractiveDist) {
+            minInteractiveDist = dist;
+            closestInteractiveDoor = {
+              name: obj.userData.name || 'Door',
+              isOpen: shouldBeOpen,
+            };
+          }
 
           obj.userData.animParts.forEach((part: THREE.Object3D) => {
             if (part && part.userData) {
@@ -800,6 +1120,10 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           });
         }
       });
+
+      if (isVisitorMode) {
+        setNearbyDoorPrompt(closestInteractiveDoor);
+      }
 
       // Pulse animation for colliding items
       const elapsedTime = clock.getElapsedTime();
@@ -943,8 +1267,10 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         // 13.0 meters horizontal spacing side-by-side on ground level
         return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
       } else {
-        // Stacked vertically
-        return { x: 0, y: level * 2.5, z: 0 };
+        // Stacked vertically: default elevation 2.5m + adjustable next-floor gap
+        const baseH = 2.5;
+        const gap = nextFloorGap || 0;
+        return { x: 0, y: level * (baseH + gap), z: 0 };
       }
     };
 
@@ -987,8 +1313,66 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const centerX = (minX + maxX) / 2 + offset.x;
       const centerZ = (minZ + maxZ) / 2 + offset.z;
 
-      // Base Ground Foundation Slab
-      const padGeom = new THREE.BoxGeometry(padW, 0.06, padD);
+      // Base Ground Foundation Slab or Inter-Floor Slab with Architectural Stairwell Cutouts
+      let padGeom: THREE.BufferGeometry;
+      const stairsBelowFloor = plan.furniture.filter((f) => {
+        if (f.isVisible === false) return false;
+        if ((f.floorLevel ?? 0) !== fl.level - 1) return false;
+        const lowerName = (f.name || '').toLowerCase();
+        const lowerCat = (f.category || '').toLowerCase();
+        const lowerCatId = (f.catalogId || '').toLowerCase();
+        const isProcStair = (f.model || '').includes('stairs') || (f.model || '').includes('staircase');
+        return lowerCat === 'stairs' || lowerName.includes('stair') || lowerCatId.includes('stair') || isProcStair;
+      });
+
+      if (fl.level > 0 && stairsBelowFloor.length > 0) {
+        const padShape = new THREE.Shape();
+        const hw = padW / 2;
+        const hd = padD / 2;
+        padShape.moveTo(-hw, -hd);
+        padShape.lineTo(hw, -hd);
+        padShape.lineTo(hw, hd);
+        padShape.lineTo(-hw, hd);
+        padShape.closePath();
+
+        stairsBelowFloor.forEach((stair) => {
+          const relX = (stair.x * CM) - ((minX + maxX) / 2);
+          const relZ = (stair.y * CM) - ((minZ + maxZ) / 2);
+          const sHw = (stair.width * CM) / 2 + 0.05;
+          const sHd = (stair.depth * CM) / 2 + 0.05;
+          const ang = stair.angle || 0;
+          const cos = Math.cos(ang);
+          const sin = Math.sin(ang);
+
+          const localPts = [
+            { x: -sHw, y: -sHd },
+            { x: sHw, y: -sHd },
+            { x: sHw, y: sHd },
+            { x: -sHw, y: sHd },
+          ];
+          const holePts = localPts.map((lp) => {
+            const rx = relX + (lp.x * cos - lp.y * sin);
+            const rz = relZ + (lp.x * sin + lp.y * cos);
+            return { x: rx, y: -rz };
+          });
+
+          const hPath = new THREE.Path();
+          hPath.moveTo(holePts[0].x, holePts[0].y);
+          hPath.lineTo(holePts[1].x, holePts[1].y);
+          hPath.lineTo(holePts[2].x, holePts[2].y);
+          hPath.lineTo(holePts[3].x, holePts[3].y);
+          hPath.closePath();
+          padShape.holes.push(hPath);
+        });
+
+        const extrude = new THREE.ExtrudeGeometry(padShape, { depth: 0.06, bevelEnabled: false });
+        extrude.rotateX(-Math.PI / 2);
+        extrude.center();
+        padGeom = extrude;
+      } else {
+        padGeom = new THREE.BoxGeometry(padW, 0.06, padD);
+      }
+
       const padMat = new THREE.MeshStandardMaterial({
         color: fl.level === 0 ? 0xf1f5f9 : 0xe2e8f0,
         roughness: 0.9,
@@ -999,102 +1383,288 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       padMesh.receiveShadow = true;
       padMesh.userData = { id: `floor_pad_${fl.level}`, type: 'floorPad', floorLevel: fl.level };
       group.add(padMesh);
-
-      // High-Definition 3D Floor Placard Signboard with ACTIVE indicator and floor click metadata
-      const isCurActive = (targetFloor === fl.level);
-      const labelCanvas = document.createElement('canvas');
-      labelCanvas.width = 2048;
-      labelCanvas.height = 512;
-      const lctx = labelCanvas.getContext('2d');
-      if (lctx) {
-        lctx.imageSmoothingEnabled = true;
-        lctx.imageSmoothingQuality = 'high';
-
-        // Outer ambient drop shadow
-        lctx.shadowColor = isCurActive ? 'rgba(2, 132, 199, 0.6)' : 'rgba(15, 23, 42, 0.35)';
-        lctx.shadowBlur = isCurActive ? 36 : 24;
-        lctx.shadowOffsetY = 10;
-
-        if (isCurActive) {
-          const grad = lctx.createLinearGradient(0, 0, 2048, 512);
-          if (fl.level === 0) {
-            grad.addColorStop(0, '#0284c7');
-            grad.addColorStop(1, '#0369a1');
-          } else if (fl.level === 1) {
-            grad.addColorStop(0, '#059669');
-            grad.addColorStop(1, '#047857');
-          } else {
-            grad.addColorStop(0, '#6366f1');
-            grad.addColorStop(1, '#4f46e5');
-          }
-          lctx.fillStyle = grad;
-        } else {
-          lctx.fillStyle = '#334155';
-        }
-
-        lctx.beginPath();
-        lctx.roundRect(32, 32, 1984, 448, 64);
-        lctx.fill();
-
-        // Crisp Border
-        lctx.shadowColor = 'transparent';
-        lctx.strokeStyle = isCurActive ? '#38bdf8' : 'rgba(255, 255, 255, 0.7)';
-        lctx.lineWidth = isCurActive ? 22 : 12;
-        lctx.beginPath();
-        lctx.roundRect(32, 32, 1984, 448, 64);
-        lctx.stroke();
-
-        // Floor Name Title
-        lctx.fillStyle = '#ffffff';
-        lctx.font = 'bold 110px system-ui, -apple-system, sans-serif';
-        lctx.textAlign = 'center';
-        lctx.textBaseline = 'middle';
-        const rawName = (fl.name || '').split('(')[0].trim().toUpperCase();
-        const baseTitle = fl.level === 0 ? '🏢 GROUND FLOOR' : fl.level === 1 ? '🏡 1ST FLOOR' : `🏡 ${rawName || `FLOOR ${fl.level}`}`;
-        const floorTitle = isCurActive ? `● ${baseTitle} (ACTIVE)` : baseTitle;
-        lctx.fillText(floorTitle, 1024, 256);
-
-        const labelTex = new THREE.CanvasTexture(labelCanvas);
-        labelTex.generateMipmaps = true;
-        labelTex.minFilter = THREE.LinearMipmapLinearFilter;
-        labelTex.magFilter = THREE.LinearFilter;
-        labelTex.anisotropy = 16;
-        labelTex.needsUpdate = true;
-
-        const placardW = 4.2;
-        const placardH = placardW * (512 / 2048);
-        const labelGeom = new THREE.PlaneGeometry(placardW, placardH);
-        const labelMat = new THREE.MeshBasicMaterial({
-          map: labelTex,
-          transparent: true,
-          side: THREE.DoubleSide,
-        });
-        const labelMesh = new THREE.Mesh(labelGeom, labelMat);
-        labelMesh.position.set(centerX, offset.y + 0.35, maxZ + offset.z + 1.2);
-        labelMesh.rotation.x = -Math.PI / 4; // Angled 45 deg upward toward camera
-        labelMesh.userData = { id: `floor_sign_${fl.level}`, type: 'floorSign', floorLevel: fl.level };
-        group.add(labelMesh);
-      }
     });
 
-    // 1. Build Rooms (Floors)
+    // Helper to test if a 2D point is inside a room polygon
+    const isPointInRoomPolygon = (px: number, py: number, points: { x: number; y: number }[]): boolean => {
+      let inside = false;
+      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const xi = points[i].x;
+        const yi = points[i].y;
+        const xj = points[j].x;
+        const yj = points[j].y;
+        const intersect = ((yi > py) !== (yj > py)) && (px < ((xj - xi) * (py - yi)) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    };
+
+    // Helper to create stairwell cutout path in Shape coordinates (where Y is inverted: -y * CM)
+    const buildStairHolePath = (stair: FurnitureItem) => {
+      const hw = (stair.width * CM) / 2 + 0.05;
+      const hd = (stair.depth * CM) / 2 + 0.05;
+      const ang = stair.angle || 0;
+      const cos = Math.cos(ang);
+      const sin = Math.sin(ang);
+
+      const localCorners = [
+        { x: -hw, y: -hd },
+        { x: hw, y: -hd },
+        { x: hw, y: hd },
+        { x: -hw, y: hd },
+      ];
+
+      const shapeCorners = localCorners.map((lp) => {
+        const wx = (stair.x * CM) + (lp.x * cos - lp.y * sin);
+        const wy = (stair.y * CM) + (lp.x * sin + lp.y * cos);
+        return { x: wx, y: -wy }; // inverted Y for THREE.Shape coordinates
+      });
+
+      const holePath = new THREE.Path();
+      holePath.moveTo(shapeCorners[0].x, shapeCorners[0].y);
+      holePath.lineTo(shapeCorners[1].x, shapeCorners[1].y);
+      holePath.lineTo(shapeCorners[2].x, shapeCorners[2].y);
+      holePath.lineTo(shapeCorners[3].x, shapeCorners[3].y);
+      holePath.closePath();
+      return holePath;
+    };
+
+    // Helper to build Next Floor Stairwell Perimeter Safety Balustrade / Mezzanine Railing
+    const buildStairwellGuardrail = (
+      stair: FurnitureItem,
+      floorOffset: { x: number; y: number; z: number },
+      gapM: number = 0
+    ): THREE.Group => {
+      const guardGroup = new THREE.Group();
+      const hw = (stair.width * CM) / 2 + 0.03;
+      const hd = (stair.depth * CM) / 2 + 0.03;
+      const railH = 0.92;
+      const isGlass =
+        (stair.model || '').includes('glass') ||
+        (stair.model || '').includes('floating') ||
+        stair.name.toLowerCase().includes('floating');
+
+      const glassMat = new THREE.MeshStandardMaterial({
+        color: 0xf1f5f9,
+        opacity: 0.42,
+        transparent: true,
+        roughness: 0.05,
+        metalness: 0.1,
+      });
+
+      const metalMat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        metalness: 0.75,
+        roughness: 0.35,
+      });
+
+      const handrailMat = new THREE.MeshStandardMaterial({
+        color: 0x92400e,
+        roughness: 0.45,
+        metalness: 0.08,
+      });
+
+      // Left edge balustrade (along Z, at X = -hw)
+      if (isGlass) {
+        const leftGlass = new THREE.Mesh(new THREE.BoxGeometry(0.012, railH - 0.06, hd * 2), glassMat);
+        leftGlass.position.set(-hw, (railH - 0.06) / 2, 0);
+        guardGroup.add(leftGlass);
+
+        const leftCap = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, hd * 2), handrailMat);
+        leftCap.position.set(-hw, railH, 0);
+        guardGroup.add(leftCap);
+      } else {
+        const leftRail = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, hd * 2), metalMat);
+        leftRail.position.set(-hw, railH, 0);
+        guardGroup.add(leftRail);
+
+        for (let z = -hd; z <= hd; z += 0.45) {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.025, railH, 0.025), metalMat);
+          post.position.set(-hw, railH / 2, z);
+          guardGroup.add(post);
+        }
+      }
+
+      // Right edge balustrade (along Z, at X = hw)
+      if (isGlass) {
+        const rightGlass = new THREE.Mesh(new THREE.BoxGeometry(0.012, railH - 0.06, hd * 2), glassMat);
+        rightGlass.position.set(hw, (railH - 0.06) / 2, 0);
+        guardGroup.add(rightGlass);
+
+        const rightCap = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, hd * 2), handrailMat);
+        rightCap.position.set(hw, railH, 0);
+        guardGroup.add(rightCap);
+      } else {
+        const rightRail = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, hd * 2), metalMat);
+        rightRail.position.set(hw, railH, 0);
+        guardGroup.add(rightRail);
+
+        for (let z = -hd; z <= hd; z += 0.45) {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.025, railH, 0.025), metalMat);
+          post.position.set(hw, railH / 2, z);
+          guardGroup.add(post);
+        }
+      }
+
+      // Back edge balustrade (along X, at Z = -hd)
+      if (isGlass) {
+        const backGlass = new THREE.Mesh(new THREE.BoxGeometry(hw * 2, railH - 0.06, 0.012), glassMat);
+        backGlass.position.set(0, (railH - 0.06) / 2, -hd);
+        guardGroup.add(backGlass);
+
+        const backCap = new THREE.Mesh(new THREE.BoxGeometry(hw * 2, 0.035, 0.035), handrailMat);
+        backCap.position.set(0, railH, -hd);
+        guardGroup.add(backCap);
+      } else {
+        const backRail = new THREE.Mesh(new THREE.BoxGeometry(hw * 2, 0.035, 0.035), metalMat);
+        backRail.position.set(0, railH, -hd);
+        guardGroup.add(backRail);
+
+        for (let x = -hw; x <= hw; x += 0.4) {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.025, railH, 0.025), metalMat);
+          post.position.set(x, railH / 2, -hd);
+          guardGroup.add(post);
+        }
+      }
+
+      // 4 Sturdy Corner Posts at balustrade junctions
+      const cornerPostGeom = new THREE.BoxGeometry(0.045, railH + 0.02, 0.045);
+      [
+        { x: -hw, z: -hd },
+        { x: hw, z: -hd },
+        { x: -hw, z: hd },
+        { x: hw, z: hd },
+      ].forEach((cp) => {
+        const post = new THREE.Mesh(cornerPostGeom, metalMat);
+        post.position.set(cp.x, (railH + 0.02) / 2, cp.z);
+        guardGroup.add(post);
+      });
+
+      // If Next Floor is elevated with gap (gapM > 0), render vertical alignment attachment connector guides
+      if (gapM > 0) {
+        const guideMat = new THREE.LineDashedMaterial({
+          color: 0x6366f1,
+          dashSize: 0.1,
+          gapSize: 0.05,
+          transparent: true,
+          opacity: 0.7,
+        });
+        const corners = [
+          { x: -hw, z: -hd },
+          { x: hw, z: -hd },
+          { x: -hw, z: hd },
+          { x: hw, z: hd },
+        ];
+        corners.forEach((c) => {
+          const pts = [
+            new THREE.Vector3(c.x, 0, c.z),
+            new THREE.Vector3(c.x, -gapM, c.z),
+          ];
+          const lineGeom = new THREE.BufferGeometry().setFromPoints(pts);
+          const line = new THREE.Line(lineGeom, guideMat);
+          line.computeLineDistances();
+          guardGroup.add(line);
+        });
+      }
+
+      // Front edge (Z = +hd) is left OPEN for clear pedestrian walk-off onto the upper floor!
+      guardGroup.position.set(stair.x * CM + floorOffset.x, floorOffset.y, stair.y * CM + floorOffset.z);
+      guardGroup.rotation.y = -(stair.angle || 0);
+      guardGroup.userData = { id: `${stair.id}_mezzanine_guard`, type: 'mezzanineGuardrail' };
+      return guardGroup;
+    };
+
+    // 1. Build Rooms (Floors & Ceilings)
     plan.rooms.filter((r) => isFloorVisible(r.floorLevel ?? 0)).forEach((room) => {
       if (room.points.length < 3) return;
-      const offset = getFloor3DOffset(room.floorLevel ?? 0);
+      const roomLevel = room.floorLevel ?? 0;
+      const offset = getFloor3DOffset(roomLevel);
 
-      const shape = new THREE.Shape();
-      shape.moveTo(room.points[0].x * CM, -room.points[0].y * CM);
+      // --- Room Floor Slab ---
+      const floorShape = new THREE.Shape();
+      floorShape.moveTo(room.points[0].x * CM, -room.points[0].y * CM);
       for (let i = 1; i < room.points.length; i++) {
-        shape.lineTo(room.points[i].x * CM, -room.points[i].y * CM);
+        floorShape.lineTo(room.points[i].x * CM, -room.points[i].y * CM);
       }
-      shape.closePath();
+      floorShape.closePath();
 
-      const geom = new THREE.ShapeGeometry(shape);
-      const floorTex = room.floorTexture ? getProceduralTexture(room.floorTexture, room.floorColor) : null;
+      // If room is on an upper floor, cut stairwell openings for stairs arriving from the floor below
+      if (roomLevel > 0) {
+        const stairsBelow = plan.furniture.filter((f) => {
+          if (f.isVisible === false) return false;
+          if ((f.floorLevel ?? 0) !== roomLevel - 1) return false;
+          const lowerName = (f.name || '').toLowerCase();
+          const lowerCat = (f.category || '').toLowerCase();
+          const lowerCatId = (f.catalogId || '').toLowerCase();
+          const isProcStair = (f.model || '').includes('stairs') || (f.model || '').includes('staircase');
+          return lowerCat === 'stairs' || lowerName.includes('stair') || lowerCatId.includes('stair') || isProcStair;
+        });
+
+        stairsBelow.forEach((stair) => {
+          if (isPointInRoomPolygon(stair.x, stair.y, room.points)) {
+            floorShape.holes.push(buildStairHolePath(stair));
+            const guardGroup = buildStairwellGuardrail(stair, offset, nextFloorGap);
+            group.add(guardGroup);
+          }
+        });
+      }
+
+      // Intelligently select photorealistic architectural floor finish matching room type and color
+      let floorTex = room.floorTexture ? getProceduralTexture(room.floorTexture, room.floorColor) : null;
+      let floorRoughness = 0.5;
+      let floorMetalness = 0.03;
+
+      if (!floorTex) {
+        const rName = (room.name || '').toLowerCase();
+        const rColor = (room.floorColor || '').toLowerCase();
+        const isWoodLike =
+          rName.includes('kitchen') ||
+          rName.includes('dining') ||
+          rName.includes('corridor') ||
+          rName.includes('hall') ||
+          rColor.includes('eab308') ||
+          rColor.includes('d4a373') ||
+          rColor.includes('b45309') ||
+          rColor.includes('c2410c');
+        const isTileLike =
+          rName.includes('bath') ||
+          rName.includes('toilet') ||
+          rName.includes('wash') ||
+          rName.includes('laundry');
+
+        if (isWoodLike) {
+          floorTex = getProceduralTexture('hardwood_plank', room.floorColor || '#c89666');
+          floorRoughness = 0.38; // Satin wood varnish with soft specular highlight!
+          floorMetalness = 0.04;
+        } else if (isTileLike) {
+          floorTex = getProceduralTexture('ceramic_tile_grid', room.floorColor || '#e2e8f0');
+          floorRoughness = 0.22; // High-gloss ceramic tile
+          floorMetalness = 0.06;
+        } else {
+          // Living room, Master bedroom, Lounge: Plush woven carpet texture
+          floorTex = getProceduralTexture('carpet_plush', room.floorColor || '#0f766e');
+          floorRoughness = 0.92; // Warm plush woven carpet
+          floorMetalness = 0.01;
+        }
+      } else {
+        if (room.floorTexture?.includes('marble')) {
+          floorRoughness = 0.18;
+          floorMetalness = 0.08;
+        } else if (room.floorTexture?.includes('wood') || room.floorTexture?.includes('parquet') || room.floorTexture?.includes('hardwood')) {
+          floorRoughness = 0.38;
+          floorMetalness = 0.04;
+        }
+      }
+
+      if (floorTex) {
+        floorTex.repeat.set(4, 4);
+      }
+
+      const geom = new THREE.ShapeGeometry(floorShape);
       const mat = new THREE.MeshStandardMaterial({
         color: room.floorColor ? new THREE.Color(room.floorColor) : 0xd8b48f,
-        roughness: room.floorTexture?.includes('marble') ? 0.2 : 0.65,
-        metalness: room.floorTexture?.includes('marble') ? 0.08 : 0.03,
+        roughness: floorRoughness,
+        metalness: floorMetalness,
         map: floorTex || undefined,
       });
 
@@ -1102,8 +1672,60 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       floorMesh.rotation.x = -Math.PI / 2;
       floorMesh.position.set(offset.x, offset.y + 0.005, offset.z);
       floorMesh.receiveShadow = true;
-      floorMesh.userData = { id: room.id, type: 'roomFloor', floorLevel: room.floorLevel ?? 0 };
+      floorMesh.userData = { id: room.id, type: 'roomFloor', floorLevel: roomLevel };
       group.add(floorMesh);
+
+      // Warm Interior Ambient Bounce Light (simulates natural home room illumination)
+      const roomPointsLen = room.points.length;
+      if (roomPointsLen > 0) {
+        const cx = (room.points.reduce((sum, p) => sum + p.x, 0) / roomPointsLen) * CM;
+        const cz = (room.points.reduce((sum, p) => sum + p.y, 0) / roomPointsLen) * CM;
+        const roomLight = new THREE.PointLight(0xfff3e3, 0.45, 9, 1.4);
+        roomLight.position.set(cx + offset.x, offset.y + 2.1, cz + offset.z);
+        group.add(roomLight);
+      }
+
+      // --- Sweet Home 3D Architectural Ceiling (Top View Option: Removed vs Kept) ---
+      const shouldRenderCeiling = showCeiling || cameraMode === 'visitor';
+      if (shouldRenderCeiling) {
+        const ceilShape = new THREE.Shape();
+        ceilShape.moveTo(room.points[0].x * CM, -room.points[0].y * CM);
+        for (let i = 1; i < room.points.length; i++) {
+          ceilShape.lineTo(room.points[i].x * CM, -room.points[i].y * CM);
+        }
+        ceilShape.closePath();
+
+        // Cut stairwell opening in ceiling for stairs on this floor climbing upward
+        const stairsGoingUp = plan.furniture.filter((f) => {
+          if (f.isVisible === false) return false;
+          if ((f.floorLevel ?? 0) !== roomLevel) return false;
+          const lowerName = (f.name || '').toLowerCase();
+          const lowerCat = (f.category || '').toLowerCase();
+          const lowerCatId = (f.catalogId || '').toLowerCase();
+          const isProcStair = (f.model || '').includes('stairs') || (f.model || '').includes('staircase');
+          return lowerCat === 'stairs' || lowerName.includes('stair') || lowerCatId.includes('stair') || isProcStair;
+        });
+
+        stairsGoingUp.forEach((stair) => {
+          if (isPointInRoomPolygon(stair.x, stair.y, room.points)) {
+            ceilShape.holes.push(buildStairHolePath(stair));
+          }
+        });
+
+        const ceilGeom = new THREE.ShapeGeometry(ceilShape);
+        const ceilHeightM = (room.ceilingHeight || 280) * CM;
+        const ceilMat = new THREE.MeshStandardMaterial({
+          color: room.ceilingColor ? new THREE.Color(room.ceilingColor) : 0xf8fafc,
+          roughness: 0.9,
+          metalness: 0.02,
+          side: cameraMode === 'visitor' ? THREE.DoubleSide : THREE.BackSide,
+        });
+        const ceilMesh = new THREE.Mesh(ceilGeom, ceilMat);
+        ceilMesh.rotation.x = -Math.PI / 2;
+        ceilMesh.position.set(offset.x, offset.y + ceilHeightM, offset.z);
+        ceilMesh.userData = { id: `${room.id}_ceiling`, type: 'roomCeiling', floorLevel: roomLevel };
+        group.add(ceilMesh);
+      }
     });
 
     // 2. Build Walls with Architectural Openings / Cutouts for Doors & Windows
@@ -1123,26 +1745,36 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const thickness = (wall.thickness || 15) * CM;
       const isSelected = selectedId === wall.id;
 
-      const wallTex = wall.texture ? getProceduralTexture(wall.texture, wall.color) : null;
+      const wallTex = wall.texture
+        ? getProceduralTexture(wall.texture, wall.color)
+        : getProceduralTexture('matte_wall_paint', wall.color || '#f8fafc');
       if (wallTex) {
-        wallTex.repeat.set(Math.max(1.5, length * 0.75), Math.max(1.5, height * 0.75));
+        wallTex.repeat.set(Math.max(1.5, length * 1.5), Math.max(1.5, height * 1.5));
       }
 
       const mat = new THREE.MeshStandardMaterial({
         color: isSelected ? 0x38bdf8 : wall.color ? new THREE.Color(wall.color) : 0xf8fafc,
-        roughness: wall.texture?.includes('royale') ? 0.45 : 0.85,
+        roughness: wall.texture?.includes('royale') ? 0.45 : 0.88,
         metalness: wall.texture?.includes('royale') ? 0.12 : 0.02,
         map: wallTex || undefined,
       });
+
+      const wallCapMat = new THREE.MeshStandardMaterial({
+        color: 0x181a1f, // Sweet Home 3D Signature Dark Charcoal Top Rim
+        roughness: 0.65,
+        metalness: 0.15,
+      });
+      // BoxGeometry 6 faces: [+X, -X, +Y (TOP), -Y (BTM), +Z, -Z]
+      const wallMaterials = isSelected ? mat : [mat, mat, wallCapMat, mat, mat, mat];
 
       // Helper to attach clean crisp architectural edge lines to wall box meshes
       const attachWallEdges = (targetMesh: THREE.Mesh) => {
         const edgesGeom = new THREE.EdgesGeometry(targetMesh.geometry, 15);
         const edgeMat = new THREE.LineBasicMaterial({
-          color: isSelected ? 0x0284c7 : 0x475569,
+          color: isSelected ? 0x0284c7 : 0x0f172a,
           linewidth: isSelected ? 2 : 1,
           transparent: true,
-          opacity: isSelected ? 0.95 : 0.45,
+          opacity: isSelected ? 0.95 : 0.75,
         });
         const edgeLines = new THREE.LineSegments(edgesGeom, edgeMat);
         targetMesh.add(edgeLines);
@@ -1171,7 +1803,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       if (wallOpenings.length === 0) {
         // Solid wall segment
         const geom = new THREE.BoxGeometry(length, height, thickness);
-        const wallMesh = new THREE.Mesh(geom, mat);
+        const wallMesh = new THREE.Mesh(geom, wallMaterials);
         wallMesh.position.set(
           (x1 + x2) / 2 + offset.x,
           offset.y + height / 2,
@@ -1213,7 +1845,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           const leftLen = op.start - curPos;
           if (leftLen > 0.05) {
             const leftGeom = new THREE.BoxGeometry(leftLen, height, thickness);
-            const leftMesh = new THREE.Mesh(leftGeom, mat);
+            const leftMesh = new THREE.Mesh(leftGeom, wallMaterials);
             leftMesh.position.set(curPos + leftLen / 2, height / 2, 0);
             leftMesh.castShadow = true;
             leftMesh.receiveShadow = true;
@@ -1226,7 +1858,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           const lintelH = Math.max(0, height - (op.elevation + op.height));
           if (lintelH > 0.04 && openLen > 0.05) {
             const lintelGeom = new THREE.BoxGeometry(openLen, lintelH, thickness);
-            const lintelMesh = new THREE.Mesh(lintelGeom, mat);
+            const lintelMesh = new THREE.Mesh(lintelGeom, wallMaterials);
             lintelMesh.position.set(op.start + openLen / 2, (op.elevation + op.height) + lintelH / 2, 0);
             lintelMesh.castShadow = true;
             lintelMesh.receiveShadow = true;
@@ -1237,7 +1869,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           // Bottom Sill (for windows with elevation above floor)
           if (op.elevation > 0.05 && openLen > 0.05) {
             const sillGeom = new THREE.BoxGeometry(openLen, op.elevation, thickness);
-            const sillMesh = new THREE.Mesh(sillGeom, mat);
+            const sillMesh = new THREE.Mesh(sillGeom, wallMaterials);
             sillMesh.position.set(op.start + openLen / 2, op.elevation / 2, 0);
             sillMesh.castShadow = true;
             sillMesh.receiveShadow = true;
@@ -1252,7 +1884,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         const remLen = length - curPos;
         if (remLen > 0.05) {
           const remGeom = new THREE.BoxGeometry(remLen, height, thickness);
-          const remMesh = new THREE.Mesh(remGeom, mat);
+          const remMesh = new THREE.Mesh(remGeom, wallMaterials);
           remMesh.position.set(curPos + remLen / 2, height / 2, 0);
           remMesh.castShadow = true;
           remMesh.receiveShadow = true;
@@ -1281,6 +1913,40 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         (item.name || '').toLowerCase().includes('downlight') ||
         (item.name || '').toLowerCase().includes('flush light') ||
         (item.name || '').toLowerCase().includes('flush panel');
+
+      const isStair =
+        (item.category || '').toLowerCase() === 'stairs' ||
+        (item.category || '').toLowerCase().includes('stair') ||
+        (item.name || '').toLowerCase().includes('stair') ||
+        (item.catalogId || '').toLowerCase().includes('stair') ||
+        (item.model || '').toLowerCase().includes('stair');
+
+      const curFloorLevel = item.floorLevel ?? 0;
+      const curFloor = plan.floors?.find((fl) => fl.level === curFloorLevel);
+      const nextFloor = plan.floors?.find((fl) => fl.level === curFloorLevel + 1);
+
+      let effectiveHeight = item.height || 250;
+      if (isStair) {
+        // ONLY interior floor-to-floor staircases should bridge floorElevationGap!
+        // Outdoor entry steps, garden stoops, and porch deck stairs retain their realistic architectural height.
+        const isOutdoorStair =
+          item.name.toLowerCase().includes('entry') ||
+          item.name.toLowerCase().includes('concrete') ||
+          item.name.toLowerCase().includes('porch') ||
+          item.name.toLowerCase().includes('deck') ||
+          item.name.toLowerCase().includes('stone steps') ||
+          (item.height !== undefined && item.height <= 160);
+
+        if (!isOutdoorStair) {
+          const curElevation = curFloor?.elevation ?? (curFloorLevel * 260);
+          const nextElevation = nextFloor?.elevation ?? (curElevation + (curFloor?.height || 260));
+          const floorElevationGap = Math.max(150, nextElevation - curElevation);
+          effectiveHeight = floorElevationGap;
+        } else {
+          effectiveHeight = item.height || 45;
+        }
+      }
+      const itemWithEffectiveHeight = isStair ? { ...item, height: effectiveHeight } : item;
 
       const floorHeightCm = 250; // standard floor ceiling height
       let effectiveElevation = item.elevation !== undefined ? item.elevation : 0;
@@ -1326,11 +1992,13 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       if (isColliding) {
         itemMat = new THREE.MeshStandardMaterial({
-          color: 0xef4444,
-          emissive: 0xff0000,
-          emissiveIntensity: 0.8,
-          roughness: 0.2,
-          metalness: 0.5,
+          color: new THREE.Color(baseColor),
+          roughness: itemRoughness,
+          metalness: itemMetalness,
+          opacity: itemOpacity,
+          transparent: isTransparent,
+          emissive: new THREE.Color(0xef4444),
+          emissiveIntensity: 0.35,
         });
       } else if (isSelected) {
         itemMat = new THREE.MeshStandardMaterial({
@@ -1396,7 +2064,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           } else if (pType === 'decor') {
             procGroup = buildInteriorDecorMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
           } else if (pType === 'stairs' || pType === 'staircase') {
-            procGroup = buildStairsMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+            procGroup = buildStairsMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: effectiveHeight }, itemMat, partMats);
           } else if (pType === 'primitives' && parsed.primitives) {
             procGroup = buildCustomPrimitivesMeshGroup(parsed.primitives, itemMat);
           }
@@ -1405,25 +2073,25 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             procGroup.userData = { isColliding };
             itemGroup.add(procGroup);
           } else {
-            const geom = new THREE.BoxGeometry(item.width * CM, item.height * CM, item.depth * CM);
+            const geom = new THREE.BoxGeometry(item.width * CM, effectiveHeight * CM, item.depth * CM);
             const mesh = new THREE.Mesh(geom, itemMat);
-            mesh.position.y = (item.height * CM) / 2;
+            mesh.position.y = (effectiveHeight * CM) / 2;
             itemGroup.add(mesh);
           }
         } catch (e) {
-          const geom = new THREE.BoxGeometry(item.width * CM, item.height * CM, item.depth * CM);
+          const geom = new THREE.BoxGeometry(item.width * CM, effectiveHeight * CM, item.depth * CM);
           const mesh = new THREE.Mesh(geom, itemMat);
-          mesh.position.y = (item.height * CM) / 2;
+          mesh.position.y = (effectiveHeight * CM) / 2;
           itemGroup.add(mesh);
         }
       } else if (item.model && (item.model.endsWith('.glb') || item.model.endsWith('.gltf') || item.model.startsWith('blob_model:') || item.model.includes('.glb?') || item.model.includes('.gltf?'))) {
-        const tempFallback = buildSmartArchetypeFallback(item, itemMat, partMats);
+        const tempFallback = buildSmartArchetypeFallback(itemWithEffectiveHeight, itemMat, partMats);
         tempFallback.name = 'temp_fallback';
         tempFallback.userData = { isColliding };
         itemGroup.add(tempFallback);
 
         const modelUrl = item.model.startsWith('blob_model:') ? getLocalModelBlob(item.model) || item.model : item.model;
-        loadGltfModel(modelUrl, item.width, item.depth, item.height)
+        loadGltfModel(modelUrl, item.width, item.depth, effectiveHeight)
           .then((gltfGroup) => {
             gltfGroup.userData = { isColliding };
             const existingFallback = itemGroup.getObjectByName('temp_fallback');
@@ -1437,7 +2105,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           });
       } else if (item.model && (item.model.endsWith('.obj') || item.model.startsWith('local_obj:') || item.model.startsWith('data:'))) {
         // Immediate smart archetype fallback while real high-poly OBJ model is loading
-        const tempFallback = buildSmartArchetypeFallback(item, itemMat, partMats);
+        const tempFallback = buildSmartArchetypeFallback(itemWithEffectiveHeight, itemMat, partMats);
         tempFallback.name = 'temp_fallback';
         tempFallback.userData = { isColliding };
         itemGroup.add(tempFallback);
@@ -1445,7 +2113,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         loadObjModel(item.model).then((objModel) => {
           const targetW = item.width * CM;
           const targetD = item.depth * CM;
-          const targetH = item.height * CM;
+          const targetH = effectiveHeight * CM;
 
           const scaleX = objModel.size.x > 0 ? targetW / objModel.size.x : targetW;
           const scaleY = objModel.size.y > 0 ? targetH / objModel.size.y : targetH;
@@ -1478,7 +2146,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           // Keep the smart archetype fallback
         });
       } else {
-        const smartFallback = buildSmartArchetypeFallback(item, itemMat, partMats);
+        const smartFallback = buildSmartArchetypeFallback(itemWithEffectiveHeight, itemMat, partMats);
         smartFallback.userData = { isColliding };
         itemGroup.add(smartFallback);
       }
@@ -1488,14 +2156,14 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         const lightIntensityVal = item.lightIntensity !== undefined ? item.lightIntensity : 1.2;
         const spot = new THREE.PointLight(new THREE.Color(lightColorHex), lightIntensityVal, 8);
         // Ceiling lights shine downwards from the bottom of the fixture
-        spot.position.y = isCeiling ? Math.max(0.08, (item.height * CM) * 0.25) : item.height * CM + 0.15;
+        spot.position.y = isCeiling ? Math.max(0.08, (effectiveHeight * CM) * 0.25) : effectiveHeight * CM + 0.15;
         spot.castShadow = true;
         itemGroup.add(spot);
       }
 
       group.add(itemGroup);
     });
-  }, [plan, collidingItemIds, activeFloor, floor3DMode]);
+  }, [plan, collidingItemIds, activeFloor, floor3DMode, showCeiling, cameraMode, nextFloorGap]);
 
   // Update Selection & Hover highlights smoothly in 3D without tearing down the scene graph
   useEffect(() => {
@@ -1525,8 +2193,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           const isColliding = current?.userData?.isColliding;
 
           if (isColliding) {
-            mat.emissive.setHex(0xff0000);
-            mat.emissiveIntensity = 0.8;
+            mat.emissive.setHex(0xef4444);
+            mat.emissiveIntensity = 0.35;
           } else if (isSelected) {
             mat.emissive.setHex(0x4f46e5); // Indigo selection highlight
             mat.emissiveIntensity = 0.45;
@@ -1725,6 +2393,9 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     // Default: Smooth Camera Orbit / Pan on drag
     if (e.button === 0) {
       isDraggingRef.current = true;
+      if (cameraModeRef.current === 'visitor') {
+        setIsDraggingLookState(true);
+      }
     } else if (e.button === 2 || e.button === 1) {
       isPanningRef.current = true;
     }
@@ -1833,10 +2504,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     // 3. CAMERA ORBIT / PAN / VISITOR HEAD LOOK
     if (cameraMode === 'visitor') {
       if (isDraggingRef.current) {
+        const maxPitch = 0.28; // ~16° max top/bottom tilt
         visitorYawRef.current -= dx * 0.005;
         visitorPitchRef.current = Math.max(
-          -Math.PI / 2.5,
-          Math.min(Math.PI / 2.5, visitorPitchRef.current - dy * 0.005)
+          -maxPitch,
+          Math.min(maxPitch, visitorPitchRef.current - dy * 0.0015)
         );
       } else if (isPanningRef.current) {
         // Free Hand Strafe/Pan in Visitor Walk Mode
@@ -1887,6 +2559,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     canDragSelectedItemRef.current = false;
     draggedItemIdRef.current = null;
     isDraggingRef.current = false;
+    setIsDraggingLookState(false);
     isPanningRef.current = false;
     setIsPanningState(false);
 
@@ -1896,16 +2569,30 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     }
 
     // Clean Click Selection & Synchronized Floor Focus in 3D
-    if (cameraModeRef.current === 'aerial' && !hasMovedPastThresholdRef.current) {
+    if (!hasMovedPastThresholdRef.current) {
       const hit = findItemAtPointer(e.clientX, e.clientY);
       if (hit.floorLevel !== undefined && onFloorChange && hit.floorLevel !== activeFloorRef.current) {
         onFloorChange(hit.floorLevel);
       }
 
-      if (hit.id && (hit.type === 'furniture' || hit.type === 'wall')) {
-        onSelectId(hit.id);
-      } else {
-        onSelectId(null); // Clicked on floor pad/sign/sky -> clear item selection cleanly
+      // Check if user clicked on an interactive door or window to toggle its open/close state
+      if (hit.id && hit.type === 'furniture') {
+        const itemMesh = meshesGroupRef.current?.children.find((c) => c.userData?.id === hit.id);
+        if (itemMesh) {
+          itemMesh.traverse((child) => {
+            if (child.userData && child.userData.isInteractive) {
+              child.userData.isOpenManually = !child.userData.isOpenManually;
+            }
+          });
+        }
+      }
+
+      if (cameraModeRef.current === 'aerial') {
+        if (hit.id && (hit.type === 'furniture' || hit.type === 'wall')) {
+          onSelectId(hit.id);
+        } else {
+          onSelectId(null); // Clicked on floor pad/sign/sky -> clear item selection cleanly
+        }
       }
     }
   };
@@ -2176,12 +2863,67 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     if (dir === 'turnRight') visitorYawRef.current -= Math.PI / 8;
   };
 
+  // Auto-Frame 3D Camera around entire house bounding box
+  const lastFitted3DPlanIdRef = useRef<string | null>(null);
+
+  const fit3DCameraToPlan = useCallback(() => {
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    plan.walls.forEach((w) => {
+      const x1 = w.xStart / 100;
+      const z1 = w.yStart / 100;
+      const x2 = w.xEnd / 100;
+      const z2 = w.yEnd / 100;
+      minX = Math.min(minX, x1, x2);
+      maxX = Math.max(maxX, x1, x2);
+      minZ = Math.min(minZ, z1, z2);
+      maxZ = Math.max(maxZ, z1, z2);
+    });
+    plan.furniture.forEach((f) => {
+      const fx = f.x / 100;
+      const fz = f.y / 100;
+      const hw = (f.width / 100) / 2;
+      const hd = (f.depth / 100) / 2;
+      minX = Math.min(minX, fx - hw);
+      maxX = Math.max(maxX, fx + hw);
+      minZ = Math.min(minZ, fz - hd);
+      maxZ = Math.max(maxZ, fz + hd);
+    });
+
+    if (minX === Infinity || maxX === -Infinity) {
+      minX = -3.5; maxX = 3.5; minZ = -2.5; maxZ = 2.5;
+    }
+
+    const centerX = (minX + maxX) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+    const spanX = maxX - minX;
+    const spanZ = maxZ - minZ;
+    const maxSpan = Math.max(spanX, spanZ, 4.0);
+
+    // Optimal viewing radius in meters for isometric 3D perspective
+    const optimalRadius = Math.max(8.0, Math.min(32.0, maxSpan * 1.45));
+
+    sphericalRef.current = {
+      radius: optimalRadius,
+      theta: Math.PI / 4,
+      phi: Math.PI / 3.2,
+    };
+    targetRef.current.set(centerX, 1.0, centerZ);
+  }, [plan]);
+
+  useEffect(() => {
+    if (plan.id !== lastFitted3DPlanIdRef.current) {
+      lastFitted3DPlanIdRef.current = plan.id;
+      if (cameraMode !== 'visitor') {
+        fit3DCameraToPlan();
+      }
+    }
+  }, [plan.id, fit3DCameraToPlan, cameraMode]);
+
   const handleResetCamera = () => {
     if (cameraMode === 'visitor') {
       handleSwitchToVisitor();
     } else {
-      sphericalRef.current = { radius: 14, theta: Math.PI / 4, phi: Math.PI / 3.2 };
-      targetRef.current.set(0, 1.0, 0);
+      fit3DCameraToPlan();
     }
   };
 
@@ -2330,145 +3072,218 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       {/* Top 3D Viewport Controls (Hidden in Customer Presentation Tour) */}
       {!isCustomerMode && (
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-sm text-xs font-semibold">
-        {/* 3D Tool Mode: Select vs Free Hand Pan */}
-        <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-          <button
-            onClick={() => setToolMode('select')}
-            className={`px-2 py-1 rounded-md text-[11px] transition flex items-center gap-1 ${
-              toolMode === 'select'
-                ? 'bg-sky-600 text-white font-bold shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-            }`}
-            title="Select & Move 3D Items (V)"
-          >
-            <MousePointer className="w-3 h-3" />
-            <span>Select</span>
-          </button>
-          <button
-            onClick={() => setToolMode('pan')}
-            className={`px-2 py-1 rounded-md text-[11px] transition flex items-center gap-1 ${
-              toolMode === 'pan'
-                ? 'bg-sky-600 text-white font-bold shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-            }`}
-            title="Free Hand / Pan View Tool (H or Hold Space) - Move 3D scene without selecting items"
-          >
-            <Hand className="w-3 h-3" />
-            <span>Hand</span>
-          </button>
-        </div>
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm text-xs font-semibold">
+        {cameraMode === 'visitor' ? (
+          /* Sleek Minimal Bar in PUBG Tour: Orbit Return & Duplex */
+          <>
+            <button
+              onClick={() => setCameraMode('aerial')}
+              className="px-2.5 py-1 rounded-lg text-[11px] bg-sky-600 text-white font-bold shadow-2xs hover:bg-sky-500 transition flex items-center gap-1 cursor-pointer"
+              title="Return to Aerial Orbit View"
+            >
+              <Rotate3d className="w-3 h-3" />
+              <span>Orbit View</span>
+            </button>
+            <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
+            <button
+              onClick={() => setFloor3DMode(floor3DMode === 'stacked' ? 'isolated' : 'stacked')}
+              className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 font-medium cursor-pointer ${
+                floor3DMode === 'stacked'
+                  ? 'bg-indigo-600 text-white font-bold shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
+              }`}
+              title="Duplex multi-story mode"
+            >
+              <Building2 className="w-3 h-3" />
+              <span>{floor3DMode === 'stacked' ? 'Duplex: ON' : 'Duplex: OFF'}</span>
+            </button>
+            <button
+              onClick={() => setShowCeiling((prev) => !prev)}
+              className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 font-medium cursor-pointer ${
+                showCeiling
+                  ? 'bg-indigo-600 text-white font-bold shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
+              }`}
+              title={showCeiling ? "Remove Top (Cutaway open interior view)" : "Keep Top (Enclose ceiling & roof)"}
+            >
+              <Layers className="w-3 h-3" />
+              <span>{showCeiling ? 'Top: ON' : 'Top: OFF'}</span>
+            </button>
+          </>
+        ) : (
+          /* Full Controls in Orbit Mode */
+          <>
+            {/* 3D Tool Mode: Select vs Free Hand Pan */}
+            <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+              <button
+                onClick={() => setToolMode('select')}
+                className={`px-2 py-1 rounded-md text-[11px] transition flex items-center gap-1 cursor-pointer ${
+                  toolMode === 'select'
+                    ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 dark:text-slate-300'
+                }`}
+                title="Select & Move 3D Items (V)"
+              >
+                <MousePointer className="w-3 h-3" />
+                <span>Select</span>
+              </button>
+              <button
+                onClick={() => setToolMode('pan')}
+                className={`px-2 py-1 rounded-md text-[11px] transition flex items-center gap-1 cursor-pointer ${
+                  toolMode === 'pan'
+                    ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 dark:text-slate-300'
+                }`}
+                title="Free Hand / Pan View Tool (H or Hold Space)"
+              >
+                <Hand className="w-3 h-3" />
+                <span>Hand</span>
+              </button>
+            </div>
 
-        <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
+            <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
 
-        {/* Camera Mode */}
-        <div className="flex items-center gap-0.5">
-          <button
-            onClick={() => setCameraMode('aerial')}
-            className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
-              cameraMode === 'aerial'
-                ? 'bg-sky-600 text-white font-bold shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-            title="Aerial Orbit View"
-          >
-            <Rotate3d className="w-3 h-3" />
-            <span>Orbit</span>
-          </button>
-          <button
-            onClick={handleSwitchToVisitor}
-            className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 ${
-              cameraMode === 'visitor'
-                ? 'bg-emerald-600 text-white font-bold shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-            title="Virtual Visitor Walking Mode (1.6m)"
-          >
-            <User className="w-3 h-3" />
-            <span>Walk (1.6m)</span>
-          </button>
-        </div>
+            {/* Camera Mode */}
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={() => {
+                  setCameraMode('aerial');
+                }}
+                className="px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer bg-sky-600 text-white font-bold shadow-2xs"
+                title="Aerial Orbit View"
+              >
+                <Rotate3d className="w-3 h-3" />
+                <span>Orbit</span>
+              </button>
+              <button
+                onClick={handleSwitchToVisitor}
+                className="px-2.5 py-1 rounded-lg text-[11px] transition flex items-center gap-1.5 font-bold cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300"
+                title="PUBG Game Tour (WASD Walk, Shift Sprint, Mouse-Look)"
+              >
+                <Gamepad2 className="w-3.5 h-3.5 text-slate-950" />
+                <span>PUBG Tour</span>
+              </button>
+            </div>
 
-        <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
+            <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
 
-        {/* Zoom In & Out */}
-        <button
-          onClick={() => {
-            if (cameraMode === 'visitor') {
-              const forward = new THREE.Vector3(
-                Math.sin(visitorYawRef.current),
-                0,
-                -Math.cos(visitorYawRef.current)
-              );
-              visitorPosRef.current.addScaledVector(forward, 0.8);
-            } else {
-              sphericalRef.current.radius = Math.max(0.3, sphericalRef.current.radius * 0.75);
-            }
-          }}
-          className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg transition"
-          title="Max Zoom In (30cm Close-Up)"
-        >
-          <ZoomIn className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={() => {
-            if (cameraMode === 'visitor') {
-              const forward = new THREE.Vector3(
-                Math.sin(visitorYawRef.current),
-                0,
-                -Math.cos(visitorYawRef.current)
-              );
-              visitorPosRef.current.addScaledVector(forward, -0.8);
-            } else {
-              sphericalRef.current.radius = Math.min(120, sphericalRef.current.radius * 1.25);
-            }
-          }}
-          className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg transition"
-          title="Zoom Out"
-        >
-          <ZoomOut className="w-3.5 h-3.5" />
-        </button>
+            {/* Duplex Multi-Story Stack */}
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={() => setFloor3DMode(floor3DMode === 'stacked' ? 'isolated' : 'stacked')}
+                className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 font-medium cursor-pointer ${
+                  floor3DMode === 'stacked'
+                    ? 'bg-indigo-600 text-white font-bold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
+                }`}
+                title="Attach Floors in 3D: Duplex multi-story mode"
+              >
+                <Building2 className="w-3 h-3" />
+                <span>{floor3DMode === 'stacked' ? 'Duplex: ON' : 'Duplex: OFF'}</span>
+              </button>
 
-        <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
+              {floor3DMode === 'stacked' && (
+                <button
+                  onClick={() => setNextFloorGap((prev) => (prev === 0 ? 0.8 : prev === 0.8 ? 1.6 : 0))}
+                  className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 font-semibold cursor-pointer ${
+                    nextFloorGap > 0
+                      ? 'bg-amber-500 text-white shadow-2xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                  }`}
+                  title="Next Floor Attachment Gap View"
+                >
+                  <span>{nextFloorGap === 0 ? '0m' : `+${nextFloorGap.toFixed(1)}m`}</span>
+                </button>
+              )}
+            </div>
 
-        {/* Snapshot Photo */}
-        <button
-          onClick={handleTakePhotoSnapshot}
-          disabled={isCapturing}
-          className="p-1.5 hover:bg-slate-100 text-sky-700 rounded-lg transition"
-          title="Take Photo Render (PNG)"
-        >
-          <Camera className="w-3.5 h-3.5" />
-        </button>
+            <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
 
-        {/* Time of Day */}
-        <div className="flex items-center gap-1 pl-1 pr-1" title={`Sun Time: ${Math.floor(timeOfDay)}:${timeOfDay % 1 !== 0 ? '30' : '00'}`}>
-          <Sun className="w-3 h-3 text-amber-500" />
-          <input
-            type="range"
-            min="6"
-            max="22"
-            step="0.5"
-            value={timeOfDay}
-            onChange={(e) => setTimeOfDay(parseFloat(e.target.value))}
-            className="w-12 accent-sky-600 h-1 bg-slate-200 rounded cursor-pointer"
-          />
-        </div>
+            {/* Ceiling Toggle */}
+            <button
+              onClick={() => setShowCeiling((prev) => !prev)}
+              className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 font-medium cursor-pointer ${
+                showCeiling
+                  ? 'bg-indigo-600 text-white font-bold shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
+              }`}
+              title={showCeiling ? "Remove Top (Cutaway open interior view)" : "Keep Top (Enclose ceiling & roof)"}
+            >
+              <Layers className="w-3 h-3" />
+              <span>{showCeiling ? 'Top: ON' : 'Top: OFF'}</span>
+            </button>
 
-        {/* Reset Camera */}
-        <button
-          onClick={handleResetCamera}
-          className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-900 rounded-lg transition"
-          title="Reset Camera View"
-        >
-          <Maximize2 className="w-3.5 h-3.5" />
-        </button>
+            <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
+
+            {/* Zoom Controls */}
+            <button
+              onClick={() => {
+                sphericalRef.current.radius = Math.max(0.3, sphericalRef.current.radius * 0.75);
+              }}
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 hover:text-slate-900 rounded-lg transition cursor-pointer"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => {
+                sphericalRef.current.radius = Math.min(120, sphericalRef.current.radius * 1.25);
+              }}
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 hover:text-slate-900 rounded-lg transition cursor-pointer"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={fit3DCameraToPlan}
+              className="p-1.5 hover:bg-amber-100 dark:hover:bg-amber-950/40 text-amber-600 hover:text-amber-800 rounded-lg transition cursor-pointer"
+              title="Fit Entire House in 3D (Auto-Frame)"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+
+            <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
+
+            {/* Snapshot Photo */}
+            <button
+              onClick={handleTakePhotoSnapshot}
+              disabled={isCapturing}
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-sky-700 rounded-lg transition cursor-pointer"
+              title="Take Photo Render (PNG)"
+            >
+              <Camera className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Time of Day */}
+            <div className="flex items-center gap-1 pl-1 pr-1" title={`Sun Time: ${Math.floor(timeOfDay)}:${timeOfDay % 1 !== 0 ? '30' : '00'}`}>
+              <Sun className="w-3 h-3 text-amber-500" />
+              <input
+                type="range"
+                min="6"
+                max="22"
+                step="0.5"
+                value={timeOfDay}
+                onChange={(e) => setTimeOfDay(parseFloat(e.target.value))}
+                className="w-10 accent-sky-600 h-1 bg-slate-200 rounded cursor-pointer"
+              />
+            </div>
+
+            {/* Reset Camera */}
+            <button
+              onClick={handleResetCamera}
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 rounded-lg transition cursor-pointer"
+              title="Reset Camera View"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
       </div>
       )}
 
-      {/* Room Jump Pills in Visitor Mode (Constrained to activeFloor only) */}
+      {/* Room Jump Pills in Visitor Mode (Placed at bottom-24 right-4 above D-pad, never overlapping top bar) */}
       {!isCustomerMode && cameraMode === 'visitor' && plan.rooms.length > 0 && (
-        <div className="absolute top-12 right-2.5 z-10 flex flex-wrap gap-1 max-w-xs justify-end">
+        <div className="absolute bottom-20 right-4 z-10 flex flex-wrap gap-1 max-w-xs justify-end pointer-events-auto">
           {plan.rooms
             .filter((r) => (r.floorLevel ?? 0) === activeFloor)
             .map((room) => (
@@ -2501,15 +3316,49 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       )}
 
 
-      {/* Virtual Visitor On-Screen D-Pad / Walk Controller */}
+      {/* PUBG Game HUD Overlay (Top Compass Ribbon, Crosshair, Stance, Keybinds, Floor Badge) */}
       {cameraMode === 'visitor' && (
-        <div className="absolute bottom-4 right-4 z-10 bg-white/95 backdrop-blur-md border border-slate-200 p-2 rounded-2xl shadow-xl flex flex-col items-center gap-1.5 select-none">
-          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-            Walk Controller
+        <PubgGameHud
+          yaw={hudYaw}
+          pitch={hudPitch}
+          isDragging={isDraggingLookState}
+          isSprinting={isSprintingState}
+          isCrouching={isCrouching}
+          isMoving={isMovingState}
+          isSoundEnabled={isSoundEnabled}
+          activeFloorLevel={activeFloor}
+          currentRoomName={
+            plan.rooms.find((r) => {
+              if ((r.floorLevel ?? 0) !== activeFloor) return false;
+              const pts = r.points;
+              if (!pts || pts.length < 3) return false;
+              const px = visitorPosRef.current.x * 100;
+              const py = visitorPosRef.current.z * 100;
+              let inside = false;
+              for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+                const xi = pts[i].x, yi = pts[i].y;
+                const xj = pts[j].x, yj = pts[j].y;
+                const intersect = yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+                if (intersect) inside = !inside;
+              }
+              return inside;
+            })?.name
+          }
+          nearbyDoorPrompt={nearbyDoorPrompt}
+          onToggleSound={() => setIsSoundEnabled(soundEngine.toggle())}
+          isCustomerMode={isCustomerMode}
+        />
+      )}
+
+      {/* On-Screen Touch / Mouse D-Pad */}
+      {cameraMode === 'visitor' && (
+        <div className="absolute bottom-16 right-4 z-20 bg-slate-950/80 backdrop-blur-md border border-slate-700 p-2 rounded-2xl shadow-2xl flex flex-col items-center gap-1.5 select-none pointer-events-auto">
+          <span className="text-[9px] font-bold text-amber-400 uppercase tracking-wider">
+            Controls
           </span>
           <button
             onClick={() => walkStep('forward')}
-            className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-emerald-600 text-slate-700 hover:text-white flex items-center justify-center transition active:scale-90 border border-slate-200 shadow-2xs"
+            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-amber-500 text-slate-200 hover:text-slate-950 flex items-center justify-center transition active:scale-90 border border-slate-700 shadow-2xs cursor-pointer"
             title="Walk Forward (W or ↑)"
           >
             <ArrowUp className="w-4 h-4" />
@@ -2517,21 +3366,21 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           <div className="flex gap-1.5">
             <button
               onClick={() => walkStep('turnLeft')}
-              className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-emerald-600 text-slate-700 hover:text-white flex items-center justify-center transition active:scale-90 border border-slate-200 shadow-2xs"
+              className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-amber-500 text-slate-200 hover:text-slate-950 flex items-center justify-center transition active:scale-90 border border-slate-700 shadow-2xs cursor-pointer"
               title="Turn Left (A or ←)"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => walkStep('backward')}
-              className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-emerald-600 text-slate-700 hover:text-white flex items-center justify-center transition active:scale-90 border border-slate-200 shadow-2xs"
+              className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-amber-500 text-slate-200 hover:text-slate-950 flex items-center justify-center transition active:scale-90 border border-slate-700 shadow-2xs cursor-pointer"
               title="Walk Backward (S or ↓)"
             >
               <ArrowDown className="w-4 h-4" />
             </button>
             <button
               onClick={() => walkStep('turnRight')}
-              className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-emerald-600 text-slate-700 hover:text-white flex items-center justify-center transition active:scale-90 border border-slate-200 shadow-2xs"
+              className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-amber-500 text-slate-200 hover:text-slate-950 flex items-center justify-center transition active:scale-90 border border-slate-700 shadow-2xs cursor-pointer"
               title="Turn Right (D or →)"
             >
               <ArrowRight className="w-4 h-4" />
@@ -2540,31 +3389,29 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           <div className="flex gap-1.5">
             <button
               onClick={() => walkStep('left')}
-              className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-[10px] text-slate-700 border border-slate-200 font-semibold"
-              title="Strafe Left (Q)"
+              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700 font-semibold cursor-pointer"
+              title="Strafe Left"
             >
-              ⤹ Strafe L
+              Strafe L
             </button>
             <button
               onClick={() => walkStep('right')}
-              className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-[10px] text-slate-700 border border-slate-200 font-semibold"
-              title="Strafe Right (E)"
+              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700 font-semibold cursor-pointer"
+              title="Strafe Right"
             >
-              Strafe R ⤸
+              Strafe R
             </button>
           </div>
         </div>
       )}
 
-      {/* Floating 3D Pick & Drag / Visitor Instructions Banner */}
-      {!isCustomerMode && (
+      {/* Floating 3D Pick & Drag / Visitor Instructions Banner (Aerial Mode only) */}
+      {!isCustomerMode && cameraMode !== 'visitor' && (
         <div className="absolute bottom-4 left-4 z-10 flex items-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 text-[11px] text-slate-600 pointer-events-none shadow-md">
           <Sparkles className="w-3.5 h-3.5 text-sky-600" />
           <span>
             {toolMode === 'pan' || isSpacePressed
               ? '🖐️ Free Hand Tool Active: Click and drag anywhere to pan the 3D scene smoothly (Press V or Click Select to exit)'
-              : cameraMode === 'visitor'
-              ? 'Virtual Visitor: Use W/A/S/D or D-Pad to walk • Drag to look 360° • Click & drag furniture to reposition • Press H for Free Hand'
               : '3D Drag & Drop: Click and drag any furniture piece on the floor • Press R to rotate • Press H or Hold Space for Free Hand Pan'}
           </span>
         </div>

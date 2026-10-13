@@ -16,68 +16,187 @@ export const sarahPlan: HomePlan = {
     { level: 1, name: '1st Floor', elevation: 250, height: 250 },
   ],
   walls: [
-    // Ground Floor Outer Perimeter
-    { id: 'sw1', xStart: -350, yStart: -250, xEnd: 350, yEnd: -250, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
-    { id: 'sw2', xStart: 350, yStart: -250, xEnd: 350, yEnd: 250, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
-    { id: 'sw3', xStart: 350, yStart: 250, xEnd: -350, yEnd: 250, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
-    { id: 'sw4', xStart: -350, yStart: 250, xEnd: -350, yEnd: -250, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 0 },
-    { id: 'sw5', xStart: 50, yStart: -250, xEnd: 50, yEnd: 250, thickness: 12, height: 250, color: '#e2e8f0', floorLevel: 0 },
+    // --- GROUND FLOOR (Matching Sweet Home 3D Reference Exactly - Spacious Proportions) ---
+    // 1. Living & Dining Room Walls (Olive Green #849b3c)
+    { id: 'sw_liv_top', xStart: -550, yStart: -380, xEnd: -110, yEnd: -380, thickness: 15, height: 250, color: '#849b3c', floorLevel: 0 },
+    { id: 'sw_liv_left', xStart: -550, yStart: 380, xEnd: -550, yEnd: -380, thickness: 15, height: 250, color: '#849b3c', floorLevel: 0 },
+    { id: 'sw_liv_btm', xStart: -110, yStart: 380, xEnd: -550, yEnd: 380, thickness: 15, height: 250, color: '#849b3c', floorLevel: 0 },
+    { id: 'sw_liv_div', xStart: -110, yStart: -380, xEnd: -110, yEnd: 380, thickness: 12, height: 250, color: '#849b3c', floorLevel: 0 },
 
-    // 1st Floor Perimeter (Completely separate layout for Floor 1)
-    { id: 'sw10', xStart: -300, yStart: -200, xEnd: 300, yEnd: -200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 1 },
-    { id: 'sw11', xStart: 300, yStart: -200, xEnd: 300, yEnd: 200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 1 },
-    { id: 'sw12', xStart: 300, yStart: 200, xEnd: -300, yEnd: 200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 1 },
-    { id: 'sw13', xStart: -300, yStart: 200, xEnd: -300, yEnd: -200, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 1 },
-    { id: 'sw14', xStart: 0, yStart: -200, xEnd: 0, yEnd: 200, thickness: 12, height: 250, color: '#cbd5e1', floorLevel: 1 },
+    // 2. Central Corridor Walls (Slate Blue #5b7a9c)
+    { id: 'sw_corr_top', xStart: -110, yStart: -380, xEnd: 50, yEnd: -380, thickness: 15, height: 250, color: '#5b7a9c', floorLevel: 0 },
+    { id: 'sw_corr_btm', xStart: 50, yStart: 380, xEnd: -110, yEnd: 380, thickness: 15, height: 250, color: '#5b7a9c', floorLevel: 0 },
+    { id: 'sw_corr_div', xStart: 50, yStart: -380, xEnd: 50, yEnd: 380, thickness: 12, height: 250, color: '#5b7a9c', floorLevel: 0 },
+
+    // 3. Kitchen & Dining Walls (Warm Ochre #cc8519)
+    { id: 'sw_kitch_top', xStart: 50, yStart: -380, xEnd: 550, yEnd: -380, thickness: 15, height: 250, color: '#cc8519', floorLevel: 0 },
+    { id: 'sw_kitch_east', xStart: 550, yStart: -380, xEnd: 550, yEnd: -80, thickness: 15, height: 250, color: '#cc8519', floorLevel: 0 },
+    { id: 'sw_kitch_div', xStart: 50, yStart: -80, xEnd: 550, yEnd: -80, thickness: 12, height: 250, color: '#cc8519', floorLevel: 0 },
+
+    // 4. Utility / Taupe Room Walls (Warm Taupe #a89a8c)
+    { id: 'sw_taupe_east', xStart: 550, yStart: -80, xEnd: 550, yEnd: 60, thickness: 15, height: 250, color: '#a89a8c', floorLevel: 0 },
+    { id: 'sw_taupe_div', xStart: 50, yStart: 60, xEnd: 550, yEnd: 60, thickness: 12, height: 250, color: '#a89a8c', floorLevel: 0 },
+
+    // 5. Pink Bedroom & Study Walls (Soft Pastel Pink #ec92a8)
+    { id: 'sw_bed_east', xStart: 550, yStart: 60, xEnd: 550, yEnd: 380, thickness: 15, height: 250, color: '#ec92a8', floorLevel: 0 },
+    { id: 'sw_bed_btm', xStart: 550, yStart: 380, xEnd: 50, yEnd: 380, thickness: 15, height: 250, color: '#ec92a8', floorLevel: 0 },
+
+    // --- 1ST FLOOR PERIMETER & ROOM WALLS (Matching Ground Floor Footprint Exactly: 11m x 7.6m) ---
+    { id: 'sw_up_top', xStart: -550, yStart: -380, xEnd: 550, yEnd: -380, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 1 },
+    { id: 'sw_up_east', xStart: 550, yStart: -380, xEnd: 550, yEnd: 380, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 1 },
+    { id: 'sw_up_btm', xStart: 550, yStart: 380, xEnd: -550, yEnd: 380, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 1 },
+    { id: 'sw_up_west', xStart: -550, yStart: 380, xEnd: -550, yEnd: -380, thickness: 15, height: 250, color: '#f8fafc', floorLevel: 1 },
+    { id: 'sw_up_div_west', xStart: -110, yStart: -380, xEnd: -110, yEnd: 380, thickness: 12, height: 250, color: '#f1f5f9', floorLevel: 1 },
+    { id: 'sw_up_div_east', xStart: 50, yStart: -380, xEnd: 50, yEnd: 380, thickness: 12, height: 250, color: '#f1f5f9', floorLevel: 1 },
   ],
   furniture: [
-    // Ground Floor Items (Floor 0)
-    { id: 'sf1', catalogId: 'sofa', name: 'Corner Lounge Sofa', category: 'Living', x: -180, y: -100, elevation: 0, angle: 0, width: 220, depth: 90, height: 85, model: '/models/sofa.obj', icon: '/models/sofa.png', color: '#0284c7', floorLevel: 0 },
-    { id: 'sf2', catalogId: 'roundTable', name: 'Coffee Table', category: 'Living', x: -180, y: 10, elevation: 0, angle: 0, width: 90, depth: 90, height: 45, model: '/models/roundTable.obj', icon: '/models/roundTable.png', color: '#78350f', floorLevel: 0 },
-    { id: 'sf3', catalogId: 'tvUnit', name: 'Media Console', category: 'Living', x: -180, y: 220, elevation: 0, angle: Math.PI, width: 160, depth: 45, height: 50, model: '/models/tvUnit.obj', icon: '/models/tvUnit.png', color: '#1e293b', floorLevel: 0 },
-    { id: 'sf4', catalogId: 'kitchenCabinet', name: 'Kitchen Island Cabinet', category: 'Kitchen', x: 200, y: -120, elevation: 0, angle: 0, width: 120, depth: 60, height: 85, model: '/models/kitchenCabinet.obj', icon: '/models/kitchenCabinet.png', floorLevel: 0 },
-    { id: 'sf5', catalogId: 'cooker', name: 'Induction Cooktop', category: 'Kitchen', x: 200, y: -190, elevation: 0, angle: 0, width: 60, depth: 60, height: 85, model: '/models/cooker.obj', icon: '/models/cooker.png', floorLevel: 0 },
-    { id: 'sf6', catalogId: 'toiletUnit', name: 'Guest Restroom Suite', category: 'Bathroom', x: 200, y: 180, elevation: 0, angle: Math.PI / 2, width: 45, depth: 70, height: 75, model: '/models/toiletUnit.obj', icon: '/models/toiletUnit.png', floorLevel: 0 },
-    { id: 'sf7', catalogId: 'door', name: 'Ground Main Entrance', category: 'Doors & Windows', x: -350, y: 0, elevation: 0, angle: Math.PI / 2, width: 85, depth: 10, height: 205, model: '/models/door.obj', icon: '/models/door.png', floorLevel: 0 },
+    // --- 1. LIVING & DINING ROOM (Left Room: Olive Walls, Teal Carpet, ~33.4m²) ---
+    // Oval Cherry Table with 4 Spindle Chairs
+    { id: 'sf_dt', catalogId: 'roundTable', name: 'Oval Cherry Dining Table', category: 'Living', x: -330, y: -200, elevation: 0, angle: 0, width: 170, depth: 105, height: 75, model: 'procedural:table:{"shape":"oval","topThickness":4,"legThickness":5,"bevel":true}', icon: '/models/roundTable.png', color: '#b45309', floorLevel: 0 },
+    { id: 'sf_ch1', catalogId: 'chair', name: 'Spindle Dining Chair N', category: 'Living', x: -330, y: -265, elevation: 0, angle: 0, width: 45, depth: 45, height: 90, model: 'procedural:chair:{"backrestStyle":"spindle_slats","seatType":"cushioned"}', icon: '/models/chair.png', color: '#92400e', floorLevel: 0 },
+    { id: 'sf_ch2', catalogId: 'chair', name: 'Spindle Dining Chair S', category: 'Living', x: -330, y: -135, elevation: 0, angle: Math.PI, width: 45, depth: 45, height: 90, model: 'procedural:chair:{"backrestStyle":"spindle_slats","seatType":"cushioned"}', icon: '/models/chair.png', color: '#92400e', floorLevel: 0 },
+    { id: 'sf_ch3', catalogId: 'chair', name: 'Spindle Dining Chair W', category: 'Living', x: -428, y: -200, elevation: 0, angle: Math.PI / 2, width: 45, depth: 45, height: 90, model: 'procedural:chair:{"backrestStyle":"spindle_slats","seatType":"cushioned"}', icon: '/models/chair.png', color: '#92400e', floorLevel: 0 },
+    { id: 'sf_ch4', catalogId: 'chair', name: 'Spindle Dining Chair E', category: 'Living', x: -232, y: -200, elevation: 0, angle: -Math.PI / 2, width: 45, depth: 45, height: 90, model: 'procedural:chair:{"backrestStyle":"spindle_slats","seatType":"cushioned"}', icon: '/models/chair.png', color: '#92400e', floorLevel: 0 },
 
-    // 1st Floor Items (Floor 1 - Fully separated, non-overlapping)
-    { id: 'sf8', catalogId: 'bed140x190', name: 'Penthouse Queen Bed', category: 'Bedroom', x: -140, y: 0, elevation: 0, angle: Math.PI / 2, width: 150, depth: 200, height: 90, model: '/models/bed140x190.obj', icon: '/models/bed140x190.png', color: '#f1f5f9', floorLevel: 1 },
-    { id: 'sf9', catalogId: 'wardrobe', name: 'Master Wardrobe Closet', category: 'Bedroom', x: -260, y: -120, elevation: 0, angle: 0, width: 120, depth: 60, height: 200, model: '/models/wardrobe.obj', icon: '/models/wardrobe.png', color: '#475569', floorLevel: 1 },
-    { id: 'sf10', catalogId: 'bath', name: 'En-suite Luxury Bath', category: 'Bathroom', x: 180, y: -80, elevation: 0, angle: 0, width: 170, depth: 75, height: 55, model: '/models/bath.obj', icon: '/models/bath.png', color: '#ffffff', floorLevel: 1 },
-    { id: 'sf11', catalogId: 'armchair', name: 'Terrace Lounge Chair', category: 'Living', x: 160, y: 110, elevation: 0, angle: -Math.PI / 4, width: 85, depth: 85, height: 80, model: '/models/armchair.obj', icon: '/models/armchair.png', color: '#065f46', floorLevel: 1 },
+    // Angled Smart TV Console & Armchair in Lounge Zone
+    { id: 'sf_tv', catalogId: 'tvUnit', name: 'Smart LED TV & Console', category: 'Living', x: -420, y: 240, elevation: 0, angle: Math.PI / 4, width: 150, depth: 45, height: 95, model: 'procedural:tvUnit:{}', icon: '/models/tvUnit.png', color: '#c26d24', floorLevel: 0 },
+    { id: 'sf_armchair', catalogId: 'chair', name: 'Moss Green Lounge Armchair', category: 'Living', x: -240, y: 260, elevation: 0, angle: -Math.PI / 4, width: 95, depth: 90, height: 80, model: 'procedural:chair:{"backrestStyle":"wingback","seatType":"cushioned"}', icon: '/models/chair.png', color: '#4d7c0f', floorLevel: 0 },
+
+    // Windows & Sliding Patio Door
+    { id: 'sf_liv_win', catalogId: 'windowModernSliding', name: 'Casement Window', category: 'Doors & Windows', x: -330, y: -380, elevation: 90, angle: 0, width: 140, depth: 15, height: 120, model: 'procedural:window:{"type":"modern_sliding"}', icon: '/models/window85x123.png', color: '#ffffff', floorLevel: 0 },
+    { id: 'sf_patio_door', catalogId: 'doorModernFlush', name: 'Patio French Door', category: 'Doors & Windows', x: -550, y: 70, elevation: 0, angle: Math.PI / 2, width: 110, depth: 12, height: 215, model: 'procedural:door:{"type":"glass_french"}', icon: '/models/door.png', color: '#ffffff', floorLevel: 0 },
+
+    // Outdoor Flight of Stairs & Deck (Left Exterior on Green Lawn)
+    { id: 'sf_porch_deck', catalogId: 'squareTable', name: 'Outdoor Porch Deck', category: 'Stairs & Structural', x: -640, y: 70, elevation: 0, angle: 0, width: 150, depth: 220, height: 15, model: 'procedural:table:{"shape":"rectangular","topThickness":15,"legThickness":0}', icon: '/models/squareTable.png', color: '#334155', floorLevel: 0 },
+    { id: 'sf_porch_stairs', catalogId: 'staircaseOutdoorDeck', name: 'Outdoor Porch & Timber Deck Flight', category: 'Stairs & Structural', x: -640, y: 260, elevation: 0, angle: 0, width: 110, depth: 200, height: 150, model: 'procedural:stairs:{"type":"outdoor_deck","stepsCount":8,"hasHandrail":true}', icon: '/models/staircase.png', color: '#92400e', floorLevel: 0 },
+
+    // --- 2. CORRIDOR (Center Hallway: Slate Blue Walls, Teal Floor, ~12.2m²) ---
+    { id: 'sf_front_door', catalogId: 'doorModernFlush', name: 'Entrance Front Door', category: 'Doors & Windows', x: -30, y: -380, elevation: 0, angle: 0, width: 90, depth: 12, height: 210, model: 'procedural:door:{"type":"modern_flush"}', icon: '/models/door.png', color: '#3b82f6', floorLevel: 0 },
+    { id: 'sf_front_steps', catalogId: 'staircaseOutdoorConcrete', name: 'Exterior Solid Stone Entry Steps', category: 'Stairs & Structural', x: -30, y: -425, elevation: 0, angle: 0, width: 120, depth: 75, height: 35, model: 'procedural:stairs:{"type":"outdoor_concrete","stepsCount":3,"hasHandrail":true}', icon: '/models/staircase.png', color: '#cbd5e1', floorLevel: 0 },
+
+    // Duplex Interior Staircase (Ascends from Central Hallway smoothly into 1st Floor Gallery Mezzanine)
+    { id: 'sf_duplex_stairs', catalogId: 'staircaseDuplexFloating', name: 'Duplex Luxury Floating Glass Staircase', category: 'Stairs & Structural', x: -30, y: 40, elevation: 0, angle: 0, width: 95, depth: 240, height: 250, model: 'procedural:stairs:{"type":"floating","stepsCount":14,"hasHandrail":true,"railingStyle":"glass"}', icon: '/models/staircase.png', color: '#d4a373', floorLevel: 0 },
+    { id: 'sf_corr_door', catalogId: 'doorModernFlush', name: 'Bedroom Passage Door', category: 'Doors & Windows', x: 50, y: 220, elevation: 0, angle: Math.PI / 2, width: 85, depth: 12, height: 205, model: 'procedural:door:{"type":"modern_flush"}', icon: '/models/door.png', color: '#ffffff', floorLevel: 0 },
+
+    // --- 3. KITCHEN & DINING (Top-Right: Warm Ochre Walls, Golden Parquet, ~15.0m²) ---
+    { id: 'sf_ktable', catalogId: 'squareTable', name: 'Kitchen Dining Table', category: 'Kitchen', x: 250, y: -230, elevation: 0, angle: 0, width: 140, depth: 85, height: 75, model: 'procedural:table:{"shape":"rectangular","topThickness":4,"legThickness":5}', icon: '/models/squareTable.png', color: '#b45309', floorLevel: 0 },
+    { id: 'sf_kch1', catalogId: 'chair', name: 'Kitchen Chair West', category: 'Kitchen', x: 175, y: -230, elevation: 0, angle: Math.PI / 2, width: 45, depth: 45, height: 90, model: 'procedural:chair:{"backrestStyle":"solid_panel","seatType":"wood_plank"}', icon: '/models/chair.png', color: '#92400e', floorLevel: 0 },
+    { id: 'sf_kch2', catalogId: 'chair', name: 'Kitchen Chair East', category: 'Kitchen', x: 325, y: -230, elevation: 0, angle: -Math.PI / 2, width: 45, depth: 45, height: 90, model: 'procedural:chair:{"backrestStyle":"solid_panel","seatType":"wood_plank"}', icon: '/models/chair.png', color: '#92400e', floorLevel: 0 },
+    { id: 'sf_pendant', catalogId: 'pendantLamp', name: 'Golden Dome Pendant Lamp', category: 'Lighting', x: 250, y: -230, elevation: 200, angle: 0, width: 45, depth: 45, height: 55, model: 'procedural:lamp:{"type":"pendant_dome","shadeWidth":45,"shadeHeight":28,"totalHeight":70}', icon: '/models/pendantLamp.png', color: '#eab308', floorLevel: 0, placementType: 'ceiling' },
+    { id: 'sf_kcounter', catalogId: 'kitchenCabinet', name: 'White Kitchen Counter & Sink', category: 'Kitchen', x: 480, y: -220, elevation: 0, angle: -Math.PI / 2, width: 140, depth: 60, height: 85, model: 'procedural:cabinet:{"columns":2,"rows":2,"doorType":"solid_doors","hasLegs":false}', icon: '/models/kitchenCabinet.png', color: '#f8fafc', floorLevel: 0 },
+    { id: 'sf_kcooker', catalogId: 'cooker', name: 'Induction Cooker Range', category: 'Kitchen', x: 480, y: -120, elevation: 0, angle: -Math.PI / 2, width: 60, depth: 60, height: 85, model: 'procedural:cooker:{}', icon: '/models/cooker.png', color: '#f1f5f9', floorLevel: 0 },
+    { id: 'sf_kradiator', catalogId: 'radiator', name: 'Kitchen Wall Radiator', category: 'Bathroom', x: 370, y: -374, elevation: 15, angle: 0, width: 70, depth: 10, height: 60, model: 'procedural:radiator:{}', icon: '/models/tvUnit.png', color: '#ffffff', floorLevel: 0, placementType: 'wall' },
+    { id: 'sf_pantry', catalogId: 'kitchenCabinet', name: 'Tall Kitchen Pantry Cabinet', category: 'Kitchen', x: 480, y: -320, elevation: 0, angle: -Math.PI / 2, width: 65, depth: 55, height: 200, model: 'procedural:cabinet:{"columns":1,"rows":3,"doorType":"solid_doors","hasLegs":true}', icon: '/models/kitchenCabinet.png', color: '#78350f', floorLevel: 0 },
+    { id: 'sf_kwin', catalogId: 'windowModernSliding', name: 'Kitchen Casement Window', category: 'Doors & Windows', x: 250, y: -380, elevation: 90, angle: 0, width: 120, depth: 15, height: 115, model: 'procedural:window:{"type":"modern_sliding"}', icon: '/models/window85x123.png', color: '#ffffff', floorLevel: 0 },
+
+    // --- 4. PINK BEDROOM & STUDY (Bottom-Right: Pink Walls, Lavender Floor, ~16.0m²) ---
+    { id: 'sf_wardrobe1', catalogId: 'kitchenCabinet', name: 'Periwinkle Double Wardrobe', category: 'Bedroom', x: 180, y: 125, elevation: 0, angle: 0, width: 110, depth: 60, height: 195, model: 'procedural:cabinet:{"columns":2,"rows":2,"doorType":"solid_doors","hasLegs":false}', icon: '/models/kitchenCabinet.png', color: '#b4c6e7', floorLevel: 0 },
+    { id: 'sf_wardrobe2', catalogId: 'kitchenCabinet', name: 'Pastel Lilac Chest', category: 'Bedroom', x: 280, y: 120, elevation: 0, angle: 0, width: 70, depth: 50, height: 110, model: 'procedural:cabinet:{"columns":1,"rows":2,"doorType":"drawers","hasLegs":false}', icon: '/models/kitchenCabinet.png', color: '#c7d2fe', floorLevel: 0 },
+    { id: 'sf_desk', catalogId: 'squareTable', name: 'Modern Black Study Desk', category: 'Bedroom', x: 410, y: 230, elevation: 0, angle: 0, width: 130, depth: 65, height: 75, model: 'procedural:desk:{}', icon: '/models/squareTable.png', color: '#18181b', floorLevel: 0 },
+    { id: 'sf_stool', catalogId: 'chair', name: 'Round Lavender Task Stool', category: 'Bedroom', x: 410, y: 285, elevation: 0, angle: 0, width: 40, depth: 40, height: 45, model: 'procedural:chair:{"backrestStyle":"backless","seatType":"cushioned","legStyle":"straight_4"}', icon: '/models/chair.png', color: '#a5b4fc', floorLevel: 0 },
+    { id: 'sf_bradiator', catalogId: 'radiator', name: 'Bedroom Wall Radiator', category: 'Bathroom', x: 544, y: 330, elevation: 15, angle: -Math.PI / 2, width: 65, depth: 10, height: 60, model: 'procedural:radiator:{}', icon: '/models/tvUnit.png', color: '#ffffff', floorLevel: 0, placementType: 'wall' },
+    { id: 'sf_lamp', catalogId: 'tableLamp', name: 'Gooseneck Study Desk Lamp', category: 'Lighting', x: 450, y: 215, elevation: 75, angle: 0, width: 25, depth: 25, height: 42, model: 'procedural:lamp:{"type":"table_lamp","shadeWidth":22,"shadeHeight":18,"totalHeight":42}', icon: '/models/pendantLamp.png', color: '#18181b', floorLevel: 0, placementType: 'tabletop', placeOnTable: true },
+    { id: 'sf_bed_win', catalogId: 'windowModernSliding', name: 'Bedroom Window', category: 'Doors & Windows', x: 550, y: 230, elevation: 90, angle: -Math.PI / 2, width: 100, depth: 15, height: 120, model: 'procedural:window:{"type":"modern_sliding"}', icon: '/models/window85x123.png', color: '#ffffff', floorLevel: 0 },
+
+    // --- 1ST FLOOR ITEMS (Duplex Penthouse Master Suite & Spa Bath) ---
+    // Master Bedroom Suite (Left Wing)
+    { id: 'sf8', catalogId: 'bed140x190', name: 'Penthouse Tufted Queen Bed', category: 'Bedroom', x: -330, y: 0, elevation: 0, angle: Math.PI / 2, width: 160, depth: 200, height: 95, model: 'procedural:bed:{"headboardStyle":"tufted","frameStyle":"platform"}', icon: '/models/bed140x190.png', color: '#475569', floorLevel: 1 },
+    { id: 'sf_up_win_west', catalogId: 'windowModernSliding', name: 'Master Bedroom West Window', category: 'Doors & Windows', x: -550, y: 0, elevation: 90, angle: Math.PI / 2, width: 140, depth: 15, height: 120, model: 'procedural:window:{"type":"modern_sliding"}', icon: '/models/window85x123.png', color: '#ffffff', floorLevel: 1 },
+    { id: 'sf_up_win_north_bed', catalogId: 'windowModernSliding', name: 'Master Bedroom North Window', category: 'Doors & Windows', x: -330, y: -380, elevation: 90, angle: 0, width: 140, depth: 15, height: 120, model: 'procedural:window:{"type":"modern_sliding"}', icon: '/models/window85x123.png', color: '#ffffff', floorLevel: 1 },
+    { id: 'sf_up_win_south_bed', catalogId: 'windowModernSliding', name: 'Master Bedroom South Window', category: 'Doors & Windows', x: -330, y: 380, elevation: 90, angle: 0, width: 140, depth: 15, height: 120, model: 'procedural:window:{"type":"modern_sliding"}', icon: '/models/window85x123.png', color: '#ffffff', floorLevel: 1 },
+    { id: 'sf_up_door_bed', catalogId: 'doorModernFlush', name: 'Master Suite Passage Door', category: 'Doors & Windows', x: -110, y: -160, elevation: 0, angle: Math.PI / 2, width: 85, depth: 10, height: 205, model: 'procedural:door:{"type":"modern_flush"}', icon: '/models/door.png', color: '#ffffff', floorLevel: 1 },
+
+    // Penthouse Spa Bath & Executive Lounge (Right Wing)
+    { id: 'sf_up_door_bath', catalogId: 'doorModernFlush', name: 'Penthouse Bath Passage Door', category: 'Doors & Windows', x: 50, y: -160, elevation: 0, angle: Math.PI / 2, width: 85, depth: 10, height: 205, model: 'procedural:door:{"type":"modern_flush"}', icon: '/models/door.png', color: '#ffffff', floorLevel: 1 },
+    { id: 'sf10', catalogId: 'bath', name: 'Luxury Bathtub', category: 'Bathroom', x: 420, y: -240, elevation: 0, angle: 0, width: 170, depth: 75, height: 55, model: 'procedural:bath:{}', icon: '/models/bath.png', color: '#ffffff', floorLevel: 1 },
+    { id: 'sf6', catalogId: 'toiletUnit', name: 'Modern Porcelain Toilet', category: 'Bathroom', x: 480, y: -130, elevation: 0, angle: -Math.PI / 2, width: 45, depth: 65, height: 75, model: 'procedural:toilet:{}', icon: '/models/toiletUnit.png', color: '#ffffff', floorLevel: 1 },
+    { id: 'sf_up_desk', catalogId: 'squareTable', name: 'Penthouse Executive Study Desk', category: 'Bedroom', x: 300, y: 220, elevation: 0, angle: 0, width: 130, depth: 65, height: 75, model: 'procedural:desk:{}', icon: '/models/squareTable.png', color: '#18181b', floorLevel: 1 },
+    { id: 'sf_up_chair', catalogId: 'chair', name: 'Executive Swivel Desk Chair', category: 'Bedroom', x: 300, y: 275, elevation: 0, angle: 0, width: 55, depth: 55, height: 90, model: 'procedural:chair:{"backrestStyle":"solid_panel","seatType":"cushioned","legStyle":"swivel_pedestal"}', icon: '/models/chair.png', color: '#475569', floorLevel: 1 },
+    { id: 'sf_up_door_balcony', catalogId: 'doorModernFlush', name: 'South Balcony French Door', category: 'Doors & Windows', x: 300, y: 380, elevation: 0, angle: 0, width: 110, depth: 12, height: 215, model: 'procedural:door:{"type":"glass_french"}', icon: '/models/door.png', color: '#ffffff', floorLevel: 1 },
+    { id: 'sf_up_win_north_bath', catalogId: 'windowModernSliding', name: 'Penthouse North Window', category: 'Doors & Windows', x: 300, y: -380, elevation: 90, angle: 0, width: 140, depth: 15, height: 120, model: 'procedural:window:{"type":"modern_sliding"}', icon: '/models/window85x123.png', color: '#ffffff', floorLevel: 1 },
+    { id: 'sf_up_win_east', catalogId: 'windowModernSliding', name: 'Penthouse East Window', category: 'Doors & Windows', x: 550, y: -240, elevation: 90, angle: -Math.PI / 2, width: 100, depth: 15, height: 120, model: 'procedural:window:{"type":"modern_sliding"}', icon: '/models/window85x123.png', color: '#ffffff', floorLevel: 1 },
   ],
   rooms: [
     {
       id: 'sr1',
-      name: 'Living Room',
+      name: 'Living & Dining Room',
       floorLevel: 0,
-      points: [{ x: -350, y: -250 }, { x: 50, y: -250 }, { x: 50, y: 250 }, { x: -350, y: 250 }],
-      floorColor: '#e2e8f0',
-      areaSquareMeters: 20.0,
+      points: [{ x: -550, y: -380 }, { x: -110, y: -380 }, { x: -110, y: 380 }, { x: -550, y: 380 }],
+      floorColor: '#0f5a65', // Sweet Home 3D Deep Teal Carpet
+      ceilingColor: '#ffffff',
+      ceilingHeight: 260,
+      areaSquareMeters: 33.4,
     },
     {
       id: 'sr2',
-      name: 'Kitchen & Dining',
+      name: 'Corridor',
       floorLevel: 0,
-      points: [{ x: 50, y: -250 }, { x: 350, y: -250 }, { x: 350, y: 250 }, { x: 50, y: 250 }],
-      floorColor: '#f1f5f9',
-      areaSquareMeters: 15.0,
+      points: [{ x: -110, y: -380 }, { x: 50, y: -380 }, { x: 50, y: 380 }, { x: -110, y: 380 }],
+      floorColor: '#0f5a65', // Sweet Home 3D Deep Teal
+      ceilingColor: '#ffffff',
+      ceilingHeight: 260,
+      areaSquareMeters: 12.2,
     },
     {
       id: 'sr3',
-      name: 'Master Bedroom',
-      floorLevel: 1,
-      points: [{ x: -300, y: -200 }, { x: 0, y: -200 }, { x: 0, y: 200 }, { x: -300, y: 200 }],
-      floorColor: '#cbd5e1',
-      areaSquareMeters: 12.0,
+      name: 'Kitchen & Dining',
+      floorLevel: 0,
+      points: [{ x: 50, y: -380 }, { x: 550, y: -380 }, { x: 550, y: -80 }, { x: 50, y: -80 }],
+      floorColor: '#f59e0b', // Sweet Home 3D Warm Golden Parquet
+      ceilingColor: '#ffffff',
+      ceilingHeight: 260,
+      areaSquareMeters: 15.0,
     },
     {
       id: 'sr4',
-      name: 'Terrace & Bath',
+      name: 'Utility Room',
+      floorLevel: 0,
+      points: [{ x: 50, y: -80 }, { x: 550, y: -80 }, { x: 550, y: 60 }, { x: 50, y: 60 }],
+      floorColor: '#a89a8c', // Sweet Home 3D Warm Taupe / Sand
+      ceilingColor: '#ffffff',
+      ceilingHeight: 260,
+      areaSquareMeters: 7.0,
+    },
+    {
+      id: 'sr5',
+      name: 'Pink Bedroom & Study',
+      floorLevel: 0,
+      points: [{ x: 50, y: 60 }, { x: 550, y: 60 }, { x: 550, y: 380 }, { x: 50, y: 380 }],
+      floorColor: '#e2d9f3', // Sweet Home 3D Pastel Lilac / Lavender
+      ceilingColor: '#ffffff',
+      ceilingHeight: 260,
+      areaSquareMeters: 16.0,
+    },
+    // Upper Floor Rooms (Penthouse Suite - Structurally Aligned 11m x 7.6m Envelope)
+    {
+      id: 'sr_up_bed',
+      name: 'Penthouse Master Suite',
       floorLevel: 1,
-      points: [{ x: 0, y: -200 }, { x: 300, y: -200 }, { x: 300, y: 200 }, { x: 0, y: 200 }],
-      floorColor: '#e2e8f0',
-      areaSquareMeters: 12.0,
+      points: [{ x: -550, y: -380 }, { x: -110, y: -380 }, { x: -110, y: 380 }, { x: -550, y: 380 }],
+      floorColor: '#fbcfe8', // Sweet Home 3D Soft Rose Silk Carpet
+      ceilingColor: '#ffffff',
+      ceilingHeight: 260,
+      areaSquareMeters: 33.4,
+    },
+    {
+      id: 'sr_up_gallery',
+      name: 'Upper Mezzanine Gallery',
+      floorLevel: 1,
+      points: [{ x: -110, y: -380 }, { x: 50, y: -380 }, { x: 50, y: 380 }, { x: -110, y: 380 }],
+      floorColor: '#0f5a65', // Matching Deep Teal Carpet
+      ceilingColor: '#ffffff',
+      ceilingHeight: 260,
+      areaSquareMeters: 12.2,
+    },
+    {
+      id: 'sr_up_bath',
+      name: 'Penthouse Bath & Lounge',
+      floorLevel: 1,
+      points: [{ x: 50, y: -380 }, { x: 550, y: -380 }, { x: 550, y: 380 }, { x: 50, y: 380 }],
+      floorColor: '#e0e7ff', // Periwinkle Spa Tile
+      ceilingColor: '#ffffff',
+      ceilingHeight: 260,
+      areaSquareMeters: 38.0,
     },
   ],
   dimensionLines: [],
@@ -192,8 +311,23 @@ export const fallbackCatalog: CatalogItem[] = [
   // --- KITCHEN & BATHROOM ---
   { id: 'kitchenCabinet', name: 'Kitchen Counter Cabinet', category: 'Kitchen', width: 120, depth: 60, height: 85, model: '/models/kitchenCabinet.obj', icon: '/models/kitchenCabinet.png' },
   { id: 'cooker', name: 'Induction Cooktop Stove', category: 'Kitchen', width: 60, depth: 60, height: 85, model: '/models/cooker.obj', icon: '/models/cooker.png' },
+  { id: 'refrigerator', name: 'Double-Door Refrigerator', category: 'Kitchen', width: 90, depth: 75, height: 185, model: 'procedural:cabinet:{"columns":2,"rows":2,"doorType":"solid_doors","hasLegs":false}', icon: '/models/kitchenCabinet.png', defaultColor: '#cbd5e1' },
+  { id: 'dishwasher', name: 'Built-in Dishwasher', category: 'Kitchen', width: 60, depth: 60, height: 85, model: 'procedural:cabinet:{"columns":1,"rows":1,"doorType":"solid_doors","hasLegs":false}', icon: '/models/kitchenCabinet.png', defaultColor: '#e2e8f0' },
+  { id: 'kitchenSink', name: 'Kitchen Sink & Mixer Tap', category: 'Kitchen', width: 80, depth: 60, height: 85, model: 'procedural:cabinet:{"columns":2,"rows":1,"doorType":"solid_doors","hasLegs":false}', icon: '/models/kitchenCabinet.png', defaultColor: '#f8fafc' },
+  { id: 'microwave', name: 'Countertop Microwave Oven', category: 'Kitchen', width: 52, depth: 38, height: 32, placementType: 'tabletop', placeOnTable: true, model: 'procedural:decor:{"type":"wall_art"}', icon: '/models/cooker.png', defaultColor: '#1e293b' },
   { id: 'bath', name: 'Luxury Bathtub', category: 'Bathroom', width: 170, depth: 75, height: 55, model: '/models/bath.obj', icon: '/models/bath.png', defaultColor: '#ffffff' },
+  { id: 'cornerBathtub', name: 'Corner Bathtub', category: 'Bathroom', width: 140, depth: 140, height: 55, model: '/models/bath.obj', icon: '/models/bath.png', defaultColor: '#ffffff' },
+  { id: 'islandBath', name: 'Freestanding Island Bath', category: 'Bathroom', width: 175, depth: 80, height: 60, model: '/models/bath.obj', icon: '/models/bath.png', defaultColor: '#ffffff' },
   { id: 'toiletUnit', name: 'Modern Toilet Suite', category: 'Bathroom', width: 45, depth: 70, height: 75, model: '/models/toiletUnit.obj', icon: '/models/toiletUnit.png' },
+  { id: 'washbasin', name: 'Washbasin with Cabinet', category: 'Bathroom', width: 80, depth: 50, height: 85, model: 'procedural:cabinet:{"columns":2,"rows":1,"doorType":"solid_doors","hasLegs":true}', icon: '/models/toiletUnit.png', defaultColor: '#ffffff' },
+  { id: 'bidet', name: 'Porcelain Bidet', category: 'Bathroom', width: 40, depth: 60, height: 42, model: '/models/toiletUnit.obj', icon: '/models/toiletUnit.png', defaultColor: '#f8fafc' },
+  { id: 'showerCabin', name: 'Shower Cabin with Glass Door', category: 'Bathroom', width: 90, depth: 90, height: 210, model: 'procedural:door:{"type":"glass_french"}', icon: '/models/bath.png', defaultColor: '#e0f2fe' },
+  { id: 'radiator', name: 'Wall Heating Radiator', category: 'Bathroom', width: 70, depth: 12, height: 60, elevation: 20, placementType: 'wall', model: 'procedural:decor:{"type":"wall_art"}', icon: '/models/tvUnit.png', defaultColor: '#ffffff' },
+  { id: 'bathmat', name: 'Plush Bathroom Bathmat', category: 'Bathroom', width: 80, depth: 50, height: 2, model: 'procedural:decor:{"type":"area_rug"}', icon: '/models/roundTable.png', defaultColor: '#0ea5e9' },
+  { id: 'bathroomScale', name: 'Digital Floor Scale', category: 'Bathroom', width: 30, depth: 30, height: 3, model: 'procedural:decor:{"type":"area_rug"}', icon: '/models/roundTable.png', defaultColor: '#334155' },
+  { id: 'hairDryer', name: 'Wall Hair Dryer', category: 'Bathroom', width: 22, depth: 15, height: 28, elevation: 130, placementType: 'wall', model: 'procedural:decor:{"type":"wall_art"}', icon: '/models/plant.png', defaultColor: '#f1f5f9' },
+  { id: 'dresser', name: '3-Drawer Dresser Chest', category: 'Bedroom', width: 95, depth: 50, height: 85, model: 'procedural:cabinet:{"columns":1,"rows":3,"doorType":"drawers","hasLegs":true}', icon: '/models/wardrobe.png', defaultColor: '#78350f' },
+  { id: 'fireplace', name: 'Modern Electric Fireplace', category: 'Living', width: 120, depth: 35, height: 95, model: 'procedural:wallDesign:{"type":"brick_cladding"}', icon: '/models/tvUnit.png', defaultColor: '#18181b' },
 
   // --- DOORS DESIGNS ---
   {
@@ -513,10 +647,30 @@ export const fallbackCatalog: CatalogItem[] = [
   { id: 'ceilingFlush', name: 'Modern Flush Ceiling Light Panel', category: 'Lighting', width: 60, depth: 60, height: 10, model: 'procedural:lamp:{"type":"flush_panel","shadeWidth":56,"shadeHeight":8,"totalHeight":10}', icon: '/models/pendantLamp.png', placementType: 'ceiling', lightIntensity: 1.4, defaultColor: '#f8fafc' },
   { id: 'tableLamp', name: 'Tabletop Desk Lamp', category: 'Lighting', width: 30, depth: 30, height: 45, model: 'procedural:lamp:{"type":"table_lamp","shadeWidth":25,"shadeHeight":20,"totalHeight":45}', icon: '/models/pendantLamp.png', placementType: 'tabletop', placeOnTable: true, defaultColor: '#fef08a' },
 
-  // --- STRUCTURAL & DINING ---
+  // --- STRUCTURAL & STAIRS (Duplex Interior & Outdoor Exterior) ---
   { id: 'dinnerSet', name: 'Fine Dining Table Setting', category: 'Living', width: 60, depth: 40, height: 12, model: 'procedural:table:{"shape":"rectangular","legStyle":"4_legs_corner","topThickness":2,"legThickness":2,"bevel":true}', icon: '/models/squareTable.png', placementType: 'tabletop', placeOnTable: true, defaultColor: '#ffffff' },
-  { id: 'staircaseStraight', name: 'Straight Flight Staircase', category: 'Stairs & Structural', width: 100, depth: 240, height: 260, model: 'procedural:stairs:{"type":"straight","stepsCount":14,"hasHandrail":true}', icon: '/models/staircase.png', defaultColor: '#d4a373', description: 'Architectural straight flight open-riser staircase with steel stringers, solid oak treads, and safety handrail' },
-  { id: 'staircaseSpiral', name: 'Curved Helical Spiral Staircase', category: 'Stairs & Structural', width: 140, depth: 140, height: 260, model: 'procedural:stairs:{"type":"spiral","stepsCount":16,"hasHandrail":true}', icon: '/models/staircase.png', defaultColor: '#d4a373', description: 'Architectural spiral staircase with central steel column, radiating wood treads, and perimeter balusters' },
+  { id: 'staircaseDuplexFloating', name: 'Duplex Luxury Floating Glass Staircase', category: 'Stairs & Structural', width: 100, depth: 250, height: 260, model: 'procedural:stairs:{"type":"floating","stepsCount":14,"hasHandrail":true,"railingStyle":"glass"}', icon: '/models/staircase.png', defaultColor: '#d4a373', description: 'Duplex luxury floating cantilevered oak treads with under-step warm LED lighting and frameless tempered glass balustrade' },
+  { id: 'staircaseDuplexLShape', name: 'Duplex L-Shaped Staircase with Landing', category: 'Stairs & Structural', width: 140, depth: 220, height: 260, model: 'procedural:stairs:{"type":"l_shape","stepsCount":14,"hasHandrail":true,"closedRisers":true}', icon: '/models/staircase.png', defaultColor: '#78350f', description: 'Duplex corner staircase with mid-flight resting landing platform, stately newel posts, and continuous handrail' },
+  { id: 'staircaseDuplexOpenRiser', name: 'Duplex Architectural Open-Riser Flight', category: 'Stairs & Structural', width: 100, depth: 240, height: 260, model: 'procedural:stairs:{"type":"open_riser","stepsCount":14,"hasHandrail":true,"railingStyle":"cable_wire"}', icon: '/models/staircase.png', defaultColor: '#b45309', description: 'Modern duplex interior staircase with matte black steel stringers, solid oak treads, and 4-tier stainless steel tension cable railing' },
+  { id: 'staircaseSpiral', name: 'Duplex Helical Spiral Staircase', category: 'Stairs & Structural', width: 140, depth: 140, height: 260, model: 'procedural:stairs:{"type":"spiral","stepsCount":16,"hasHandrail":true}', icon: '/models/staircase.png', defaultColor: '#d4a373', description: 'Space-saving luxury helical spiral staircase with heavy steel column, radiating fan-shaped treads, and sweeping perimeter balusters' },
+  { id: 'staircaseOutdoorConcrete', name: 'Exterior Solid Stone Entry Steps', category: 'Stairs & Structural', width: 130, depth: 180, height: 120, model: 'procedural:stairs:{"type":"outdoor_concrete","stepsCount":6,"hasHandrail":true}', icon: '/models/staircase.png', defaultColor: '#cbd5e1', description: 'Weather-resistant solid tiered masonry block steps with overhanging bullnose limestone treads and black forged iron railing' },
+  { id: 'staircaseOutdoorDeck', name: 'Outdoor Porch & Timber Deck Flight', category: 'Stairs & Structural', width: 110, depth: 200, height: 150, model: 'procedural:stairs:{"type":"outdoor_deck","stepsCount":8,"hasHandrail":true}', icon: '/models/staircase.png', defaultColor: '#92400e', description: 'Outdoor pressure-treated cedar deck stairs with 4x4 posts, twin-plank drainage treads, and heavy timber perimeter pickets' },
+  { id: 'staircaseOutdoorMetal', name: 'Exterior Industrial Metal & Fire Escape', category: 'Stairs & Structural', width: 100, depth: 220, height: 250, model: 'procedural:stairs:{"type":"outdoor_metal","stepsCount":12,"hasHandrail":true}', icon: '/models/staircase.png', defaultColor: '#475569', description: 'Galvanized industrial exterior steel stairs with anti-slip perforated treads and dual pipe safety guardrails on both sides' },
+
+  // --- OUTDOOR, GARDEN & ACCESSORIES (Sweet Home 3D Catalog) ---
+  { id: 'deckChair', name: 'Deck chair', category: 'Outdoor & Garden', width: 65, depth: 105, height: 85, model: 'procedural:table:{"shape":"rectangular","legStyle":"cross_trestle","topThickness":3,"legThickness":3,"bevel":false}', icon: '/models/armchair.png', defaultColor: '#38bdf8', description: 'Folding timber and striped canvas outdoor beach deck chair' },
+  { id: 'hangingUmbrella', name: 'Hanging umbrella', category: 'Outdoor & Garden', width: 250, depth: 250, height: 240, model: 'procedural:lamp:{"type":"pendant_dome","shadeWidth":240,"shadeHeight":40,"totalHeight":240}', icon: '/models/roundTable.png', defaultColor: '#fef3c7', description: 'Cantilevered octagonal outdoor patio shade umbrella with weighted base' },
+  { id: 'gardenHut', name: 'Garden hut', category: 'Outdoor & Garden', width: 200, depth: 180, height: 220, model: 'procedural:cabinet:{"columns":1,"rows":1,"doorType":"solid_doors","hasLegs":false}', icon: '/models/bookcase.png', defaultColor: '#d4a373', description: 'Natural pine wood garden tool shed with pitched asphalt shingle roof' },
+  { id: 'dogHouse', name: 'Dog house', category: 'Outdoor & Garden', width: 90, depth: 95, height: 85, model: 'procedural:cabinet:{"columns":1,"rows":1,"doorType":"open_shelves","hasLegs":false}', icon: '/models/bedsideTable.png', defaultColor: '#92400e', description: 'Classic timber dog kennel with cedar siding and front arch doorway' },
+  { id: 'fountain', name: 'Garden fountain', category: 'Outdoor & Garden', width: 120, depth: 120, height: 110, model: 'procedural:lamp:{"type":"chandelier","shadeWidth":110,"shadeHeight":90,"totalHeight":110}', icon: '/models/roundTable.png', defaultColor: '#cbd5e1', description: 'Tiered carved stone ornamental garden fountain with flowing water basin' },
+  { id: 'grillBBQ', name: 'Grill barbecue station', category: 'Outdoor & Garden', width: 110, depth: 60, height: 105, model: 'procedural:cabinet:{"columns":2,"rows":2,"doorType":"solid_doors","hasLegs":true}', icon: '/models/cooker.png', defaultColor: '#18181b', description: 'Stainless steel outdoor grill barbecue smoker station with side prep tables' },
+  { id: 'hammock', name: 'Hammock', category: 'Outdoor & Garden', width: 260, depth: 90, height: 80, model: 'procedural:decor:{"type":"area_rug"}', icon: '/models/sofa.png', defaultColor: '#fef3c7', description: 'Cotton canvas relaxing garden hammock slung between curved wooden arc beams' },
+  { id: 'fencePicket', name: 'Fence picket (1.5m)', category: 'Outdoor & Garden', width: 150, depth: 8, height: 100, model: 'procedural:wallDesign:{"type":"wood_slats"}', icon: '/models/bookcase.png', defaultColor: '#ffffff', description: 'Classic white painted pointed picket boundary garden fence' },
+  { id: 'fenceGrid', name: 'Fence grid wire panel', category: 'Outdoor & Garden', width: 200, depth: 6, height: 120, model: 'procedural:wallDesign:{"type":"wood_slats"}', icon: '/models/bookcase.png', defaultColor: '#94a3b8', description: 'Galvanized wire grid mesh fence panel with steel posts' },
+  { id: 'gardenGate', name: 'Garden gate', category: 'Outdoor & Garden', width: 100, depth: 8, height: 120, model: 'procedural:door:{"type":"barn_sliding"}', icon: '/models/door.png', defaultColor: '#1e293b', description: 'Black forged iron garden security entrance gate' },
+  { id: 'divingBoard', name: 'Diving board', category: 'Outdoor & Garden', width: 50, depth: 180, height: 45, model: 'procedural:shelf:{"type":"floating","plankThickness":5}', icon: '/models/bed90x190.png', defaultColor: '#0284c7', description: 'Flexible fiberglass pool diving board with non-skid tread' },
+  { id: 'wallUplight', name: 'Wall uplight sconce', category: 'Lighting', width: 24, depth: 16, height: 30, elevation: 180, placementType: 'wall', model: 'procedural:lamp:{"type":"table_lamp","shadeWidth":20,"shadeHeight":25,"totalHeight":30}', icon: '/models/pendantLamp.png', defaultColor: '#f8fafc', description: 'Architectural wall-mounted uplight creating soft ambient vertical glow' },
+  { id: 'workLamp', name: 'Work lamp with clamp', category: 'Lighting', width: 12, depth: 30, height: 45, placementType: 'tabletop', placeOnTable: true, model: 'procedural:lamp:{"type":"table_lamp","shadeWidth":15,"shadeHeight":20,"totalHeight":45}', icon: '/models/pendantLamp.png', defaultColor: '#e11d48', description: 'Articulated swing-arm architect desk work lamp' },
 ];
 
 export async function fetchCatalog(): Promise<CatalogItem[]> {

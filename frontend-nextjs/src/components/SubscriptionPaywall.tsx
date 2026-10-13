@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Lock,
   ShieldAlert,
@@ -17,7 +17,7 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { User, PaymentStatus } from '../types/plan';
-import { PRICING_PLANS, PlanId, saveSubscriptionLocally } from '../services/subscriptionService';
+import { PRICING_PLANS, PlanId, PlanDetail, saveSubscriptionLocally, fetchActivePricingPlans } from '../services/subscriptionService';
 import { initiateCashfreeCheckout } from '../services/cashfreeClient';
 import confetti from 'canvas-confetti';
 
@@ -39,8 +39,17 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
   isRefreshing = false,
 }) => {
   const [selectedPlan, setSelectedPlan] = useState<PlanId>('monthly');
+  const [pricingPlans, setPricingPlans] = useState<Record<string, PlanDetail>>(PRICING_PLANS);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchActivePricingPlans().then((live) => {
+      if (live) {
+        setPricingPlans({ ...live });
+      }
+    });
+  }, []);
 
   const triggerConfetti = () => {
     try {
@@ -52,7 +61,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
     setErrorMessage(null);
     setIsProcessing(true);
 
-    const planConfig = PRICING_PLANS[planId];
+    const planConfig = pricingPlans[planId] || PRICING_PLANS[planId];
     const durationDays = planConfig?.durationDays || (planId === 'trial_2days' ? 2 : planId === 'yearly' ? 365 : 30);
 
     try {
@@ -241,18 +250,18 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
           >
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quick Test</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{pricingPlans.trial_2days?.badge || 'Quick Test'}</span>
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
-                  48 Hours
+                  {pricingPlans.trial_2days?.durationDays ? `${pricingPlans.trial_2days.durationDays} Days` : '48 Hours'}
                 </span>
               </div>
-              <h3 className="text-lg font-bold text-white">2-Day Trial</h3>
+              <h3 className="text-lg font-bold text-white">{pricingPlans.trial_2days?.name || '2-Day Trial'}</h3>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹200</span>
-                <span className="text-xs text-slate-400">/ 48 hrs</span>
+                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹{pricingPlans.trial_2days?.priceINR?.toLocaleString('en-IN') || '200'}</span>
+                <span className="text-xs text-slate-400">{pricingPlans.trial_2days?.periodLabel || '/ 48 hrs'}</span>
               </div>
               <p className="text-xs text-slate-400 mt-2">
-                Unrestricted 100% studio access for 48 hours. Test raytracing & exports.
+                {pricingPlans.trial_2days?.description || 'Unrestricted 100% studio access for 48 hours. Test raytracing & exports.'}
               </p>
             </div>
             <ul className="mt-4 space-y-2 text-xs text-slate-300 border-t border-slate-800 pt-3">
@@ -281,25 +290,25 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
             }`}
           >
             <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 text-[10px] font-extrabold text-white uppercase tracking-wider shadow-md">
-              Most Popular
+              {pricingPlans.monthly?.badge || 'Most Popular'}
             </div>
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Professional</span>
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">
-                  30 Days
+                  {pricingPlans.monthly?.durationDays ? `${pricingPlans.monthly.durationDays} Days` : '30 Days'}
                 </span>
               </div>
               <h3 className="text-lg font-bold text-white flex items-center gap-1.5">
-                Monthly Pass
+                {pricingPlans.monthly?.name || 'Monthly Pass'}
                 <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
               </h3>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹999</span>
-                <span className="text-xs text-slate-400">/ month</span>
+                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹{pricingPlans.monthly?.priceINR?.toLocaleString('en-IN') || '999'}</span>
+                <span className="text-xs text-slate-400">{pricingPlans.monthly?.periodLabel || '/ month'}</span>
               </div>
               <p className="text-xs text-slate-400 mt-2">
-                Full uninterrupted access for interior designers and residential architects.
+                {pricingPlans.monthly?.description || 'Full uninterrupted access for interior designers and residential architects.'}
               </p>
             </div>
             <ul className="mt-4 space-y-2 text-xs text-slate-300 border-t border-slate-800 pt-3">
@@ -328,25 +337,25 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
             }`}
           >
             <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-emerald-500 text-[10px] font-extrabold text-slate-950 uppercase tracking-wider shadow-md">
-              Save 20%
+              {pricingPlans.yearly?.badge || 'Save 20%'}
             </div>
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Best Value</span>
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
-                  365 Days
+                  {pricingPlans.yearly?.durationDays ? `${pricingPlans.yearly.durationDays} Days` : '365 Days'}
                 </span>
               </div>
               <h3 className="text-lg font-bold text-white flex items-center gap-1.5">
-                Annual Pass
+                {pricingPlans.yearly?.name || 'Annual Pass'}
                 <Crown className="w-4 h-4 text-yellow-400" />
               </h3>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹9,590</span>
-                <span className="text-xs text-slate-400">/ year</span>
+                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹{pricingPlans.yearly?.priceINR?.toLocaleString('en-IN') || '9,590'}</span>
+                <span className="text-xs text-slate-400">{pricingPlans.yearly?.periodLabel || '/ year'}</span>
               </div>
               <p className="text-xs text-slate-400 mt-2">
-                Equivalent to just ₹799/mo. 365 days of full unlimited studio access.
+                {pricingPlans.yearly?.description || '365 days of full unlimited studio access.'}
               </p>
             </div>
             <ul className="mt-4 space-y-2 text-xs text-slate-300 border-t border-slate-800 pt-3">

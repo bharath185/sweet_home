@@ -56,6 +56,7 @@ export interface FurnitureItem {
   height: number;
   model: string;
   icon?: string;
+  description?: string;
   color?: string;
   partColors?: Record<string, string>;
   texture?: string;
@@ -85,6 +86,7 @@ export interface Room {
   floorColor?: string;
   floorTexture?: string;
   ceilingColor?: string;
+  ceilingHeight?: number; // in cm
   areaSquareMeters?: number;
   floorLevel?: number;
 }

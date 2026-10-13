@@ -538,88 +538,131 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
         />
       </div>
 
-      {/* Top Virtual Tour Header Bar */}
-      <header className="absolute top-3.5 left-3.5 right-3.5 z-20 flex items-center justify-between pointer-events-none gap-2">
-        <div className="pointer-events-auto bg-white/95 px-3.5 py-2 rounded-2xl shadow-md flex items-center gap-2.5 border border-slate-200 backdrop-blur-xl">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-600/20 shrink-0">
-            <Sparkles className="w-4 h-4" />
+      {/* Top Virtual Tour Unified Header Bar */}
+      <header className="absolute top-3 left-3 right-3 z-30 flex items-center justify-between pointer-events-none gap-2">
+        {/* Left: Client & Presentation Info + View Switcher */}
+        <div className="pointer-events-auto bg-white/95 backdrop-blur-xl px-3 py-1.5 rounded-2xl shadow-md border border-slate-200 flex items-center gap-2 shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-emerald-600 to-teal-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+            <Sparkles className="w-3.5 h-3.5" />
           </div>
-          <div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-600 text-white font-mono shadow-2xs">
-                👤 Client: {clientName || 'Sarah Jenkins'}
-              </span>
-              <h1 className="text-xs font-black text-slate-900 tracking-tight truncate max-w-[170px]">
-                {plan.name}
-              </h1>
-              {/* Tour Camera Mode Switcher */}
-              <div className="flex items-center bg-slate-100 p-0.5 rounded-full border border-slate-200">
-                <button
-                  onClick={() => setTourCameraMode('visitor')}
-                  className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold transition ${
-                    tourCameraMode === 'visitor'
-                      ? 'bg-emerald-600 text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="First-Person Human Walking View (1.6m)"
-                >
-                  <User className="w-3 h-3" />
-                  <span>🚶 Walk Tour (1.6m)</span>
-                </button>
-                <button
-                  onClick={() => setTourCameraMode('aerial')}
-                  className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold transition ${
-                    tourCameraMode === 'aerial'
-                      ? 'bg-sky-600 text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="3D Aerial Orbit View"
-                >
-                  <Eye className="w-3 h-3" />
-                  <span>🌐 Aerial View</span>
-                </button>
-                <div className="w-[1px] h-3 bg-slate-300 mx-0.5" />
-                <button
-                  onClick={() => setTourToolMode(tourToolMode === 'pan' ? 'select' : 'pan')}
-                  className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold transition ${
-                    tourToolMode === 'pan'
-                      ? 'bg-amber-600 text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="Free Hand / Pan View Tool (H or Hold Space) - Move 3D scene without selecting items"
-                >
-                  <Hand className="w-3 h-3" />
-                  <span>🖐️ Free Hand</span>
-                </button>
-              </div>
-            </div>
-            <p className="text-[10px] text-slate-500">
-              {tourToolMode === 'pan'
-                ? '🖐️ Free Hand Tool: Click & drag anywhere to pan view without touching furniture • Press H or click Free Hand to exit'
-                : tourCameraMode === 'visitor'
-                ? '🚶 Use WASD, Arrow Keys, or on-screen D-Pad to walk • Doors auto-open when approaching!'
-                : '🌐 Left-click + drag to orbit • Scroll to zoom • Press H for Free Hand'}
-            </p>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-600 text-white font-mono shadow-2xs shrink-0">
+              👤 {clientName || 'Client Tour'}
+            </span>
+            <span className="text-xs font-black text-slate-800 tracking-tight truncate max-w-[130px] hidden sm:inline">
+              {plan.name}
+            </span>
+          </div>
+
+          <div className="w-[1px] h-4 bg-slate-200 mx-0.5 shrink-0" />
+
+          {/* Tour Camera Mode Switcher */}
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200/80">
+            <button
+              onClick={() => setTourCameraMode('visitor')}
+              className={`flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-bold transition cursor-pointer ${
+                tourCameraMode === 'visitor'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="First-Person Walk Tour (1.6m)"
+            >
+              <User className="w-3 h-3" />
+              <span>Walk</span>
+            </button>
+            <button
+              onClick={() => setTourCameraMode('aerial')}
+              className={`flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-bold transition cursor-pointer ${
+                tourCameraMode === 'aerial'
+                  ? 'bg-sky-600 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="3D Aerial Orbit View"
+            >
+              <Eye className="w-3 h-3" />
+              <span>Orbit</span>
+            </button>
+            <div className="w-[1px] h-3 bg-slate-300 mx-0.5" />
+            <button
+              onClick={() => setTourToolMode(tourToolMode === 'pan' ? 'select' : 'pan')}
+              className={`flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-bold transition cursor-pointer ${
+                tourToolMode === 'pan'
+                  ? 'bg-amber-600 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Free Hand / Pan View Tool (H or Hold Space)"
+            >
+              <Hand className="w-3 h-3" />
+              <span>Hand</span>
+            </button>
           </div>
         </div>
 
-        {/* Action Controls: + Add 3D Items, Design Specs, Share, CAD Studio */}
-        <div className="pointer-events-auto flex items-center gap-2">
-          {/* + ADD 3D ITEMS BUTTON FOR CLIENT */}
+        {/* Center: Clean Level & Room Navigator (Active Floor Only, Zero Scrollbar) */}
+        <div
+          className="pointer-events-auto bg-white/95 backdrop-blur-xl px-2 py-1 rounded-2xl shadow-md border border-slate-200 flex items-center gap-1.5 shrink-0 max-w-[44vw] overflow-x-auto no-scrollbar scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          onWheel={(e) => {
+            if (e.deltaY !== 0) {
+              e.currentTarget.scrollLeft += e.deltaY;
+            }
+          }}
+        >
+          {/* Floor Level Tabs */}
+          {(plan.floors || [
+            { level: 0, name: 'Ground Floor' },
+            { level: 1, name: '1st Floor' }
+          ]).map((fl) => (
+            <button
+              key={fl.level}
+              onClick={() => onFloorChange(fl.level)}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                activeFloor === fl.level
+                  ? 'bg-sky-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              {fl.name}
+            </button>
+          ))}
+
+          <div className="w-[1px] h-4 bg-slate-200 mx-0.5 shrink-0" />
+
+          {/* Rooms on this active floor only */}
+          {plan.rooms
+            .filter((r) => (r.floorLevel ?? 0) === activeFloor)
+            .map((room) => (
+              <button
+                key={room.id}
+                onClick={() => setSelectedRoom(room)}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+                  selectedRoom?.id === room.id
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <MapPin className={`w-3 h-3 ${selectedRoom?.id === room.id ? 'text-white' : 'text-emerald-500'}`} />
+                <span>{room.name}</span>
+              </button>
+            ))}
+        </div>
+
+        {/* Right: Actions (+ Add Items, Specs, Share, CAD Studio) */}
+        <div className="pointer-events-auto flex items-center gap-1 bg-white/95 backdrop-blur-xl p-1 rounded-2xl shadow-md border border-slate-200 shrink-0">
           <button
             onClick={() => {
               setShowAddCatalogDrawer(!showAddCatalogDrawer);
               setShowSpecDrawer(false);
             }}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold backdrop-blur-xl border transition shadow-xs active:scale-95 ${
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
               showAddCatalogDrawer
-                ? 'bg-sky-600 text-white border-sky-700 shadow-sm'
-                : 'bg-white/95 text-slate-800 border-slate-200 hover:bg-slate-50'
+                ? 'bg-sky-600 text-white shadow-xs'
+                : 'text-slate-700 hover:bg-slate-100'
             }`}
-            title="Browse & Add 3D Furniture, Lighting & Decor to this room"
+            title="Browse & Add 3D Items"
           >
-            <Plus className={`w-4 h-4 ${showAddCatalogDrawer ? 'text-white' : 'text-sky-600'}`} />
-            <span>+ Add 3D Items</span>
+            <Plus className="w-3.5 h-3.5 text-sky-600" />
+            <span className="hidden md:inline">+ Add Items</span>
           </button>
 
           <button
@@ -627,83 +670,48 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
               setShowSpecDrawer(!showSpecDrawer);
               setShowAddCatalogDrawer(false);
             }}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold backdrop-blur-xl border transition shadow-xs ${
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
               showSpecDrawer
-                ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
-                : 'bg-white/95 text-slate-700 border-slate-200 hover:bg-slate-50'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-slate-700 hover:bg-slate-100'
             }`}
+            title="Design Specifications"
           >
-            <ListFilter className="w-4 h-4" />
-            <span>Design Specs ({plan.furniture.length})</span>
+            <ListFilter className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">Specs ({plan.furniture.length})</span>
           </button>
 
           <button
             onClick={onOpenShare}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/95 hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-xs border border-slate-200 transition"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+            title="Share Presentation Link"
           >
-            <Share2 className="w-4 h-4 text-sky-600" />
-            <span>Share</span>
+            <Share2 className="w-3.5 h-3.5 text-sky-600" />
+            <span className="hidden sm:inline">Share</span>
           </button>
 
-          {/* Only show CAD Studio switch if not client */}
           {userRole !== 'CLIENT' && (
             <button
               onClick={onSwitchToStudio}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-sm border border-sky-700/20 transition active:scale-95"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-xs transition active:scale-95 cursor-pointer ml-0.5"
+              title="Return to CAD Studio"
             >
-              <Layers className="w-4 h-4" />
+              <Layers className="w-3.5 h-3.5" />
               <span>CAD Studio</span>
             </button>
           )}
         </div>
       </header>
 
-      {/* Collision Alert Pill (Non-overlapping at Bottom Left) */}
+      {/* Collision Alert Pill (Non-overlapping above radar) */}
       {collidingItemIds.size > 0 && (
-        <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 bg-rose-600 text-white backdrop-blur-xl px-3.5 py-1.5 rounded-full shadow-lg border border-rose-500 text-xs font-bold animate-pulse">
-          <AlertTriangle className="w-4 h-4" />
+        <div className="absolute bottom-48 left-4 z-20 flex items-center gap-2 bg-rose-600 text-white backdrop-blur-xl px-3 py-1.5 rounded-full shadow-lg border border-rose-500 text-xs font-bold animate-pulse">
+          <AlertTriangle className="w-3.5 h-3.5" />
           <span>
-            {collidingItemIds.size} {collidingItemIds.size === 1 ? 'Item' : 'Items'} Overlapping (Red)
+            {collidingItemIds.size} {collidingItemIds.size === 1 ? 'Item' : 'Items'} Overlapping
           </span>
         </div>
       )}
-
-      {/* Floor & Room Selector at Top Center (Non-overlapping with clear clearance) */}
-      <div className="absolute top-18 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-white/95 p-1 rounded-full border border-slate-200 shadow-md backdrop-blur-xl text-xs">
-        {(plan.floors || [
-          { level: 0, name: 'Ground Floor' },
-          { level: 1, name: '1st Floor' }
-        ]).map((fl) => (
-          <button
-            key={fl.level}
-            onClick={() => onFloorChange(fl.level)}
-            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-              activeFloor === fl.level
-                ? 'bg-sky-600 text-white shadow-xs font-bold'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            {fl.name}
-          </button>
-        ))}
-
-        <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
-
-        {plan.rooms.map((room) => (
-          <button
-            key={room.id}
-            onClick={() => setSelectedRoom(room)}
-            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition ${
-              selectedRoom?.id === room.id
-                ? 'bg-emerald-600 text-white shadow-xs font-bold'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <MapPin className="w-3 h-3 text-emerald-500" />
-            <span>{room.name}</span>
-          </button>
-        ))}
-      </div>
 
       {/* SLIDE-OUT 1: ADD 3D ITEMS CATALOG DRAWER FOR CLIENT */}
       {showAddCatalogDrawer && (

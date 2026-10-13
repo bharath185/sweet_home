@@ -13,11 +13,11 @@ interface Polygon {
 }
 
 /**
- * Computes 4 vertices of a rotated furniture item in 2D space
+ * Computes 4 vertices of a rotated furniture item in 2D space, with optional margin inset
  */
-function getFurniturePolygon(item: FurnitureItem): Polygon {
-  const halfW = item.width / 2;
-  const halfD = item.depth / 2;
+function getFurniturePolygon(item: FurnitureItem, inset: number = 0): Polygon {
+  const halfW = Math.max(1, (item.width - inset * 2) / 2);
+  const halfD = Math.max(1, (item.depth - inset * 2) / 2);
   const angle = item.angle || 0;
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
@@ -115,6 +115,69 @@ function doPolygonsIntersect(a: Polygon, b: Polygon): boolean {
   return true; // No separating axis -> Polygons intersect
 }
 
+function isChairOrSeating(item: FurnitureItem): boolean {
+  const name = item.name.toLowerCase();
+  const cat = (item.category || '').toLowerCase();
+  return (
+    cat.includes('chair') ||
+    cat.includes('seating') ||
+    name.includes('chair') ||
+    name.includes('stool') ||
+    name.includes('bench') ||
+    name.includes('armchair')
+  );
+}
+
+function isTableOrDesk(item: FurnitureItem): boolean {
+  const name = item.name.toLowerCase();
+  const cat = (item.category || '').toLowerCase();
+  return (
+    cat.includes('table') ||
+    cat.includes('desk') ||
+    name.includes('table') ||
+    name.includes('desk') ||
+    name.includes('counter') ||
+    name.includes('island')
+  );
+}
+
+function isFloorCoveringOrStructural(item: FurnitureItem): boolean {
+  const name = item.name.toLowerCase();
+  const cat = (item.category || '').toLowerCase();
+  return (
+    cat.includes('rug') ||
+    cat.includes('carpet') ||
+    cat.includes('mat') ||
+    cat.includes('outdoor') ||
+    cat.includes('stairs') ||
+    cat.includes('structural') ||
+    name.includes('rug') ||
+    name.includes('carpet') ||
+    name.includes('mat') ||
+    name.includes('deck') ||
+    name.includes('porch') ||
+    name.includes('stair') ||
+    item.height <= 5
+  );
+}
+
+function isWallFixture(item: FurnitureItem): boolean {
+  const name = item.name.toLowerCase();
+  const cat = (item.category || '').toLowerCase();
+  return (
+    cat === 'doors & windows' ||
+    cat === 'stairs & structural' ||
+    item.placementType === 'wall' ||
+    item.placementType === 'ceiling' ||
+    name.includes('radiator') ||
+    name.includes('sconce') ||
+    name.includes('painting') ||
+    name.includes('mirror') ||
+    name.includes('deck') ||
+    name.includes('stair')
+  );
+}
+
 /**
  * Detects all collisions, invalid overlaps, and placement restrictions (like tabletop items on floor).
  */
@@ -134,9 +197,16 @@ export function detectCollisions(
     (w) => (w.floorLevel ?? 0) === activeFloor
   );
 
+  // Inset polygons by 2cm for furniture-to-furniture checks
   const furniturePolygons = new Map<string, Polygon>();
   floorFurniture.forEach((f) => {
-    furniturePolygons.set(f.id, getFurniturePolygon(f));
+    furniturePolygons.set(f.id, getFurniturePolygon(f, 2));
+  });
+
+  // Inset polygons by 4cm for furniture-to-wall checks to allow flush wall contact
+  const furnitureWallPolygons = new Map<string, Polygon>();
+  floorFurniture.forEach((f) => {
+    furnitureWallPolygons.set(f.id, getFurniturePolygon(f, 4));
   });
 
   const wallPolygons = new Map<string, Polygon>();
@@ -149,7 +219,7 @@ export function detectCollisions(
     if (isTabletopItem(f)) {
       const host = findSupportingHost(f, floorFurniture);
       // If no host table is underneath or elevation is 0 (on bare floor)
-      if (!host || (f.elevation || 0) < ((host.elevation || 0) + host.height - 5)) {
+      if (!host || (f.elevation || 0) < ((host.elevation || 0) + host.height - 8)) {
         collidingItemIds.add(f.id);
         const reason = '⚠️ Tabletop item restricted from floor. Must be placed on a table or counter.';
         reasons.set(f.id, reasons.has(f.id) ? reasons.get(f.id) + '; ' + reason : reason);
@@ -172,24 +242,37 @@ export function detectCollisions(
       const f2 = floorFurniture[j];
       const poly2 = furniturePolygons.get(f2.id)!;
 
+      // Allow floor coverings (rugs, decks, mats) to have other items on top
+      if (isFloorCoveringOrStructural(f1) || isFloorCoveringOrStructural(f2)) {
+        continue;
+      }
+
+      // Check if one item is a valid tabletop item resting ON TOP of a host table/surface
       const f1Bottom = f1.elevation || 0;
       const f1Top = f1Bottom + f1.height;
       const f2Bottom = f2.elevation || 0;
       const f2Top = f2Bottom + f2.height;
 
-      // Check if one item is a valid tabletop item resting ON TOP of a host table/surface
       const isF1TabletopOnF2 =
         isTabletopItem(f1) &&
         isSupportingSurface(f2) &&
-        f1Bottom >= f2Top - 4;
+        f1Bottom >= f2Top - 6;
 
       const isF2TabletopOnF1 =
         isTabletopItem(f2) &&
         isSupportingSurface(f1) &&
-        f2Bottom >= f1Top - 4;
+        f2Bottom >= f1Top - 6;
 
       // If valid tabletop resting relationship, skip collision between them!
       if (isF1TabletopOnF2 || isF2TabletopOnF1) {
+        continue;
+      }
+
+      // Chair tucked into / pulled up to a dining table or desk: architectural clearance
+      const isChairTablePair =
+        (isChairOrSeating(f1) && isTableOrDesk(f2)) ||
+        (isChairOrSeating(f2) && isTableOrDesk(f1));
+      if (isChairTablePair) {
         continue;
       }
 
@@ -208,12 +291,11 @@ export function detectCollisions(
     }
   }
 
-  // 3. Furniture vs Wall collision check (excluding Doors and Windows)
+  // 3. Furniture vs Wall collision check (excluding Doors, Windows, Wall fixtures & Structural)
   for (const f of floorFurniture) {
-    // Doors & Windows are designed to snap to walls, skip wall collision for them
-    if (f.category === 'Doors & Windows') continue;
+    if (isWallFixture(f)) continue;
 
-    const polyF = furniturePolygons.get(f.id)!;
+    const polyF = furnitureWallPolygons.get(f.id)!;
 
     for (const w of floorWalls) {
       const polyW = wallPolygons.get(w.id)!;

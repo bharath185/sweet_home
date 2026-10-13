@@ -71,6 +71,61 @@ export interface CustomPrimitive {
 
 const CM = 0.01;
 
+// Cache shared materials for metallic ferrules & accents
+const brassCapMat = new THREE.MeshStandardMaterial({
+  color: 0xd97706,
+  metalness: 0.92,
+  roughness: 0.18,
+});
+
+const chromeMat = new THREE.MeshStandardMaterial({
+  color: 0xe2e8f0,
+  metalness: 0.95,
+  roughness: 0.1,
+});
+
+/**
+ * Creates a high-detail rounded box geometry with soft bevel edges (Sweet Home 3D Quality)
+ */
+export function createRoundedBoxGeometry(
+  width: number,
+  height: number,
+  depth: number,
+  radius: number = 0.015,
+  smoothness: number = 3
+): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  const eps = 0.0001;
+  const r = Math.min(radius, width / 2 - eps, height / 2 - eps);
+  const w = width / 2;
+  const h = height / 2;
+
+  shape.moveTo(-w + r, -h);
+  shape.lineTo(w - r, -h);
+  shape.quadraticCurveTo(w, -h, w, -h + r);
+  shape.lineTo(w, h - r);
+  shape.quadraticCurveTo(w, h, w - r, h);
+  shape.lineTo(-w + r, h);
+  shape.quadraticCurveTo(-w, h, -w, h - r);
+  shape.lineTo(-w, -h + r);
+  shape.quadraticCurveTo(-w, -h, -w + r, -h);
+
+  const extrudeSettings = {
+    steps: 1,
+    depth: depth,
+    bevelEnabled: true,
+    bevelThickness: Math.min(r, depth / 4),
+    bevelSize: r,
+    bevelOffset: 0,
+    bevelSegments: smoothness,
+  };
+
+  const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+  geom.center();
+  geom.computeVertexNormals();
+  return geom;
+}
+
 export function buildTableMeshGroup(params: TableParams, mat: THREE.Material, partMats?: Record<string, THREE.Material>): THREE.Group {
   const group = new THREE.Group();
   const topMat = partMats?.top || mat;
@@ -83,16 +138,34 @@ export function buildTableMeshGroup(params: TableParams, mat: THREE.Material, pa
   const legThick = Math.max(2, params.legThickness || 6) * CM;
 
   let topMesh: THREE.Mesh;
-  if (params.shape === 'round') {
+  if (params.shape === 'round' && Math.abs(w - d) < 0.05) {
     const radius = Math.min(w, d) / 2;
-    const geom = new THREE.CylinderGeometry(radius, radius, topThick, 36);
+    const geom = new THREE.CylinderGeometry(radius, radius, topThick, 48);
+    geom.computeVertexNormals();
+    topMesh = new THREE.Mesh(geom, topMat);
+  } else if (params.shape === 'oval' || params.shape === 'round') {
+    // True smooth beveled elliptical tabletop (Sweet Home 3D oval dining table)
+    const shape = new THREE.Shape();
+    shape.absellipse(0, 0, w / 2 - 0.015, d / 2 - 0.015, 0, Math.PI * 2, false, 0);
+    const geom = new THREE.ExtrudeGeometry(shape, {
+      depth: topThick,
+      bevelEnabled: true,
+      bevelThickness: 0.012,
+      bevelSize: 0.012,
+      bevelSegments: 4,
+      curveSegments: 48,
+    });
+    geom.center();
+    geom.rotateX(Math.PI / 2);
+    geom.computeVertexNormals();
     topMesh = new THREE.Mesh(geom, topMat);
   } else if (params.shape === 'hexagonal') {
     const radius = Math.min(w, d) / 2;
     const geom = new THREE.CylinderGeometry(radius, radius, topThick, 6);
+    geom.computeVertexNormals();
     topMesh = new THREE.Mesh(geom, topMat);
   } else {
-    const geom = new THREE.BoxGeometry(w, topThick, d);
+    const geom = createRoundedBoxGeometry(w, topThick, d, 0.02);
     topMesh = new THREE.Mesh(geom, topMat);
   }
   topMesh.position.y = h - topThick / 2;
@@ -101,20 +174,32 @@ export function buildTableMeshGroup(params: TableParams, mat: THREE.Material, pa
   topMesh.userData = { partId: 'top' };
   group.add(topMesh);
 
+  // Sweet Home 3D Detail: Under-table Apron Frame
+  const apronThick = 0.02;
+  const apronH = 0.05;
+  const apronGeom = new THREE.BoxGeometry(w - legThick * 2, apronH, d - legThick * 2);
+  const apronMesh = new THREE.Mesh(apronGeom, legsMat);
+  apronMesh.position.y = h - topThick - apronH / 2;
+  apronMesh.castShadow = true;
+  apronMesh.userData = { partId: 'legs' };
+  group.add(apronMesh);
+
   const legHeight = h - topThick;
 
   if (params.legStyle === 'pedestal_column' || params.shape === 'round') {
-    const colGeom = new THREE.CylinderGeometry(legThick * 1.5, legThick * 2, legHeight, 24);
+    const colGeom = new THREE.CylinderGeometry(legThick * 1.5, legThick * 2, legHeight, 32);
+    colGeom.computeVertexNormals();
     const colMesh = new THREE.Mesh(colGeom, legsMat);
     colMesh.position.y = legHeight / 2;
     colMesh.castShadow = true;
     colMesh.userData = { partId: 'legs' };
     group.add(colMesh);
 
-    const baseRadius = Math.min(w, d) * 0.35;
-    const baseGeom = new THREE.CylinderGeometry(baseRadius, baseRadius, 0.03, 32);
+    const baseRadius = Math.min(w, d) * 0.38;
+    const baseGeom = new THREE.CylinderGeometry(baseRadius, baseRadius * 1.05, 0.035, 48);
+    baseGeom.computeVertexNormals();
     const baseMesh = new THREE.Mesh(baseGeom, legsMat);
-    baseMesh.position.y = 0.015;
+    baseMesh.position.y = 0.0175;
     baseMesh.castShadow = true;
     baseMesh.userData = { partId: 'legs' };
     group.add(baseMesh);
@@ -123,7 +208,7 @@ export function buildTableMeshGroup(params: TableParams, mat: THREE.Material, pa
     const rightX = w / 2 - 0.15;
 
     [leftX, rightX].forEach((posX) => {
-      const trestleGeom = new THREE.BoxGeometry(legThick, legHeight, d * 0.75);
+      const trestleGeom = createRoundedBoxGeometry(legThick, legHeight, d * 0.75, 0.012);
       const tMesh = new THREE.Mesh(trestleGeom, legsMat);
       tMesh.position.set(posX, legHeight / 2, 0);
       tMesh.castShadow = true;
@@ -131,7 +216,7 @@ export function buildTableMeshGroup(params: TableParams, mat: THREE.Material, pa
       group.add(tMesh);
     });
 
-    const beamGeom = new THREE.BoxGeometry(w - 0.3, legThick * 0.8, legThick * 0.8);
+    const beamGeom = createRoundedBoxGeometry(w - 0.3, legThick * 0.8, legThick * 0.8, 0.01);
     const beamMesh = new THREE.Mesh(beamGeom, legsMat);
     beamMesh.position.set(0, legHeight * 0.3, 0);
     beamMesh.castShadow = true;
@@ -140,7 +225,8 @@ export function buildTableMeshGroup(params: TableParams, mat: THREE.Material, pa
   } else {
     const offsetX = w / 2 - legThick;
     const offsetZ = d / 2 - legThick;
-    const legGeom = new THREE.BoxGeometry(legThick, legHeight, legThick);
+    const legGeom = new THREE.CylinderGeometry(legThick * 0.7, legThick * 0.5, legHeight, 24);
+    legGeom.computeVertexNormals();
 
     const positions = [
       [-offsetX, legHeight / 2, -offsetZ],
@@ -155,6 +241,14 @@ export function buildTableMeshGroup(params: TableParams, mat: THREE.Material, pa
       legMesh.castShadow = true;
       legMesh.userData = { partId: 'legs' };
       group.add(legMesh);
+
+      // Sweet Home 3D Metallic Brass Feet Caps (Ferrules)
+      const capGeom = new THREE.CylinderGeometry(legThick * 0.52, legThick * 0.54, 0.04, 24);
+      capGeom.computeVertexNormals();
+      const capMesh = new THREE.Mesh(capGeom, brassCapMat);
+      capMesh.position.set(x, 0.02, z);
+      capMesh.userData = { partId: 'legs' };
+      group.add(capMesh);
     });
   }
 
@@ -171,9 +265,10 @@ export function buildChairMeshGroup(params: ChairParams, mat: THREE.Material, pa
   const d = Math.max(30, params.depth) * CM;
   const h = Math.max(40, params.height) * CM;
   const seatH = Math.max(25, params.seatHeight || 45) * CM;
-  const seatThick = 0.05;
+  const seatThick = 0.06;
 
-  const seatGeom = new THREE.BoxGeometry(w, seatThick, d);
+  // Sweet Home 3D Detail: Upholstered Seat Cushion with Beveled Edge
+  const seatGeom = createRoundedBoxGeometry(w, seatThick, d, 0.025);
   const seatMesh = new THREE.Mesh(seatGeom, seatMat);
   seatMesh.position.set(0, seatH - seatThick / 2, 0);
   seatMesh.castShadow = true;
@@ -182,19 +277,44 @@ export function buildChairMeshGroup(params: ChairParams, mat: THREE.Material, pa
 
   if (params.backrestStyle !== 'backless') {
     const backHeight = h - seatH;
-    const backThick = 0.04;
-    const backGeom = new THREE.BoxGeometry(w * 0.95, backHeight, backThick);
-    const backMesh = new THREE.Mesh(backGeom, backMat);
-    backMesh.position.set(0, seatH + backHeight / 2, -d / 2 + backThick / 2);
-    backMesh.castShadow = true;
-    backMesh.userData = { partId: 'backrest' };
-    group.add(backMesh);
+    const backThick = 0.045;
+
+    if (params.backrestStyle === 'spindle_slats') {
+      // Wood Slats Backrest with Top Curved Arch Rail
+      const railGeom = createRoundedBoxGeometry(w * 0.95, 0.04, 0.035, 0.01);
+      const topRail = new THREE.Mesh(railGeom, backMat);
+      topRail.position.set(0, h - 0.02, -d / 2 + 0.025);
+      topRail.castShadow = true;
+      topRail.userData = { partId: 'backrest' };
+      group.add(topRail);
+
+      const slatCount = 5;
+      const slatGeom = new THREE.CylinderGeometry(0.008, 0.008, backHeight - 0.04, 16);
+      slatGeom.computeVertexNormals();
+      for (let i = 0; i < slatCount; i++) {
+        const sx = -w * 0.35 + (i / (slatCount - 1)) * w * 0.7;
+        const slatMesh = new THREE.Mesh(slatGeom, backMat);
+        slatMesh.position.set(sx, seatH + (backHeight - 0.04) / 2, -d / 2 + 0.025);
+        slatMesh.castShadow = true;
+        slatMesh.userData = { partId: 'backrest' };
+        group.add(slatMesh);
+      }
+    } else {
+      // Ergonomic Solid / Upholstered Backrest Panel
+      const backGeom = createRoundedBoxGeometry(w * 0.92, backHeight, backThick, 0.02);
+      const backMesh = new THREE.Mesh(backGeom, backMat);
+      backMesh.position.set(0, seatH + backHeight / 2, -d / 2 + backThick / 2);
+      backMesh.rotation.x = -0.06; // subtle ergonomic recline
+      backMesh.castShadow = true;
+      backMesh.userData = { partId: 'backrest' };
+      group.add(backMesh);
+    }
   }
 
   const legHeight = seatH - seatThick;
-  const legThick = 0.04;
-  const offsetX = w / 2 - legThick;
-  const offsetZ = d / 2 - legThick;
+  const legThick = 0.038;
+  const offsetX = w / 2 - legThick * 1.2;
+  const offsetZ = d / 2 - legThick * 1.2;
 
   const positions = [
     [-offsetX, legHeight / 2, -offsetZ],
@@ -203,14 +323,34 @@ export function buildChairMeshGroup(params: ChairParams, mat: THREE.Material, pa
     [offsetX, legHeight / 2, offsetZ],
   ];
 
-  const legGeom = new THREE.CylinderGeometry(legThick * 0.6, legThick, legHeight, 16);
+  const legGeom = new THREE.CylinderGeometry(legThick * 0.65, legThick * 0.45, legHeight, 24);
+  legGeom.computeVertexNormals();
+
   positions.forEach(([x, y, z]) => {
     const legMesh = new THREE.Mesh(legGeom, legsMat);
     legMesh.position.set(x, y, z);
     legMesh.castShadow = true;
     legMesh.userData = { partId: 'legs' };
     group.add(legMesh);
+
+    // Brass Leg Caps
+    const capGeom = new THREE.CylinderGeometry(legThick * 0.47, legThick * 0.49, 0.03, 24);
+    const capMesh = new THREE.Mesh(capGeom, brassCapMat);
+    capMesh.position.set(x, 0.015, z);
+    capMesh.userData = { partId: 'legs' };
+    group.add(capMesh);
   });
+
+  // Cross-bracing stretchers
+  const stretcherGeom = new THREE.CylinderGeometry(0.008, 0.008, w * 0.8, 12);
+  stretcherGeom.rotateZ(Math.PI / 2);
+  const stretcher1 = new THREE.Mesh(stretcherGeom, legsMat);
+  stretcher1.position.set(0, legHeight * 0.4, -offsetZ);
+  group.add(stretcher1);
+
+  const stretcher2 = new THREE.Mesh(stretcherGeom, legsMat);
+  stretcher2.position.set(0, legHeight * 0.4, offsetZ);
+  group.add(stretcher2);
 
   return group;
 }
@@ -227,16 +367,16 @@ export function buildSofaMeshGroup(params: SofaParams, mat: THREE.Material, part
   const h = Math.max(50, params.height) * CM;
   const armWidth = Math.min(0.18, w * 0.12);
 
-  // 1. Sleek Lower Platform / Base Frame
+  // 1. Sleek Lower Platform / Base Frame with Soft Edges
   const baseH = 0.08;
-  const baseGeom = new THREE.BoxGeometry(w, baseH, d);
+  const baseGeom = createRoundedBoxGeometry(w, baseH, d, 0.015);
   const baseMesh = new THREE.Mesh(baseGeom, bodyMat);
   baseMesh.position.set(0, 0.12 + baseH / 2, 0);
   baseMesh.castShadow = true;
   baseMesh.userData = { partId: 'body' };
   group.add(baseMesh);
 
-  // 2. Realistic Tapered Legs
+  // 2. Realistic Tapered Legs with Brass Ferrules
   const legH = 0.12;
   const legOffsets = [
     [-w / 2 + 0.08, -d / 2 + 0.08],
@@ -244,19 +384,26 @@ export function buildSofaMeshGroup(params: SofaParams, mat: THREE.Material, part
     [-w / 2 + 0.08, d / 2 - 0.08],
     [w / 2 - 0.08, d / 2 - 0.08],
   ];
-  const legGeom = new THREE.CylinderGeometry(0.018, 0.028, legH, 16);
+  const legGeom = new THREE.CylinderGeometry(0.018, 0.028, legH, 24);
+  legGeom.computeVertexNormals();
   legOffsets.forEach(([lx, lz]) => {
     const legMesh = new THREE.Mesh(legGeom, legsMat);
     legMesh.position.set(lx, legH / 2, lz);
     legMesh.castShadow = true;
     legMesh.userData = { partId: 'legs' };
     group.add(legMesh);
+
+    const capGeom = new THREE.CylinderGeometry(0.029, 0.03, 0.025, 24);
+    const capMesh = new THREE.Mesh(capGeom, brassCapMat);
+    capMesh.position.set(lx, 0.0125, lz);
+    capMesh.userData = { partId: 'legs' };
+    group.add(capMesh);
   });
 
   // 3. Padded Backrest Structure
   const backH = h - 0.12;
   const backThick = Math.min(0.18, d * 0.22);
-  const backGeom = new THREE.BoxGeometry(w, backH, backThick);
+  const backGeom = createRoundedBoxGeometry(w, backH, backThick, 0.025);
   const backMesh = new THREE.Mesh(backGeom, bodyMat);
   backMesh.position.set(0, 0.12 + backH / 2, -d / 2 + backThick / 2);
   backMesh.castShadow = true;
@@ -268,7 +415,7 @@ export function buildSofaMeshGroup(params: SofaParams, mat: THREE.Material, part
   const armH = h * 0.68;
   if (params.armStyle !== 'armless') {
     [-w / 2 + armWidth / 2, w / 2 - armWidth / 2].forEach((xPos) => {
-      const armGeom = new THREE.BoxGeometry(armWidth, armH, d);
+      const armGeom = createRoundedBoxGeometry(armWidth, armH, d, 0.02);
       const armMesh = new THREE.Mesh(armGeom, bodyMat);
       armMesh.position.set(xPos, 0.12 + armH / 2, 0);
       armMesh.castShadow = true;
@@ -277,7 +424,7 @@ export function buildSofaMeshGroup(params: SofaParams, mat: THREE.Material, part
     });
   }
 
-  // 5. Individual Plump Seat Cushions (Multi-cushion design)
+  // 5. Individual Plump Seat Cushions (Sweet Home 3D Multi-cushion design)
   const numCushions = w > 1.6 ? 3 : 2;
   const gap = 0.015;
   const cushionW = (seatW - gap * (numCushions - 1)) / numCushions;
@@ -287,7 +434,7 @@ export function buildSofaMeshGroup(params: SofaParams, mat: THREE.Material, part
 
   for (let i = 0; i < numCushions; i++) {
     const cx = -seatW / 2 + cushionW / 2 + i * (cushionW + gap);
-    const cushionGeom = new THREE.BoxGeometry(cushionW * 0.98, cushionH, cushionD);
+    const cushionGeom = createRoundedBoxGeometry(cushionW * 0.98, cushionH, cushionD, 0.03);
     const cushionMesh = new THREE.Mesh(cushionGeom, cushionsMat);
     cushionMesh.position.set(cx, 0.12 + baseH + cushionH / 2, seatCenterZ);
     cushionMesh.castShadow = true;
@@ -296,7 +443,7 @@ export function buildSofaMeshGroup(params: SofaParams, mat: THREE.Material, part
 
     // Thick angled Back Cushions resting on the backrest
     const backCushionH = Math.max(0.3, (h - 0.28) * 0.7);
-    const backCushionGeom = new THREE.BoxGeometry(cushionW * 0.96, backCushionH, 0.14);
+    const backCushionGeom = createRoundedBoxGeometry(cushionW * 0.96, backCushionH, 0.14, 0.025);
     const backCushionMesh = new THREE.Mesh(backCushionGeom, cushionsMat);
     backCushionMesh.position.set(cx, 0.12 + baseH + cushionH + backCushionH * 0.45, -d / 2 + backThick + 0.06);
     backCushionMesh.rotation.x = 0.12;
@@ -306,7 +453,7 @@ export function buildSofaMeshGroup(params: SofaParams, mat: THREE.Material, part
   }
 
   // 6. Plump Organic Accent Throw Pillows
-  const pilGeom = new THREE.BoxGeometry(0.24, 0.24, 0.1);
+  const pilGeom = createRoundedBoxGeometry(0.24, 0.24, 0.1, 0.04);
   [-seatW / 2 + 0.14, seatW / 2 - 0.14].forEach((px, idx) => {
     const pillow = new THREE.Mesh(pilGeom, pillowsMat);
     pillow.position.set(px, 0.12 + baseH + cushionH + 0.12, -d / 2 + backThick + 0.16);
@@ -319,7 +466,7 @@ export function buildSofaMeshGroup(params: SofaParams, mat: THREE.Material, part
 
   if (params.type === 'l_shape_left' || params.type === 'l_shape_right') {
     const chaiseX = params.type === 'l_shape_left' ? -w / 2 + d * 0.4 : w / 2 - d * 0.4;
-    const chaiseGeom = new THREE.BoxGeometry(d * 0.7, cushionH, d * 0.9);
+    const chaiseGeom = createRoundedBoxGeometry(d * 0.7, cushionH, d * 0.9, 0.03);
     const chaiseMesh = new THREE.Mesh(chaiseGeom, cushionsMat);
     chaiseMesh.position.set(chaiseX, 0.12 + baseH + cushionH / 2, d * 0.7);
     chaiseMesh.castShadow = true;
@@ -336,14 +483,14 @@ export function buildCabinetMeshGroup(params: CabinetParams, mat: THREE.Material
   const frameMat = partMats?.frame || mat;
   const doorsMat = partMats?.doors || mat;
   const legsMat = partMats?.legs || mat;
-  const handlesMat = partMats?.handles || new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.85, roughness: 0.2 });
+  const handlesMat = partMats?.handles || brassCapMat;
 
   const w = Math.max(30, params.width) * CM;
   const d = Math.max(20, params.depth) * CM;
   const h = Math.max(30, params.height) * CM;
   const wallThick = 0.025;
 
-  const topGeom = new THREE.BoxGeometry(w, wallThick, d);
+  const topGeom = createRoundedBoxGeometry(w, wallThick, d, 0.01);
   const topMesh = new THREE.Mesh(topGeom, topMat);
   topMesh.position.set(0, h - wallThick / 2, 0);
   topMesh.castShadow = true;
@@ -378,18 +525,19 @@ export function buildCabinetMeshGroup(params: CabinetParams, mat: THREE.Material
   backMesh.userData = { partId: 'frame' };
   group.add(backMesh);
 
-  // Door Faces & Handles
+  // Door Faces & Handles with Recessed Frame Detailing
   const doorWidth = (w - wallThick * 2) / 2;
   [-doorWidth / 2, doorWidth / 2].forEach((dx, didx) => {
-    const doorGeom = new THREE.BoxGeometry(doorWidth * 0.96, sideH * 0.96, 0.018);
+    const doorGeom = createRoundedBoxGeometry(doorWidth * 0.96, sideH * 0.96, 0.018, 0.008);
     const doorMesh = new THREE.Mesh(doorGeom, doorsMat);
     doorMesh.position.set(dx, sideH / 2 + wallThick + (params.hasLegs ? 0.1 : 0), d / 2 - 0.01);
     doorMesh.castShadow = true;
     doorMesh.userData = { partId: 'doors' };
     group.add(doorMesh);
 
-    // Handle Pull
-    const handleGeom = new THREE.CylinderGeometry(0.006, 0.006, 0.12, 12);
+    // Sweet Home 3D Detail: Chrome/Brass Handle Pull Bar
+    const handleGeom = new THREE.CylinderGeometry(0.008, 0.008, 0.14, 16);
+    handleGeom.computeVertexNormals();
     const handleMesh = new THREE.Mesh(handleGeom, handlesMat);
     const hx = didx === 0 ? dx + doorWidth * 0.35 : dx - doorWidth * 0.35;
     handleMesh.position.set(hx, sideH / 2 + wallThick + (params.hasLegs ? 0.1 : 0), d / 2 + 0.015);
@@ -399,7 +547,8 @@ export function buildCabinetMeshGroup(params: CabinetParams, mat: THREE.Material
   });
 
   if (params.hasLegs) {
-    const legGeom = new THREE.CylinderGeometry(0.02, 0.02, 0.1, 16);
+    const legGeom = new THREE.CylinderGeometry(0.02, 0.015, 0.1, 20);
+    legGeom.computeVertexNormals();
     [
       [-w / 2 + 0.05, 0.05, -d / 2 + 0.05],
       [w / 2 - 0.05, 0.05, -d / 2 + 0.05],
@@ -411,6 +560,12 @@ export function buildCabinetMeshGroup(params: CabinetParams, mat: THREE.Material
       leg.castShadow = true;
       leg.userData = { partId: 'legs' };
       group.add(leg);
+
+      const capGeom = new THREE.CylinderGeometry(0.016, 0.017, 0.02, 20);
+      const capMesh = new THREE.Mesh(capGeom, brassCapMat);
+      capMesh.position.set(x, 0.01, z);
+      capMesh.userData = { partId: 'legs' };
+      group.add(capMesh);
     });
   }
 
@@ -429,24 +584,28 @@ export function buildBedMeshGroup(params: BedParams, mat: THREE.Material, partMa
   const h = Math.max(40, params.height) * CM;
   const frameH = 0.25;
 
-  const frameGeom = new THREE.BoxGeometry(w + 0.1, frameH, d + 0.1);
+  // Solid Platform Frame
+  const frameGeom = createRoundedBoxGeometry(w + 0.1, frameH, d + 0.1, 0.02);
   const frameMesh = new THREE.Mesh(frameGeom, frameMat);
   frameMesh.position.set(0, frameH / 2, 0);
   frameMesh.castShadow = true;
   frameMesh.userData = { partId: 'frame' };
   group.add(frameMesh);
 
-  const matGeom = new THREE.BoxGeometry(w, 0.22, d);
+  // Sweet Home 3D Detail: Layered Mattress with Quilted Edge
+  const matGeom = createRoundedBoxGeometry(w, 0.22, d, 0.03);
   const matMesh = new THREE.Mesh(matGeom, beddingMat);
   matMesh.position.set(0, frameH + 0.11, 0);
   matMesh.castShadow = true;
   matMesh.userData = { partId: 'bedding' };
   group.add(matMesh);
 
-  const pillowGeom = new THREE.BoxGeometry(w * 0.4, 0.1, 0.35);
+  // Plush Dual Sleeping Pillows
+  const pillowGeom = createRoundedBoxGeometry(w * 0.4, 0.11, 0.35, 0.035);
   [-w * 0.22, w * 0.22].forEach((xPos) => {
     const pillow = new THREE.Mesh(pillowGeom, pillowMat);
     pillow.position.set(xPos, frameH + 0.26, -d / 2 + 0.25);
+    pillow.rotation.x = 0.08;
     pillow.castShadow = true;
     pillow.userData = { partId: 'pillows' };
     group.add(pillow);
@@ -454,7 +613,7 @@ export function buildBedMeshGroup(params: BedParams, mat: THREE.Material, partMa
 
   if (params.headboardStyle !== 'none') {
     const headH = Math.max(0.6, h);
-    const headGeom = new THREE.BoxGeometry(w + 0.15, headH, 0.1);
+    const headGeom = createRoundedBoxGeometry(w + 0.15, headH, 0.1, 0.025);
     const headMesh = new THREE.Mesh(headGeom, headMat);
     headMesh.position.set(0, headH / 2, -d / 2 - 0.05);
     headMesh.castShadow = true;
@@ -1368,31 +1527,105 @@ export function buildInteriorDecorMeshGroup(params: DecorParams, mat: THREE.Mate
 }
 
 export interface StairsParams {
-  type?: 'straight' | 'spiral' | 'l_shape';
+  type?:
+    | 'straight'
+    | 'open_riser'
+    | 'floating'
+    | 'l_shape'
+    | 'spiral'
+    | 'outdoor_concrete'
+    | 'outdoor_deck'
+    | 'outdoor_metal';
   width: number;
   depth: number;
   height: number;
   stepsCount?: number;
   hasHandrail?: boolean;
+  handrailSide?: 'both' | 'left' | 'right';
+  railingStyle?: 'glass' | 'cable_wire' | 'spindles' | 'wrought_iron' | 'timber_pickets' | 'pipe';
+  closedRisers?: boolean;
 }
 
-export function buildStairsMeshGroup(params: StairsParams, mat: THREE.Material, partMats?: Record<string, THREE.Material>): THREE.Group {
+export function buildStairsMeshGroup(
+  params: StairsParams,
+  mat: THREE.Material,
+  partMats?: Record<string, THREE.Material>
+): THREE.Group {
   const group = new THREE.Group();
+
+  // Primary material mapping with architectural fallbacks
   const treadsMat = partMats?.treads || mat;
-  const stringersMat = partMats?.stringers || new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.5, roughness: 0.4 });
+  const stringersMat =
+    partMats?.stringers ||
+    new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6, roughness: 0.35 });
   const handrailMat = partMats?.handrail || stringersMat;
+
+  // Architectural specialized materials
+  const glassBalustradeMat = new THREE.MeshStandardMaterial({
+    color: 0xf1f5f9,
+    opacity: 0.38,
+    transparent: true,
+    roughness: 0.05,
+    metalness: 0.1,
+  });
+
+  const concreteMat = new THREE.MeshStandardMaterial({
+    color: 0x94a3b8,
+    roughness: 0.88,
+    metalness: 0.02,
+  });
+
+  const stoneTreadMat = new THREE.MeshStandardMaterial({
+    color: 0xe2e8f0,
+    roughness: 0.72,
+    metalness: 0.04,
+  });
+
+  const wroughtIronMat = new THREE.MeshStandardMaterial({
+    color: 0x0f172a,
+    roughness: 0.35,
+    metalness: 0.82,
+  });
+
+  const deckTimberMat = new THREE.MeshStandardMaterial({
+    color: 0x92400e,
+    roughness: 0.65,
+    metalness: 0.05,
+  });
+
+  const stepLedMat = new THREE.MeshStandardMaterial({
+    color: 0xfef08a,
+    emissive: new THREE.Color(0xfde047),
+    emissiveIntensity: 0.5,
+    roughness: 0.2,
+  });
+
+  const cableWireMat = new THREE.MeshStandardMaterial({
+    color: 0xe2e8f0,
+    metalness: 0.95,
+    roughness: 0.15,
+  });
+
+  const riserBoardMat = new THREE.MeshStandardMaterial({
+    color: 0xf8fafc,
+    roughness: 0.5,
+    metalness: 0.02,
+  });
 
   const w = Math.max(60, params.width) * CM;
   const d = Math.max(100, params.depth) * CM;
-  const h = Math.max(150, params.height) * CM;
+  const h = Math.max(120, params.height) * CM;
   const steps = params.stepsCount || 14;
   const hasHandrail = params.hasHandrail !== false;
+  const handrailSide = params.handrailSide || 'right';
 
   const stepRise = h / steps;
   const stepRun = d / steps;
 
+  // ----------------------------------------------------
+  // 1. DUPLEX SPIRAL / HELICAL STAIRCASE
+  // ----------------------------------------------------
   if (params.type === 'spiral') {
-    // Elegant Spiral / Helical Staircase with center column & radiating treads
     const centerRadius = 0.08;
     const colGeom = new THREE.CylinderGeometry(centerRadius, centerRadius, h, 24);
     const colMesh = new THREE.Mesh(colGeom, stringersMat);
@@ -1402,88 +1635,987 @@ export function buildStairsMeshGroup(params: StairsParams, mat: THREE.Material, 
     group.add(colMesh);
 
     const outerRadius = Math.min(w, d) / 2;
-    const angleStep = (Math.PI * 1.6) / steps;
+    const totalRotation = Math.PI * 1.6;
+    const angleStep = totalRotation / steps;
 
     for (let i = 0; i < steps; i++) {
       const stepAngle = i * angleStep;
       const stepY = i * stepRise + stepRise / 2;
 
-      // Wedge shaped tread
-      const treadGeom = new THREE.BoxGeometry(outerRadius, 0.035, 0.22);
+      // Wedge shaped wooden tread
+      const treadGeom = new THREE.BoxGeometry(outerRadius, 0.038, 0.24);
       const treadMesh = new THREE.Mesh(treadGeom, treadsMat);
-      treadMesh.position.set(Math.cos(stepAngle) * (outerRadius / 2), stepY, Math.sin(stepAngle) * (outerRadius / 2));
+      treadMesh.position.set(
+        Math.cos(stepAngle) * (outerRadius / 2),
+        stepY,
+        Math.sin(stepAngle) * (outerRadius / 2)
+      );
       treadMesh.rotation.y = -stepAngle;
       treadMesh.castShadow = true;
       treadMesh.userData = { partId: 'treads' };
       group.add(treadMesh);
 
-      // Baluster spindle
+      // Helical outer baluster spindle
       if (hasHandrail) {
-        const balGeom = new THREE.CylinderGeometry(0.008, 0.008, 0.85, 8);
+        const balH = 0.9;
+        const balGeom = new THREE.CylinderGeometry(0.009, 0.009, balH, 8);
         const balMesh = new THREE.Mesh(balGeom, handrailMat);
-        balMesh.position.set(Math.cos(stepAngle) * (outerRadius - 0.03), stepY + 0.425, Math.sin(stepAngle) * (outerRadius - 0.03));
+        balMesh.position.set(
+          Math.cos(stepAngle) * (outerRadius - 0.025),
+          stepY + balH / 2,
+          Math.sin(stepAngle) * (outerRadius - 0.025)
+        );
         balMesh.userData = { partId: 'handrail' };
         group.add(balMesh);
+
+        // Segmented continuous handrail connecting to next step
+        if (i < steps - 1) {
+          const nextAngle = (i + 1) * angleStep;
+          const nextY = (i + 1) * stepRise + stepRise / 2;
+          const p1 = new THREE.Vector3(
+            Math.cos(stepAngle) * (outerRadius - 0.025),
+            stepY + balH,
+            Math.sin(stepAngle) * (outerRadius - 0.025)
+          );
+          const p2 = new THREE.Vector3(
+            Math.cos(nextAngle) * (outerRadius - 0.025),
+            nextY + balH,
+            Math.sin(nextAngle) * (outerRadius - 0.025)
+          );
+          const railVec = p2.clone().sub(p1);
+          const segLen = railVec.length();
+          const railSegGeom = new THREE.CylinderGeometry(0.018, 0.018, segLen, 8);
+          const railSegMesh = new THREE.Mesh(railSegGeom, handrailMat);
+          railSegMesh.position.copy(p1.clone().add(p2).multiplyScalar(0.5));
+          railSegMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), railVec.normalize());
+          group.add(railSegMesh);
+        }
       }
     }
-  } else {
-    // Classic Architectural Straight / Open-Riser Flight
-    const stringerThick = 0.05;
+  }
 
-    // Left and right stringer beams
+  // ----------------------------------------------------
+  // 2. DUPLEX LUXURY FLOATING CANTILEVERED STAIRCASE
+  // ----------------------------------------------------
+  else if (params.type === 'floating') {
+    const treadThick = 0.065; // 6.5cm thick solid oak cantilever block
+    const treadDepth = stepRun * 1.15;
+
+    // Structural wall mounting spine plate on the left wall side
     const beamLen = Math.hypot(d, h);
     const beamAngle = Math.atan2(h, d);
-    const beamGeom = new THREE.BoxGeometry(stringerThick, 0.16, beamLen);
+    const wallPlate = new THREE.Mesh(
+      new THREE.BoxGeometry(0.025, 0.22, beamLen),
+      stringersMat
+    );
+    wallPlate.position.set(-w / 2 + 0.015, h / 2, 0);
+    wallPlate.rotation.x = beamAngle;
+    wallPlate.userData = { partId: 'stringers' };
+    group.add(wallPlate);
 
-    const leftBeam = new THREE.Mesh(beamGeom, stringersMat);
+    for (let i = 0; i < steps; i++) {
+      const zPos = -d / 2 + i * stepRun + stepRun / 2;
+      const yPos = (i + 1) * stepRise;
+
+      // Solid cantilever oak tread
+      const treadGeom = new THREE.BoxGeometry(w - 0.04, treadThick, treadDepth);
+      const treadMesh = new THREE.Mesh(treadGeom, treadsMat);
+      treadMesh.position.set(0.01, yPos - treadThick / 2, zPos);
+      treadMesh.castShadow = true;
+      treadMesh.receiveShadow = true;
+      treadMesh.userData = { partId: 'treads' };
+      group.add(treadMesh);
+
+      // Warm LED light strip embedded beneath front nose of each tread
+      const ledGeom = new THREE.BoxGeometry(w * 0.88, 0.008, 0.018);
+      const ledMesh = new THREE.Mesh(ledGeom, stepLedMat);
+      ledMesh.position.set(0.01, yPos - treadThick - 0.004, zPos + treadDepth * 0.42);
+      group.add(ledMesh);
+
+      // Stainless steel standoff mounting pucks connecting to glass panel
+      if (hasHandrail) {
+        const puckGeom = new THREE.CylinderGeometry(0.022, 0.022, 0.035, 16);
+        const puckMesh = new THREE.Mesh(puckGeom, cableWireMat);
+        puckMesh.rotation.z = Math.PI / 2;
+        puckMesh.position.set(w / 2 - 0.01, yPos - treadThick / 2, zPos);
+        group.add(puckMesh);
+      }
+    }
+
+    // Modern Frameless Tempered Glass Balustrade & Slim Wood Handrail Cap
+    if (hasHandrail) {
+      const railH = 0.92;
+      const glassGeom = new THREE.BoxGeometry(0.012, railH, beamLen);
+      const glassMesh = new THREE.Mesh(glassGeom, glassBalustradeMat);
+      glassMesh.position.set(w / 2, h / 2 + railH * 0.45, 0);
+      glassMesh.rotation.x = beamAngle;
+      glassMesh.userData = { partId: 'handrail' };
+      group.add(glassMesh);
+
+      // Slim top handrail channel atop the glass
+      const capGeom = new THREE.BoxGeometry(0.035, 0.03, beamLen);
+      const capMesh = new THREE.Mesh(capGeom, handrailMat);
+      capMesh.position.set(w / 2, h / 2 + railH * 0.95, 0);
+      capMesh.rotation.x = beamAngle;
+      group.add(capMesh);
+    }
+  }
+
+  // ----------------------------------------------------
+  // 3. DUPLEX L-SHAPED STAIRCASE WITH INTERMEDIATE LANDING
+  // ----------------------------------------------------
+  else if (params.type === 'l_shape') {
+    const flight1Steps = Math.floor(steps / 2);
+    const flight2Steps = steps - flight1Steps;
+    const landingH = (flight1Steps * stepRise);
+    const landingSize = w; // Square resting landing platform
+
+    // Mid-flight square landing platform at h/2
+    const landingGeom = new THREE.BoxGeometry(landingSize, 0.045, landingSize);
+    const landingMesh = new THREE.Mesh(landingGeom, treadsMat);
+    landingMesh.position.set(0, landingH - 0.022, d / 2 - landingSize / 2);
+    landingMesh.castShadow = true;
+    landingMesh.receiveShadow = true;
+    landingMesh.userData = { partId: 'treads' };
+    group.add(landingMesh);
+
+    // Landing apron / support fascia
+    const apronGeom = new THREE.BoxGeometry(landingSize, landingH, landingSize);
+    const apronMesh = new THREE.Mesh(apronGeom, riserBoardMat);
+    apronMesh.position.set(0, landingH / 2 - 0.045, d / 2 - landingSize / 2);
+    apronMesh.userData = { partId: 'stringers' };
+    group.add(apronMesh);
+
+    // Flight 1 (Lower Flight): climbs forward along Z to landing
+    const f1Run = (d - landingSize) / flight1Steps;
+    for (let i = 0; i < flight1Steps; i++) {
+      const zPos = -d / 2 + i * f1Run + f1Run / 2;
+      const yPos = (i + 1) * stepRise;
+
+      // Closed riser
+      const riserGeom = new THREE.BoxGeometry(w - 0.04, stepRise, 0.02);
+      const riserMesh = new THREE.Mesh(riserGeom, riserBoardMat);
+      riserMesh.position.set(0, yPos - stepRise / 2, zPos - f1Run / 2);
+      group.add(riserMesh);
+
+      // Wood tread
+      const treadGeom = new THREE.BoxGeometry(w, 0.038, f1Run * 1.15);
+      const treadMesh = new THREE.Mesh(treadGeom, treadsMat);
+      treadMesh.position.set(0, yPos - 0.019, zPos);
+      treadMesh.castShadow = true;
+      group.add(treadMesh);
+    }
+
+    // Flight 2 (Upper Flight): climbs from landing to top
+    const f2Rise = (h - landingH) / flight2Steps;
+    const f2Run = (w) / flight2Steps;
+    for (let i = 0; i < flight2Steps; i++) {
+      const xPos = -w / 2 + (i + 0.5) * f2Run;
+      const yPos = landingH + (i + 1) * f2Rise;
+
+      const riserGeom = new THREE.BoxGeometry(0.02, f2Rise, landingSize - 0.04);
+      const riserMesh = new THREE.Mesh(riserGeom, riserBoardMat);
+      riserMesh.position.set(xPos - f2Run / 2, yPos - f2Rise / 2, d / 2 - landingSize / 2);
+      group.add(riserMesh);
+
+      const treadGeom = new THREE.BoxGeometry(f2Run * 1.15, 0.038, landingSize);
+      const treadMesh = new THREE.Mesh(treadGeom, treadsMat);
+      treadMesh.position.set(xPos, yPos - 0.019, d / 2 - landingSize / 2);
+      treadMesh.castShadow = true;
+      group.add(treadMesh);
+    }
+
+    // Stately Newel Posts & Classic Balustrade
+    if (hasHandrail) {
+      const newelH = 1.05;
+      const newelW = 0.075;
+      const newelGeom = new THREE.BoxGeometry(newelW, newelH, newelW);
+
+      // Post 1: Bottom start
+      const newel1 = new THREE.Mesh(newelGeom, handrailMat);
+      newel1.position.set(w / 2 - newelW / 2, newelH / 2, -d / 2);
+      group.add(newel1);
+
+      // Post 2: Landing corner
+      const newel2 = new THREE.Mesh(new THREE.BoxGeometry(newelW, newelH + landingH, newelW), handrailMat);
+      newel2.position.set(w / 2 - newelW / 2, (newelH + landingH) / 2, d / 2 - landingSize);
+      group.add(newel2);
+
+      // Post 3: Top flight landing
+      const newel3 = new THREE.Mesh(newelGeom, handrailMat);
+      newel3.position.set(w / 2, h + newelH / 2, d / 2);
+      group.add(newel3);
+    }
+  }
+
+  // ----------------------------------------------------
+  // 4. NORMAL HOUSE OUTSIDE: SOLID MASONRY / STONE STEPS
+  // ----------------------------------------------------
+  else if (params.type === 'outdoor_concrete') {
+    const curbW = 0.12; // 12cm thick side masonry cheek walls
+    const treadDepth = stepRun * 1.18; // Overhanging bullnose stone tread
+
+    // Left and Right Stepped Stone Cheek Walls / Parapets
+    const cheekGeomL = new THREE.BoxGeometry(curbW, h + 0.15, d);
+    const cheekMeshL = new THREE.Mesh(cheekGeomL, concreteMat);
+    cheekMeshL.position.set(-w / 2 + curbW / 2, (h + 0.15) / 2, 0);
+    cheekMeshL.castShadow = true;
+    cheekMeshL.userData = { partId: 'stringers' };
+    group.add(cheekMeshL);
+
+    const cheekMeshR = new THREE.Mesh(cheekGeomL, concreteMat);
+    cheekMeshR.position.set(w / 2 - curbW / 2, (h + 0.15) / 2, 0);
+    cheekMeshR.castShadow = true;
+    cheekMeshR.userData = { partId: 'stringers' };
+    group.add(cheekMeshR);
+
+    // Solid Tiered Concrete Masonry Foundation & Limestone Slabs
+    const innerW = w - curbW * 2;
+    for (let i = 0; i < steps; i++) {
+      const zPos = -d / 2 + i * stepRun + stepRun / 2;
+      const yStepTop = (i + 1) * stepRise;
+
+      // Solid concrete riser block extending down to ground (y=0)
+      const solidBlockH = yStepTop - 0.045;
+      const blockGeom = new THREE.BoxGeometry(innerW, solidBlockH, stepRun);
+      const blockMesh = new THREE.Mesh(blockGeom, concreteMat);
+      blockMesh.position.set(0, solidBlockH / 2, zPos);
+      blockMesh.castShadow = true;
+      blockMesh.receiveShadow = true;
+      blockMesh.userData = { partId: 'stringers' };
+      group.add(blockMesh);
+
+      // Heavy 4.5cm limestone tread slab with bullnose nosing overhang
+      const stoneTreadGeom = new THREE.BoxGeometry(innerW + 0.02, 0.045, treadDepth);
+      const stoneTreadMesh = new THREE.Mesh(stoneTreadGeom, stoneTreadMat);
+      stoneTreadMesh.position.set(0, yStepTop - 0.0225, zPos + 0.015);
+      stoneTreadMesh.castShadow = true;
+      stoneTreadMesh.receiveShadow = true;
+      stoneTreadMesh.userData = { partId: 'treads' };
+      group.add(stoneTreadMesh);
+    }
+
+    // Classic Exterior Wrought-Iron Balustrade
+    if (hasHandrail) {
+      const beamLen = Math.hypot(d, h);
+      const beamAngle = Math.atan2(h, d);
+      const railH = 0.88;
+
+      // Molded black wrought-iron handrail
+      const ironRail = new THREE.Mesh(
+        new THREE.BoxGeometry(0.035, 0.04, beamLen),
+        wroughtIronMat
+      );
+      ironRail.position.set(w / 2 - curbW / 2, h / 2 + railH + 0.05, 0);
+      ironRail.rotation.x = beamAngle;
+      ironRail.userData = { partId: 'handrail' };
+      group.add(ironRail);
+
+      // Bottom ornamental square iron newel post
+      const newelBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(0.045, railH + 0.15, 0.045),
+        wroughtIronMat
+      );
+      newelBottom.position.set(w / 2 - curbW / 2, (railH + 0.15) / 2, -d / 2 + stepRun / 2);
+      group.add(newelBottom);
+
+      // Top iron newel post
+      const newelTop = new THREE.Mesh(
+        new THREE.BoxGeometry(0.045, railH + 0.15, 0.045),
+        wroughtIronMat
+      );
+      newelTop.position.set(w / 2 - curbW / 2, h + (railH + 0.15) / 2, d / 2 - stepRun / 2);
+      group.add(newelTop);
+
+      // Vertical square wrought-iron pickets every 12cm
+      const picketCount = Math.max(4, Math.floor(steps * 1.5));
+      for (let p = 0; p < picketCount; p++) {
+        const frac = (p + 0.5) / picketCount;
+        const pz = -d / 2 + frac * d;
+        const py = frac * h;
+        const picket = new THREE.Mesh(
+          new THREE.BoxGeometry(0.014, railH, 0.014),
+          wroughtIronMat
+        );
+        picket.position.set(w / 2 - curbW / 2, py + railH / 2 + 0.04, pz);
+        group.add(picket);
+      }
+    }
+  }
+
+  // ----------------------------------------------------
+  // 5. NORMAL HOUSE OUTSIDE: TIMBER PORCH & DECK FLIGHT
+  // ----------------------------------------------------
+  else if (params.type === 'outdoor_deck') {
+    const stringerThick = 0.045;
+    const beamLen = Math.hypot(d, h);
+    const beamAngle = Math.atan2(h, d);
+
+    // Left, Right & Center Notched Timber Carriage Stringers
+    const stringerPositions = [-w / 2 + stringerThick, w / 2 - stringerThick];
+    if (w > 0.9) stringerPositions.push(0);
+
+    stringerPositions.forEach((xPos) => {
+      const stringerMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(stringerThick, 0.22, beamLen),
+        deckTimberMat
+      );
+      stringerMesh.position.set(xPos, h / 2 - 0.04, 0);
+      stringerMesh.rotation.x = beamAngle;
+      stringerMesh.userData = { partId: 'stringers' };
+      group.add(stringerMesh);
+    });
+
+    // 2x6 Deck Plank Treads (twin planks per step with drainage expansion gap)
+    const plankW = (stepRun * 1.1) / 2 - 0.005;
+    for (let i = 0; i < steps; i++) {
+      const zCenter = -d / 2 + i * stepRun + stepRun / 2;
+      const yPos = (i + 1) * stepRise;
+
+      // Front plank
+      const plank1 = new THREE.Mesh(
+        new THREE.BoxGeometry(w, 0.038, plankW),
+        deckTimberMat
+      );
+      plank1.position.set(0, yPos - 0.019, zCenter + plankW / 2 + 0.003);
+      plank1.castShadow = true;
+      plank1.receiveShadow = true;
+      plank1.userData = { partId: 'treads' };
+      group.add(plank1);
+
+      // Rear plank
+      const plank2 = new THREE.Mesh(
+        new THREE.BoxGeometry(w, 0.038, plankW),
+        deckTimberMat
+      );
+      plank2.position.set(0, yPos - 0.019, zCenter - plankW / 2 - 0.003);
+      plank2.castShadow = true;
+      plank2.receiveShadow = true;
+      plank2.userData = { partId: 'treads' };
+      group.add(plank2);
+
+      // Deck closed riser face
+      const riserMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(w - stringerThick * 2, stepRise - 0.038, 0.02),
+        deckTimberMat
+      );
+      riserMesh.position.set(0, yPos - (stepRise - 0.038) / 2 - 0.038, zCenter - stepRun / 2);
+      group.add(riserMesh);
+    }
+
+    // Heavy 4x4 Deck Posts & Square Pickets
+    if (hasHandrail) {
+      const postW = 0.085; // 4x4 timber post
+      const railH = 0.92;
+
+      // Bottom and Top 4x4 Deck Posts with Pyramidal Chamfered Tops
+      const postGeom = new THREE.BoxGeometry(postW, railH + 0.15, postW);
+      const postBottom = new THREE.Mesh(postGeom, deckTimberMat);
+      postBottom.position.set(w / 2, (railH + 0.15) / 2, -d / 2);
+      group.add(postBottom);
+
+      const postTop = new THREE.Mesh(postGeom, deckTimberMat);
+      postTop.position.set(w / 2, h + (railH + 0.15) / 2, d / 2);
+      group.add(postTop);
+
+      // Heavy 2x4 Top Handrail Cap
+      const capRail = new THREE.Mesh(
+        new THREE.BoxGeometry(postW, 0.045, beamLen),
+        deckTimberMat
+      );
+      capRail.position.set(w / 2, h / 2 + railH, 0);
+      capRail.rotation.x = beamAngle;
+      capRail.userData = { partId: 'handrail' };
+      group.add(capRail);
+
+      // Sub-rail underneath
+      const subRail = new THREE.Mesh(
+        new THREE.BoxGeometry(0.045, 0.035, beamLen),
+        deckTimberMat
+      );
+      subRail.position.set(w / 2, h / 2 + railH - 0.05, 0);
+      subRail.rotation.x = beamAngle;
+      group.add(subRail);
+
+      // Bottom rail
+      const btmRail = new THREE.Mesh(
+        new THREE.BoxGeometry(0.045, 0.035, beamLen),
+        deckTimberMat
+      );
+      btmRail.position.set(w / 2, h / 2 + 0.12, 0);
+      btmRail.rotation.x = beamAngle;
+      group.add(btmRail);
+
+      // Vertical 2x2 Square Deck Pickets
+      const picketCount = Math.max(5, Math.floor(steps * 1.6));
+      for (let p = 0; p < picketCount; p++) {
+        const frac = (p + 0.5) / picketCount;
+        const pz = -d / 2 + frac * d;
+        const py = frac * h;
+        const picket = new THREE.Mesh(
+          new THREE.BoxGeometry(0.035, railH - 0.22, 0.035),
+          deckTimberMat
+        );
+        picket.position.set(w / 2, py + (railH + 0.12) / 2, pz);
+        group.add(picket);
+      }
+    }
+  }
+
+  // ----------------------------------------------------
+  // 6. EXTERIOR INDUSTRIAL METAL / FIRE ESCAPE FLIGHT
+  // ----------------------------------------------------
+  else if (params.type === 'outdoor_metal') {
+    const stringerThick = 0.04;
+    const beamLen = Math.hypot(d, h);
+    const beamAngle = Math.atan2(h, d);
+
+    // Galvanized Steel C-Channel Stringers
+    const leftStringer = new THREE.Mesh(
+      new THREE.BoxGeometry(stringerThick, 0.18, beamLen),
+      stringersMat
+    );
+    leftStringer.position.set(-w / 2 + stringerThick / 2, h / 2, 0);
+    leftStringer.rotation.x = beamAngle;
+    leftStringer.userData = { partId: 'stringers' };
+    group.add(leftStringer);
+
+    const rightStringer = new THREE.Mesh(
+      new THREE.BoxGeometry(stringerThick, 0.18, beamLen),
+      stringersMat
+    );
+    rightStringer.position.set(w / 2 - stringerThick / 2, h / 2, 0);
+    rightStringer.rotation.x = beamAngle;
+    rightStringer.userData = { partId: 'stringers' };
+    group.add(rightStringer);
+
+    // Perforated Anti-Slip Steel Treads
+    for (let i = 0; i < steps; i++) {
+      const zPos = -d / 2 + i * stepRun + stepRun / 2;
+      const yPos = (i + 1) * stepRise;
+
+      const treadMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(w - stringerThick * 2, 0.03, stepRun * 1.1),
+        cableWireMat
+      );
+      treadMesh.position.set(0, yPos - 0.015, zPos);
+      treadMesh.castShadow = true;
+      treadMesh.userData = { partId: 'treads' };
+      group.add(treadMesh);
+    }
+
+    // Double Pipe Safety Guardrails on Both Sides
+    if (hasHandrail) {
+      const railH = 0.95;
+      [-w / 2, w / 2].forEach((xSide) => {
+        // Top pipe grab rail
+        const topPipe = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.022, 0.022, beamLen, 12),
+          stringersMat
+        );
+        topPipe.position.set(xSide, h / 2 + railH, 0);
+        topPipe.rotation.x = beamAngle;
+        topPipe.userData = { partId: 'handrail' };
+        group.add(topPipe);
+
+        // Mid-height safety knee rail
+        const midPipe = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.016, 0.016, beamLen, 12),
+          stringersMat
+        );
+        midPipe.position.set(xSide, h / 2 + railH * 0.5, 0);
+        midPipe.rotation.x = beamAngle;
+        group.add(midPipe);
+
+        // Pipe stanchion posts
+        for (let p = 0; p <= 3; p++) {
+          const frac = p / 3;
+          const pz = -d / 2 + frac * d;
+          const py = frac * h;
+          const post = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.02, 0.02, railH, 12),
+            stringersMat
+          );
+          post.position.set(xSide, py + railH / 2, pz);
+          group.add(post);
+        }
+      });
+    }
+  }
+
+  // ----------------------------------------------------
+  // 7. DUPLEX ARCHITECTURAL OPEN-RISER HARDWOOD & STEEL
+  // ----------------------------------------------------
+  else {
+    // Default: 'open_riser' / 'straight'
+    const stringerThick = 0.045;
+    const beamLen = Math.hypot(d, h);
+    const beamAngle = Math.atan2(h, d);
+
+    // Architectural Matte Black Steel Channel Stringers
+    const leftBeam = new THREE.Mesh(
+      new THREE.BoxGeometry(stringerThick, 0.18, beamLen),
+      stringersMat
+    );
     leftBeam.position.set(-w / 2 + stringerThick / 2, h / 2, 0);
     leftBeam.rotation.x = beamAngle;
     leftBeam.userData = { partId: 'stringers' };
     group.add(leftBeam);
 
-    const rightBeam = new THREE.Mesh(beamGeom, stringersMat);
+    const rightBeam = new THREE.Mesh(
+      new THREE.BoxGeometry(stringerThick, 0.18, beamLen),
+      stringersMat
+    );
     rightBeam.position.set(w / 2 - stringerThick / 2, h / 2, 0);
     rightBeam.rotation.x = beamAngle;
     rightBeam.userData = { partId: 'stringers' };
     group.add(rightBeam);
 
-    // Horizontal Steps / Treads
+    // Solid 4.5cm Beveled Hardwood Treads with Open Risers
     for (let i = 0; i < steps; i++) {
       const zPos = -d / 2 + i * stepRun + stepRun / 2;
       const yPos = (i + 1) * stepRise;
 
-      const treadGeom = new THREE.BoxGeometry(w - stringerThick * 2, 0.04, stepRun * 1.1);
+      const treadGeom = new THREE.BoxGeometry(w - stringerThick * 2, 0.045, stepRun * 1.15);
       const treadMesh = new THREE.Mesh(treadGeom, treadsMat);
-      treadMesh.position.set(0, yPos - 0.02, zPos);
+      treadMesh.position.set(0, yPos - 0.0225, zPos);
       treadMesh.castShadow = true;
       treadMesh.receiveShadow = true;
       treadMesh.userData = { partId: 'treads' };
       group.add(treadMesh);
     }
 
-    // Safety Handrail & Balusters along left edge
+    // Modern Stainless Tension Cable Wire Railing & Solid Wood Handrail
     if (hasHandrail) {
-      const railH = 0.85;
-      const handrailGeom = new THREE.CylinderGeometry(0.02, 0.02, beamLen, 12);
+      const railH = 0.9;
+      const railX = handrailSide === 'left' ? -w / 2 : w / 2;
+
+      // Ergonomic round wood handrail
+      const handrailGeom = new THREE.CylinderGeometry(0.026, 0.026, beamLen, 16);
       const handrailMesh = new THREE.Mesh(handrailGeom, handrailMat);
-      handrailMesh.position.set(w / 2, h / 2 + railH, 0);
+      handrailMesh.position.set(railX, h / 2 + railH, 0);
       handrailMesh.rotation.x = beamAngle;
       handrailMesh.userData = { partId: 'handrail' };
       group.add(handrailMesh);
 
-      // Support Posts
-      for (let p = 0; p <= 3; p++) {
-        const frac = p / 3;
+      // Stainless Steel Tension Cables (4 parallel horizontal safety cables)
+      for (let c = 1; c <= 4; c++) {
+        const wireH = (railH * c) / 5;
+        const cableMesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.003, 0.003, beamLen, 8),
+          cableWireMat
+        );
+        cableMesh.position.set(railX, h / 2 + wireH, 0);
+        cableMesh.rotation.x = beamAngle;
+        group.add(cableMesh);
+      }
+
+      // Vertical Steel Stanchion Posts
+      const postCount = 4;
+      for (let p = 0; p < postCount; p++) {
+        const frac = p / (postCount - 1);
         const pz = -d / 2 + frac * d;
         const py = frac * h;
-        const postGeom = new THREE.CylinderGeometry(0.015, 0.015, railH, 8);
-        const postMesh = new THREE.Mesh(postGeom, handrailMat);
-        postMesh.position.set(w / 2, py + railH / 2, pz);
+        const postGeom = new THREE.BoxGeometry(0.03, railH, 0.03);
+        const postMesh = new THREE.Mesh(postGeom, stringersMat);
+        postMesh.position.set(railX, py + railH / 2, pz);
         postMesh.userData = { partId: 'handrail' };
         group.add(postMesh);
       }
     }
   }
+
+  return group;
+}
+
+// ----------------------------------------------------
+// TV UNIT & FLAT SCREEN TELEVISION
+// ----------------------------------------------------
+export function buildTvUnitMeshGroup(
+  wCm: number,
+  dCm: number,
+  hCm: number,
+  mat: THREE.Material,
+  partMats?: Record<string, THREE.Material>
+): THREE.Group {
+  const group = new THREE.Group();
+  const w = Math.max(80, wCm) * CM;
+  const d = Math.max(35, dCm) * CM;
+  const totalH = Math.max(60, hCm) * CM;
+  const consoleH = Math.min(0.45, totalH * 0.45);
+  const woodMat = partMats?.frame || mat;
+  const screenMat = new THREE.MeshStandardMaterial({
+    color: 0x05070a,
+    roughness: 0.05,
+    metalness: 0.85,
+  });
+  const bezelMat = new THREE.MeshStandardMaterial({
+    color: 0x18181b,
+    roughness: 0.4,
+    metalness: 0.8,
+  });
+
+  // 1. Lower Console Credenza / Cabinet
+  const consoleGeom = createRoundedBoxGeometry(w, consoleH, d, 0.02);
+  const consoleMesh = new THREE.Mesh(consoleGeom, woodMat);
+  consoleMesh.position.set(0, consoleH / 2 + 0.1, 0);
+  consoleMesh.castShadow = true;
+  consoleMesh.receiveShadow = true;
+  group.add(consoleMesh);
+
+  // Console Legs (4 tapered metal legs)
+  const legH = 0.1;
+  const legR = 0.018;
+  const offX = w / 2 - 0.08;
+  const offZ = d / 2 - 0.08;
+  [[-offX, -offZ], [offX, -offZ], [-offX, offZ], [offX, offZ]].forEach(([lx, lz]) => {
+    const legGeom = new THREE.CylinderGeometry(legR * 0.8, legR * 0.5, legH, 16);
+    const leg = new THREE.Mesh(legGeom, chromeMat);
+    leg.position.set(lx, legH / 2, lz);
+    leg.castShadow = true;
+    group.add(leg);
+  });
+
+  // Front Drawer dividing line & sleek pull bars
+  const pullGeom = createRoundedBoxGeometry(w * 0.28, 0.012, 0.015, 0.003);
+  [-w * 0.22, w * 0.22].forEach((px) => {
+    const pull = new THREE.Mesh(pullGeom, brassCapMat);
+    pull.position.set(px, consoleH / 2 + 0.1, d / 2 + 0.008);
+    group.add(pull);
+  });
+
+  // 2. Flat-Screen Smart LED TV on top of console
+  const tvW = Math.min(w * 0.85, 1.4);
+  const tvH = tvW * 0.58; // 16:9 ratio
+  const tvY = consoleH + 0.1 + 0.04;
+
+  // TV Stand Base Pedestal
+  const standBaseGeom = createRoundedBoxGeometry(tvW * 0.35, 0.012, 0.18, 0.01);
+  const standBase = new THREE.Mesh(standBaseGeom, bezelMat);
+  standBase.position.set(0, consoleH + 0.1 + 0.006, 0);
+  group.add(standBase);
+
+  // TV Stand Neck Riser
+  const neckGeom = new THREE.BoxGeometry(0.06, 0.04, 0.03);
+  const neck = new THREE.Mesh(neckGeom, bezelMat);
+  neck.position.set(0, consoleH + 0.1 + 0.025, 0);
+  group.add(neck);
+
+  // TV Bezel Frame
+  const tvFrameGeom = createRoundedBoxGeometry(tvW, tvH, 0.025, 0.01);
+  const tvFrame = new THREE.Mesh(tvFrameGeom, bezelMat);
+  tvFrame.position.set(0, tvY + tvH / 2, 0);
+  tvFrame.castShadow = true;
+  group.add(tvFrame);
+
+  // TV High-Gloss Glass Screen
+  const tvScreenGeom = new THREE.PlaneGeometry(tvW - 0.04, tvH - 0.04);
+  const tvScreen = new THREE.Mesh(tvScreenGeom, screenMat);
+  tvScreen.position.set(0, tvY + tvH / 2, 0.014);
+  group.add(tvScreen);
+
+  // Power LED glow dot (subtle blue dot)
+  const ledGeom = new THREE.SphereGeometry(0.004, 8, 8);
+  const ledMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+  const led = new THREE.Mesh(ledGeom, ledMat);
+  led.position.set(0, tvY + 0.012, 0.015);
+  group.add(led);
+
+  return group;
+}
+
+// ----------------------------------------------------
+// WALL HEATING RADIATOR
+// ----------------------------------------------------
+export function buildRadiatorMeshGroup(
+  wCm: number,
+  dCm: number,
+  hCm: number
+): THREE.Group {
+  const group = new THREE.Group();
+  const w = Math.max(40, wCm) * CM;
+  const d = Math.max(8, dCm) * CM;
+  const h = Math.max(40, hCm) * CM;
+
+  const whiteEnamelMat = new THREE.MeshStandardMaterial({
+    color: 0xf8fafc,
+    roughness: 0.25,
+    metalness: 0.1,
+  });
+
+  // Vertical Heating Columns (Fins)
+  const numFins = Math.max(6, Math.floor(w / 0.06));
+  const finW = 0.045;
+  const finD = d * 0.85;
+  const finH = h - 0.08;
+
+  for (let i = 0; i < numFins; i++) {
+    const x = -w / 2 + finW / 2 + (i / (numFins - 1)) * (w - finW);
+    const finGeom = createRoundedBoxGeometry(finW * 0.85, finH, finD, 0.01);
+    const finMesh = new THREE.Mesh(finGeom, whiteEnamelMat);
+    finMesh.position.set(x, h / 2, 0);
+    finMesh.castShadow = true;
+    group.add(finMesh);
+  }
+
+  // Top and Bottom Horizontal Manifold Pipes
+  const pipeR = 0.016;
+  const pipeGeom = new THREE.CylinderGeometry(pipeR, pipeR, w, 16);
+  pipeGeom.rotateZ(Math.PI / 2);
+
+  const topPipe = new THREE.Mesh(pipeGeom, whiteEnamelMat);
+  topPipe.position.set(0, h - 0.04, 0);
+  group.add(topPipe);
+
+  const btmPipe = new THREE.Mesh(pipeGeom, whiteEnamelMat);
+  btmPipe.position.set(0, 0.04, 0);
+  group.add(btmPipe);
+
+  // Chrome Thermostatic Valve Knob on side
+  const valveGeom = new THREE.CylinderGeometry(0.02, 0.02, 0.05, 16);
+  valveGeom.rotateZ(Math.PI / 2);
+  const valve = new THREE.Mesh(valveGeom, chromeMat);
+  valve.position.set(w / 2 + 0.025, h - 0.04, 0);
+  group.add(valve);
+
+  return group;
+}
+
+// ----------------------------------------------------
+// KITCHEN STOVE / INDUCTION RANGE COOKER
+// ----------------------------------------------------
+export function buildCookerMeshGroup(
+  wCm: number,
+  dCm: number,
+  hCm: number
+): THREE.Group {
+  const group = new THREE.Group();
+  const w = Math.max(50, wCm) * CM;
+  const d = Math.max(50, dCm) * CM;
+  const h = Math.max(70, hCm) * CM;
+
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.35, metalness: 0.15 });
+  const steelMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.2, metalness: 0.85 });
+  const glassCooktopMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.08, metalness: 0.8 });
+  const ovenGlassMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.1, metalness: 0.5 });
+
+  // Main Range Body
+  const bodyGeom = createRoundedBoxGeometry(w, h, d, 0.015);
+  const body = new THREE.Mesh(bodyGeom, bodyMat);
+  body.position.set(0, h / 2, 0);
+  body.castShadow = true;
+  group.add(body);
+
+  // Black Ceramic Induction Glass Top
+  const topPlate = new THREE.Mesh(new THREE.BoxGeometry(w * 0.96, 0.015, d * 0.96), glassCooktopMat);
+  topPlate.position.set(0, h + 0.0075, 0);
+  group.add(topPlate);
+
+  // 4 Induction Cooking Burner Rings
+  const burnerR1 = Math.min(w, d) * 0.16;
+  const burnerR2 = Math.min(w, d) * 0.12;
+  const offX = w * 0.24;
+  const offZ = d * 0.24;
+  const ringMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.6, roughness: 0.3 });
+
+  [
+    [-offX, -offZ, burnerR1],
+    [offX, -offZ, burnerR2],
+    [-offX, offZ, burnerR2],
+    [offX, offZ, burnerR1],
+  ].forEach(([bx, bz, r]) => {
+    const ringGeom = new THREE.RingGeometry(r * 0.8, r, 24);
+    ringGeom.rotateX(-Math.PI / 2);
+    const ring = new THREE.Mesh(ringGeom, ringMat);
+    ring.position.set(bx, h + 0.016, bz);
+    group.add(ring);
+  });
+
+  // Front Control Panel with 4 Knobs
+  const knobMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.9, roughness: 0.2 });
+  for (let k = 0; k < 4; k++) {
+    const kx = -w * 0.3 + (k / 3) * w * 0.6;
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.018, 16), knobMat);
+    knob.rotateX(Math.PI / 2);
+    knob.position.set(kx, h - 0.05, d / 2 + 0.01);
+    group.add(knob);
+  }
+
+  // Oven Door with Glass Window & Handle
+  const ovenW = w * 0.85;
+  const ovenH = h * 0.55;
+  const ovenWin = new THREE.Mesh(createRoundedBoxGeometry(ovenW, ovenH, 0.02, 0.01), ovenGlassMat);
+  ovenWin.position.set(0, h * 0.42, d / 2 + 0.005);
+  group.add(ovenWin);
+
+  // Horizontal Oven Handle Bar
+  const handleGeom = createRoundedBoxGeometry(ovenW * 0.75, 0.016, 0.022, 0.005);
+  const handle = new THREE.Mesh(handleGeom, steelMat);
+  handle.position.set(0, h * 0.64, d / 2 + 0.022);
+  group.add(handle);
+
+  return group;
+}
+
+// ----------------------------------------------------
+// SANITARY FIXTURES (BATH, TOILET, SINK)
+// ----------------------------------------------------
+export function buildSanitaryMeshGroup(
+  type: 'bath' | 'toilet' | 'sink',
+  wCm: number,
+  dCm: number,
+  hCm: number
+): THREE.Group {
+  const group = new THREE.Group();
+  const w = Math.max(30, wCm) * CM;
+  const d = Math.max(30, dCm) * CM;
+  const h = Math.max(30, hCm) * CM;
+
+  const porcelainMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.12,
+    metalness: 0.05,
+  });
+
+  if (type === 'bath') {
+    // Luxury Bathtub with rounded rim & inner basin
+    const tubGeom = createRoundedBoxGeometry(w, h, d, Math.min(w, d) * 0.25);
+    const tub = new THREE.Mesh(tubGeom, porcelainMat);
+    tub.position.set(0, h / 2, 0);
+    tub.castShadow = true;
+    group.add(tub);
+
+    // Inner Bath Basin
+    const basinMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.1 });
+    const basinGeom = createRoundedBoxGeometry(w - 0.12, h * 0.85, d - 0.12, Math.min(w, d) * 0.2);
+    const basin = new THREE.Mesh(basinGeom, basinMat);
+    basin.position.set(0, h * 0.58, 0);
+    group.add(basin);
+
+    // Chrome Drain & Overflow
+    const drain = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.005, 16), chromeMat);
+    drain.position.set(-w * 0.3, h * 0.16, 0);
+    group.add(drain);
+
+    // Chrome Mixer Tap on End Rim
+    const tapSpout = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.09, 12), chromeMat);
+    tapSpout.position.set(-w / 2 + 0.05, h + 0.045, 0);
+    group.add(tapSpout);
+
+  } else if (type === 'toilet') {
+    // Water Tank at rear
+    const tankW = w * 0.9;
+    const tankD = d * 0.32;
+    const tankH = h * 0.5;
+    const tankGeom = createRoundedBoxGeometry(tankW, tankH, tankD, 0.02);
+    const tank = new THREE.Mesh(tankGeom, porcelainMat);
+    tank.position.set(0, h - tankH / 2, -d / 2 + tankD / 2);
+    tank.castShadow = true;
+    group.add(tank);
+
+    // Dual Flush Chrome Button
+    const flushBtn = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.008, 16), chromeMat);
+    flushBtn.position.set(0, h + 0.004, -d / 2 + tankD / 2);
+    group.add(flushBtn);
+
+    // Toilet Bowl
+    const bowlH = Math.min(0.42, h * 0.55);
+    const bowlW = w * 0.85;
+    const bowlD = d * 0.68;
+    const bowlGeom = createRoundedBoxGeometry(bowlW, bowlH, bowlD, bowlW * 0.38);
+    const bowl = new THREE.Mesh(bowlGeom, porcelainMat);
+    bowl.position.set(0, bowlH / 2, d / 2 - bowlD / 2);
+    bowl.castShadow = true;
+    group.add(bowl);
+
+    // Toilet Seat Lid Rim
+    const seatMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.25 });
+    const seatGeom = createRoundedBoxGeometry(bowlW * 0.95, 0.022, bowlD * 0.95, bowlW * 0.36);
+    const seat = new THREE.Mesh(seatGeom, seatMat);
+    seat.position.set(0, bowlH + 0.011, d / 2 - bowlD / 2);
+    group.add(seat);
+
+  } else {
+    // Sink / Washbasin with Counter
+    const basinGeom = createRoundedBoxGeometry(w, h * 0.25, d, 0.03);
+    const basin = new THREE.Mesh(basinGeom, porcelainMat);
+    basin.position.set(0, h - h * 0.125, 0);
+    basin.castShadow = true;
+    group.add(basin);
+
+    // Chrome Faucet & Spout
+    const faucetGeom = new THREE.CylinderGeometry(0.012, 0.014, 0.12, 12);
+    const faucet = new THREE.Mesh(faucetGeom, chromeMat);
+    faucet.position.set(0, h + 0.06, -d / 2 + 0.08);
+    group.add(faucet);
+
+    const spoutGeom = new THREE.CylinderGeometry(0.01, 0.01, 0.07, 12);
+    spoutGeom.rotateX(Math.PI / 4);
+    const spout = new THREE.Mesh(spoutGeom, chromeMat);
+    spout.position.set(0, h + 0.1, -d / 2 + 0.11);
+    group.add(spout);
+  }
+
+  return group;
+}
+
+// ----------------------------------------------------
+// MODERN DESK WITH TASK STOOL
+// ----------------------------------------------------
+export function buildDeskMeshGroup(
+  wCm: number,
+  dCm: number,
+  hCm: number,
+  mat: THREE.Material
+): THREE.Group {
+  const group = new THREE.Group();
+  const w = Math.max(70, wCm) * CM;
+  const d = Math.max(45, dCm) * CM;
+  const h = Math.max(65, hCm) * CM;
+
+  const topThick = 0.032;
+  const steelMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.3 });
+
+  // 1. Desktop Slab
+  const topGeom = createRoundedBoxGeometry(w, topThick, d, 0.015);
+  const topMesh = new THREE.Mesh(topGeom, mat);
+  topMesh.position.set(0, h - topThick / 2, 0);
+  topMesh.castShadow = true;
+  group.add(topMesh);
+
+  // 2. Minimalist Steel Frame Legs
+  const legThick = 0.024;
+  const legH = h - topThick;
+  [-w / 2 + 0.06, w / 2 - 0.06].forEach((lx) => {
+    const post1 = new THREE.Mesh(new THREE.BoxGeometry(legThick, legH, legThick), steelMat);
+    post1.position.set(lx, legH / 2, -d / 2 + 0.04);
+    group.add(post1);
+
+    const post2 = new THREE.Mesh(new THREE.BoxGeometry(legThick, legH, legThick), steelMat);
+    post2.position.set(lx, legH / 2, d / 2 - 0.04);
+    group.add(post2);
+
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(legThick, legThick, d - 0.08), steelMat);
+    bar.position.set(lx, legThick / 2, 0);
+    group.add(bar);
+  });
+
+  // Stool / Task Seat
+  const stoolR = 0.16;
+  const stoolH = 0.44;
+  const seatMat = new THREE.MeshStandardMaterial({ color: 0x8b5cf6, roughness: 0.5 }); // Lavender velvet
+  const stoolSeat = new THREE.Mesh(new THREE.CylinderGeometry(stoolR, stoolR, 0.05, 24), seatMat);
+  stoolSeat.position.set(0, stoolH - 0.025, d * 0.28);
+  stoolSeat.castShadow = true;
+  group.add(stoolSeat);
+
+  const stoolStem = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, stoolH - 0.05, 16), steelMat);
+  stoolStem.position.set(0, (stoolH - 0.05) / 2, d * 0.28);
+  group.add(stoolStem);
+
+  const stoolBase = new THREE.Mesh(new THREE.CylinderGeometry(stoolR * 0.85, stoolR * 0.85, 0.014, 24), steelMat);
+  stoolBase.position.set(0, 0.007, d * 0.28);
+  group.add(stoolBase);
 
   return group;
 }
@@ -1510,6 +2642,11 @@ export function buildProceduralMeshGroup(
   if (archetype === 'wallDesign') return buildWallDesignMeshGroup(merged, material);
   if (archetype === 'decor') return buildInteriorDecorMeshGroup(merged, material);
   if (archetype === 'stairs' || archetype === 'staircase') return buildStairsMeshGroup(merged, material, partMats);
+  if (archetype === 'tvUnit' || archetype === 'tv') return buildTvUnitMeshGroup(widthCm, depthCm, heightCm, material, partMats);
+  if (archetype === 'radiator' || archetype === 'heater') return buildRadiatorMeshGroup(widthCm, depthCm, heightCm);
+  if (archetype === 'cooker' || archetype === 'stove') return buildCookerMeshGroup(widthCm, depthCm, heightCm);
+  if (archetype === 'bath' || archetype === 'toilet' || archetype === 'sink') return buildSanitaryMeshGroup(archetype, widthCm, depthCm, heightCm);
+  if (archetype === 'desk') return buildDeskMeshGroup(widthCm, depthCm, heightCm, material);
   if (archetype === 'primitives' && params.primitives) return buildCustomPrimitivesMeshGroup(params.primitives, material);
   
   const grp = new THREE.Group();

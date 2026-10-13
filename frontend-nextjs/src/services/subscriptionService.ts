@@ -104,6 +104,32 @@ export const PRICING_PLANS: Record<string, PlanDetail> = {
 };
 
 /**
+ * Fetches the live configured pricing plans from the server (/api/plans)
+ */
+export async function fetchActivePricingPlans(): Promise<Record<string, PlanDetail>> {
+  try {
+    const res = await fetch('/api/plans');
+    const data = await res.json();
+    if (res.ok && data.plans) {
+      for (const [key, val] of Object.entries(data.plans)) {
+        if (PRICING_PLANS[key]) {
+          PRICING_PLANS[key] = {
+            ...PRICING_PLANS[key],
+            ...(val as any),
+          };
+        } else {
+          PRICING_PLANS[key] = val as any;
+        }
+      }
+      return PRICING_PLANS;
+    }
+  } catch (err) {
+    console.warn('Failed to fetch dynamic pricing plans from server:', err);
+  }
+  return PRICING_PLANS;
+}
+
+/**
  * Checks if the user has an active pass (Trial, Monthly, or Yearly) that has not expired.
  * All features are fully accessible as long as the user has an active pass.
  */

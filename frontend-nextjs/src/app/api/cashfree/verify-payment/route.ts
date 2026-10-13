@@ -1,18 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { setUserPaymentStatus, recordTransaction } from '@/lib/paymentStore';
-
-const SERVER_PLAN_CONFIG: Record<
-  string,
-  { priceINR: number; durationDays: number; tier: 'TRIAL' | 'PRO'; name: string }
-> = {
-  trial_2days: { priceINR: 200, durationDays: 2, tier: 'TRIAL', name: '2-Day Studio Trial Pass' },
-  monthly: { priceINR: 999, durationDays: 30, tier: 'PRO', name: 'Monthly Studio Pass' },
-  yearly: { priceINR: 9590, durationDays: 365, tier: 'PRO', name: 'Annual Studio Pass (20% Off)' },
-  // Backward compatibility aliases
-  pro_monthly: { priceINR: 999, durationDays: 30, tier: 'PRO', name: 'Monthly Studio Pass' },
-  pro_yearly: { priceINR: 9590, durationDays: 365, tier: 'PRO', name: 'Annual Studio Pass (20% Off)' },
-};
+import { getPlanConfig, getActiveCashfreeCredentials } from '@/lib/paymentConfigStore';
 
 function generateSubscriptionToken(payload: object, secret: string): string {
   const payloadStr = Buffer.from(JSON.stringify(payload)).toString('base64');
@@ -32,34 +21,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const planConfig = SERVER_PLAN_CONFIG[planId];
+    const planConfig = getPlanConfig(planId);
     if (!planConfig) {
       return NextResponse.json(
-        { error: 'Invalid planId supplied' },
+        { error: `Invalid planId: ${planId} supplied` },
         { status: 400 }
       );
     }
 
-    const appId =
-      process.env.CASHFREE_APP_ID ||
-      process.env.NEXT_PUBLIC_CASHFREE_APP_ID ||
-      process.env.CASHFREE_CLIENT_ID;
-    const secretKey = process.env.CASHFREE_SECRET_KEY;
-    const env = (process.env.CASHFREE_ENVIRONMENT || 'SANDBOX').toUpperCase();
+    const { appId, secretKey, environment, isConfigured } = getActiveCashfreeCredentials();
     const subSecret = process.env.SUBSCRIPTION_JWT_SECRET || secretKey || 'sweethome-prod-sub-crypto-secret-key-2026';
-
-    const isLiveConfigured =
-      appId &&
-      secretKey &&
-      !appId.includes('TEST_CF_APP_ID') &&
-      !secretKey.includes('TEST_CF_SECRET_KEY') &&
-      !appId.includes('your_cashfree');
 
     const isSimulated = orderId.includes('_sim_') || orderId.startsWith('cf_sim_');
 
     // 1. Live Cashfree API Order Verification
     const baseUrl =
-      env === 'PRODUCTION'
+      environment === 'PRODUCTION'
         ? `https://api.cashfree.com/pg/orders/${orderId}`
         : `https://sandbox.cashfree.com/pg/orders/${orderId}`;
 

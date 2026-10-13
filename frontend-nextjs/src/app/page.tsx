@@ -65,6 +65,8 @@ import {
   DollarSign,
   Wand2,
   Crown,
+  Download,
+  Upload,
   ShieldCheck,
   AlertCircle,
 } from 'lucide-react';
@@ -72,6 +74,16 @@ import { CostEstimatorModal } from '../components/CostEstimatorModal';
 import { AiStylerModal } from '../components/AiStylerModal';
 import UpgradeModal from '../components/UpgradeModal';
 import { SubscriptionPaywall } from '../components/SubscriptionPaywall';
+import { ProjectManagerModal } from '../components/ProjectManagerModal';
+import { SelectDemoModal } from '../components/SelectDemoModal';
+import {
+  UserProjectSummary,
+  getUserProjects,
+  saveUserProject,
+  deleteUserProject,
+  exportPlanAsJson,
+  parseAndValidateProjectJson,
+} from '../services/projectService';
 import {
   canAccessFeature,
   getUserSubscriptionTier,
@@ -196,6 +208,23 @@ export default function HomeStudioPage() {
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState<boolean>(false);
   const [upgradeHighlight, setUpgradeHighlight] = useState<string | undefined>(undefined);
 
+  // User Project Persistence & Starter Houses Modal
+  const [isProjectManagerOpen, setIsProjectManagerOpen] = useState<boolean>(false);
+  const [projectManagerTab, setProjectManagerTab] = useState<'projects' | 'new' | 'import'>('projects');
+  const [userProjects, setUserProjects] = useState<UserProjectSummary[]>([]);
+  const [isSelectDemoModalOpen, setIsSelectDemoModalOpen] = useState<boolean>(false);
+  const directImportFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Ask initially with "Select a demo" dialog on first session load
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const alreadyPicked = sessionStorage.getItem('sweethome_initial_demo_selected');
+      if (!alreadyPicked) {
+        setIsSelectDemoModalOpen(true);
+      }
+    }
+  }, []);
+
   const handleOpenUpgrade = useCallback((highlight?: string) => {
     setUpgradeHighlight(highlight);
     setIsUpgradeModalOpen(true);
@@ -302,6 +331,11 @@ export default function HomeStudioPage() {
       setPlan(newPlan);
       commitSnapshot(newPlan);
 
+      if (currentUserRef.current) {
+        const updatedList = saveUserProject(currentUserRef.current.id, newPlan);
+        setUserProjects(updatedList);
+      }
+
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
       setCloudSyncStatus('saving');
 
@@ -356,10 +390,15 @@ export default function HomeStudioPage() {
         loadedUser = u;
         setCurrentUser(u);
         setUserRole(u.role);
+        const projs = getUserProjects(u.id);
+        setUserProjects(projs);
         if (u.role === 'ADMIN') {
           setActiveView('dashboard');
         } else {
           setActiveView('split');
+          if (projs.length > 0) {
+            setPlan(projs[0].plan);
+          }
         }
       } catch (e) {}
     }
@@ -456,12 +495,19 @@ export default function HomeStudioPage() {
     setUserRole(user.role);
     localStorage.setItem('sweethome_current_user', JSON.stringify(user));
     refreshUserPaymentStatus(user);
+    const projs = getUserProjects(user.id);
+    setUserProjects(projs);
+
     if (user.role === 'ADMIN') {
       setActiveView('dashboard');
-    } else if (user.role === 'CLIENT') {
-      setActiveView('customer');
     } else {
       setActiveView('split');
+      if (projs.length > 0) {
+        setPlan(projs[0].plan);
+      } else {
+        setProjectManagerTab('new');
+        setIsProjectManagerOpen(true);
+      }
     }
   };
 
@@ -532,6 +578,10 @@ export default function HomeStudioPage() {
 
   const handleSave = async () => {
     setIsSaving(true);
+    if (currentUser) {
+      const updatedList = saveUserProject(currentUser.id, plan);
+      setUserProjects(updatedList);
+    }
     try {
       await savePlanToBackend(plan);
       setCloudSyncStatus('synced');
@@ -541,6 +591,75 @@ export default function HomeStudioPage() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleOpenUserProject = (selectedPlan: HomePlan) => {
+    setPlan(selectedPlan);
+    historyRef.current = [JSON.parse(JSON.stringify(selectedPlan))];
+    historyIndexRef.current = 0;
+    setCanUndo(false);
+    setCanRedo(false);
+    setActiveView('split');
+  };
+
+  const handleSaveNewUserProject = (newPlan: HomePlan) => {
+    if (currentUser) {
+      const updatedList = saveUserProject(currentUser.id, newPlan);
+      setUserProjects(updatedList);
+    }
+    setPlan(newPlan);
+    historyRef.current = [JSON.parse(JSON.stringify(newPlan))];
+    historyIndexRef.current = 0;
+    setCanUndo(false);
+    setCanRedo(false);
+    setActiveView('split');
+  };
+
+  const handleDeleteUserProject = (projectId: string) => {
+    if (currentUser) {
+      const updatedList = deleteUserProject(currentUser.id, projectId);
+      setUserProjects(updatedList);
+    }
+  };
+
+  const handleDirectImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const text = ev.target?.result as string;
+        const validatedPlan = parseAndValidateProjectJson(text);
+        if (currentUser) {
+          validatedPlan.id = `plan_${currentUser.id}_${Date.now()}`;
+          const updatedList = saveUserProject(currentUser.id, validatedPlan);
+          setUserProjects(updatedList);
+        }
+        setPlan(validatedPlan);
+        commitSnapshot(validatedPlan);
+        setActiveView('split');
+        alert(`✓ Project "${validatedPlan.name}" imported successfully! You can now continue designing.`);
+      } catch (err: any) {
+        alert(err.message || 'Failed to parse project file. Please provide a valid .sweethome.json file.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleSelectDemoPlan = (selectedPlan: HomePlan) => {
+    if (currentUser) {
+      const updatedList = saveUserProject(currentUser.id, selectedPlan);
+      setUserProjects(updatedList);
+    }
+    setPlan(selectedPlan);
+    historyRef.current = [JSON.parse(JSON.stringify(selectedPlan))];
+    historyIndexRef.current = 0;
+    setCanUndo(false);
+    setCanRedo(false);
+    setActiveView('split');
+    sessionStorage.setItem('sweethome_initial_demo_selected', 'true');
+    setIsSelectDemoModalOpen(false);
   };
 
   const handleAddCustomItem = async (newItem: CatalogItem, autoPlaceInScene?: boolean) => {
@@ -728,6 +847,15 @@ export default function HomeStudioPage() {
         currentUser={currentUser}
         onUserUpdated={(updated) => {
           setCurrentUser(updated);
+          setActiveView('split');
+          const projs = getUserProjects(updated.id);
+          setUserProjects(projs);
+          if (projs.length === 0) {
+            setProjectManagerTab('new');
+            setIsProjectManagerOpen(true);
+          } else {
+            setPlan(projs[0].plan);
+          }
         }}
         onLogout={handleLogout}
         onRefreshStatus={() => refreshUserPaymentStatus(currentUser)}
@@ -735,6 +863,11 @@ export default function HomeStudioPage() {
         isRefreshing={isRefreshingStatus}
       />
     );
+  }
+
+  // Guard: If regular user somehow has dashboard as activeView, redirect immediately to Design Studio
+  if (currentUser.role !== 'ADMIN' && activeView === 'dashboard') {
+    setActiveView('split');
   }
 
   const isDark = theme === 'dark';
@@ -837,18 +970,21 @@ export default function HomeStudioPage() {
         {/* VIEW 3: Interactive Design Studio (Split, 2D Blueprint, 3D WebGL) */}
         {(activeView === 'split' || activeView === '2d' || activeView === '3d') && (
           <div className="flex-1 flex flex-col h-full overflow-hidden">
-            {/* Beautiful Scattered Pro Design Studio Command Center */}
-            <div className={`flex-shrink-0 px-4 py-2 border-b flex items-center justify-between gap-2 select-none z-20 backdrop-blur-md ${
-              isDark ? 'bg-[#0b1222]/90 border-slate-800/90 text-slate-200' : 'bg-white/95 border-slate-200 text-slate-800 shadow-xs'
-            }`}>
-              {/* Cluster 1: View Mode Pill Switcher */}
-              <div className="flex items-center gap-1.5">
-                <div className={`flex items-center p-1 rounded-xl border ${
-                  isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100 border-slate-200'
+            <div
+              className={`flex-shrink-0 px-4 py-1.5 border-b flex items-center justify-between gap-3 select-none z-20 backdrop-blur-md overflow-x-auto whitespace-nowrap no-scrollbar scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
+                isDark ? 'bg-[#0b1222]/95 border-slate-800 text-slate-200' : 'bg-white/95 border-slate-200/90 text-slate-800 shadow-xs'
+              }`}
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {/* Left Group: Viewport Modes + Architecture Floor Levels */}
+              <div className="flex items-center gap-2.5 shrink-0">
+                {/* 1. View Mode Segmented Switcher */}
+                <div className={`flex items-center p-0.5 rounded-xl border ${
+                  isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100/90 border-slate-200/80'
                 }`}>
                   <button
                     onClick={() => setActiveView('2d')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
                       activeView === '2d'
                         ? 'bg-indigo-600 text-white shadow-xs'
                         : isDark
@@ -858,13 +994,16 @@ export default function HomeStudioPage() {
                     title="2D CAD Architectural Floor Plan"
                   >
                     <span>📐</span>
-                    <span>2D Plan</span>
+                    <span className="hidden sm:inline">2D Plan</span>
                   </button>
 
                   <button
-                    onClick={() => setActiveView('3d')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-                      activeView === '3d'
+                    onClick={() => {
+                      setActiveView('3d');
+                      setCameraMode3D('aerial');
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                      activeView === '3d' && cameraMode3D !== 'visitor'
                         ? 'bg-indigo-600 text-white shadow-xs'
                         : isDark
                         ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -873,12 +1012,12 @@ export default function HomeStudioPage() {
                     title="3D WebGL Real-time Orbit Viewport"
                   >
                     <span>🧊</span>
-                    <span>3D View</span>
+                    <span className="hidden sm:inline">3D View</span>
                   </button>
 
                   <button
                     onClick={() => setActiveView('split')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
                       activeView === 'split'
                         ? 'bg-indigo-600 text-white shadow-xs'
                         : isDark
@@ -888,125 +1027,135 @@ export default function HomeStudioPage() {
                     title="Simultaneous 2D & 3D Split Screen"
                   >
                     <Columns className="w-3.5 h-3.5" />
-                    <span>Split View</span>
+                    <span>Split</span>
                   </button>
 
                   <button
-                    onClick={() => setActiveView('customer')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-                      isDark
-                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                    }`}
-                    title="Interactive Client Walkthrough & Room Presentation"
-                  >
-                    <span>🚶</span>
-                    <span>Tour</span>
-                  </button>
-                </div>
-
-                {/* Quick Tour Walk Mode / Client Pointer Toggle */}
-                <button
-                  onClick={() => setCameraMode3D((prev) => (prev === 'visitor' ? 'aerial' : 'visitor'))}
-                  className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer border shadow-2xs ${
-                    cameraMode3D === 'visitor'
-                      ? 'bg-sky-500/15 border-sky-400 text-sky-400 font-bold shadow-xs ring-1 ring-sky-400/40'
-                      : isDark
-                      ? 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                      : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                  title={cameraMode3D === 'visitor' ? 'Tour Mode Active: Client View Pointer Visible (Click to Disable)' : 'Enable Tour Mode to Display Client View Pointer'}
-                >
-                  <span className={`w-2 h-2 rounded-full ${cameraMode3D === 'visitor' ? 'bg-sky-400 shadow-sm shadow-sky-400/80 animate-pulse' : 'bg-slate-400'}`} />
-                  <span>{cameraMode3D === 'visitor' ? 'Tour Pointer Active' : 'Tour Pointer'}</span>
-                </button>
-              </div>
-
-              {/* Cluster 2: Multi-Floor & Elevation Navigator */}
-              <div className={`flex items-center p-1 rounded-xl border ${
-                isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100 border-slate-200'
-              }`}>
-                <div className="flex items-center gap-1 px-1">
-                  <Building className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                  <span className="text-[11px] font-bold text-slate-400 mr-1 hidden sm:inline">Level:</span>
-                </div>
-
-                {(plan.floors || [
-                  { level: 0, name: 'Ground Floor' },
-                  { level: 1, name: '1st Floor' }
-                ]).map((fl) => (
-                  <button
-                    key={fl.level}
                     onClick={() => {
-                      setActiveFloor(fl.level);
-                      setFloorMode('single');
+                      setActiveView('3d');
+                      setCameraMode3D('visitor');
                     }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
-                      floorMode !== 'sideBySide' && activeFloor === fl.level
-                        ? 'bg-indigo-600 text-white shadow-xs'
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                      activeView === '3d' && cameraMode3D === 'visitor'
+                        ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
                         : isDark
                         ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
                     }`}
+                    title="Interactive 3D First-Person Tour Walkthrough (PUBG Controls, Interactive Doors & Adding Items)"
                   >
-                    <span>{fl.level === 0 ? 'Ground' : fl.level === 1 ? '1st Fl' : `L${fl.level}`}</span>
+                    <span>🚶</span>
+                    <span className="hidden sm:inline">Tour</span>
                   </button>
-                ))}
+                </div>
 
-                {/* Add New Floor Button */}
-                <button
-                  onClick={() => {
-                    if (!canAccessFeature(currentUser, 'multi_floor')) {
-                      handleOpenUpgrade('Multi-Floor Architecture & Custom Levels');
-                      return;
-                    }
-                    const currentFloors = plan.floors || [
-                      { level: 0, name: 'Ground Floor', elevation: 0, height: 280 },
-                      { level: 1, name: '1st Floor', elevation: 280, height: 280 },
-                    ];
-                    const nextLevel = Math.max(...currentFloors.map((f) => f.level), 0) + 1;
-                    const nextFloor: FloorLevel = {
-                      level: nextLevel,
-                      name: `Level ${nextLevel}`,
-                      elevation: nextLevel * 280,
-                      height: 280,
-                    };
-                    const updatedPlan = {
-                      ...plan,
-                      floors: [...currentFloors, nextFloor],
-                    };
-                    handleUpdatePlan(updatedPlan);
-                    setActiveFloor(nextLevel);
-                  }}
-                  className={`px-2 py-1 rounded-lg text-xs font-semibold transition border ml-0.5 cursor-pointer flex items-center gap-1 ${
-                    isDark
-                      ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
-                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                  }`}
-                  title="Add Architectural Floor Level"
-                >
-                  <Plus className="w-3 h-3 text-indigo-400" />
-                  <span className="hidden xl:inline">Add</span>
-                </button>
+                {/* Vertical Divider */}
+                <div className={`w-[1px] h-6 shrink-0 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
 
-                <button
-                  onClick={() => setFloorMode(floorMode === 'sideBySide' ? 'single' : 'sideBySide')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition border ml-1 cursor-pointer ${
-                    floorMode === 'sideBySide'
-                      ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
-                      : isDark
-                      ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                  }`}
-                  title="Display all floors side-by-side"
-                >
-                  🔲 All Levels
-                </button>
+                {/* 2. Architecture Multi-Floor & Elevation Navigator */}
+                <div className={`flex items-center p-0.5 rounded-xl border ${
+                  isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100/90 border-slate-200/80'
+                }`}>
+                  <div className="flex items-center gap-1 px-1.5">
+                    <Building className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span className="text-[11px] font-bold text-slate-400 hidden xl:inline">Level:</span>
+                  </div>
+
+                  {(plan.floors || [
+                    { level: 0, name: 'Ground Floor' },
+                    { level: 1, name: '1st Floor' }
+                  ]).map((fl) => (
+                    <button
+                      key={fl.level}
+                      onClick={() => {
+                        setActiveFloor(fl.level);
+                        setFloorMode('single');
+                      }}
+                      className={`px-2 py-1 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                        floorMode !== 'sideBySide' && activeFloor === fl.level
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : isDark
+                          ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                      }`}
+                    >
+                      <span>{fl.level === 0 ? 'Ground' : fl.level === 1 ? '1st Fl' : `L${fl.level}`}</span>
+                    </button>
+                  ))}
+
+                  {/* Add New Floor Button */}
+                  <button
+                    onClick={() => {
+                      if (!canAccessFeature(currentUser, 'multi_floor')) {
+                        handleOpenUpgrade('Multi-Floor Architecture & Custom Levels');
+                        return;
+                      }
+                      const currentFloors = plan.floors || [
+                        { level: 0, name: 'Ground Floor', elevation: 0, height: 280 },
+                        { level: 1, name: '1st Floor', elevation: 280, height: 280 },
+                      ];
+                      const nextLevel = Math.max(...currentFloors.map((f) => f.level), 0) + 1;
+                      const nextFloor: FloorLevel = {
+                        level: nextLevel,
+                        name: `Level ${nextLevel}`,
+                        elevation: nextLevel * 280,
+                        height: 280,
+                      };
+                      const updatedPlan = {
+                        ...plan,
+                        floors: [...currentFloors, nextFloor],
+                      };
+                      handleUpdatePlan(updatedPlan);
+                      setActiveFloor(nextLevel);
+                    }}
+                    className={`px-2 py-1 rounded-lg text-xs font-semibold transition border ml-0.5 cursor-pointer flex items-center gap-1 ${
+                      isDark
+                        ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                    }`}
+                    title="Add Architectural Floor Level"
+                  >
+                    <Plus className="w-3 h-3 text-indigo-400" />
+                    <span className="hidden 2xl:inline">Add</span>
+                  </button>
+
+                  {/* 3D Multi-Floor Stacking Modes */}
+                  <div className="flex items-center gap-1 ml-1 pl-1 border-l border-slate-300 dark:border-slate-800">
+                    <button
+                      onClick={() => setFloorMode(floorMode === 'stacked' ? 'single' : 'stacked')}
+                      className={`px-2 py-1 rounded-lg text-xs font-semibold transition border cursor-pointer flex items-center gap-1 ${
+                        floorMode === 'stacked'
+                          ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
+                          : isDark
+                          ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                      }`}
+                      title="Duplex Stacked Mode: Attach next floor directly on top of lower floor with stairwell opening"
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Duplex</span>
+                    </button>
+
+                    <button
+                      onClick={() => setFloorMode(floorMode === 'sideBySide' ? 'single' : 'sideBySide')}
+                      className={`px-2 py-1 rounded-lg text-xs font-semibold transition border cursor-pointer ${
+                        floorMode === 'sideBySide'
+                          ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
+                          : isDark
+                          ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                      }`}
+                      title="Display all floors side-by-side"
+                    >
+                      Side-by-Side
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              {/* Cluster 3: History, Calibration & Tools */}
-              <div className="flex items-center gap-1.5">
-                {/* Undo / Redo */}
+              {/* Right Group: History, Pro CAD Tools & Cloud Project Actions */}
+              <div className="flex items-center gap-2 shrink-0">
+                {/* 3. History Undo / Redo */}
                 <div className={`flex items-center p-0.5 rounded-xl border ${
                   isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
                 }`}>
@@ -1040,167 +1189,215 @@ export default function HomeStudioPage() {
                   </button>
                 </div>
 
-                {/* 3D Catalog & Inspector Toggle Button */}
-                <button
-                  onClick={() => setIsInspectorOpen(!isInspectorOpen)}
-                  className={`px-2.5 py-1.5 rounded-md border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
-                    isInspectorOpen
-                      ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
-                      : isDark
-                      ? 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-800'
-                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-                  }`}
-                  title="Toggle 3D Catalog & Inspector Panel"
-                >
-                  <Box className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Catalog / Inspector</span>
-                </button>
+                {/* Vertical Divider */}
+                <div className={`w-[1px] h-6 shrink-0 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
 
-                {/* Blueprint Scan Importer */}
-                <button
-                  onClick={() => setIsBlueprintModalOpen(true)}
-                  className={`p-1.5 rounded-xl border transition flex items-center gap-1 text-xs font-semibold cursor-pointer ${
-                    isDark
-                      ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
-                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-                  }`}
-                  title="Import Blueprint Scan Overlay"
-                >
-                  <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
-                  <span className="hidden md:inline">Blueprint</span>
-                </button>
-
-                {/* Grid Preferences */}
-                <button
-                  onClick={() => setIsPreferencesModalOpen(true)}
-                  className={`p-1.5 rounded-xl border transition cursor-pointer ${
-                    isDark
-                      ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
-                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-                  }`}
-                  title="Grid & Unit Preferences"
-                >
-                  <Sliders className="w-3.5 h-3.5" />
-                </button>
-
-                {/* Cost Estimator & BOM Button */}
-                <button
-                  onClick={() => setIsCostEstimatorModalOpen(true)}
-                  className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
-                    isDark
-                      ? 'bg-slate-900 hover:bg-slate-800 text-emerald-300 border-emerald-500/30'
-                      : 'bg-white hover:bg-slate-100 text-emerald-700 border-emerald-300 shadow-2xs'
-                  }`}
-                  title="Bill of Materials (BOM) & Project Cost Estimator"
-                >
-                  <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
-                  <span className="hidden lg:inline">Cost / BOM</span>
-                </button>
-
-                {/* AI Room Styler Button */}
-                <button
-                  onClick={() => setIsAiStylerModalOpen(true)}
-                  className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
-                    isDark
-                      ? 'bg-slate-900 hover:bg-slate-800 text-fuchsia-300 border-fuchsia-500/30'
-                      : 'bg-white hover:bg-slate-100 text-fuchsia-700 border-fuchsia-300 shadow-2xs'
-                  }`}
-                  title="AI Room Styler & Color Theme Preset Generator"
-                >
-                  <Wand2 className="w-3.5 h-3.5 text-fuchsia-400" />
-                  <span className="hidden lg:inline">AI Styler</span>
-                </button>
-
-                {/* Collision Warning Indicator */}
-                {collisionReport.totalCollisions > 0 && (
-                  <span
-                    className="px-2 py-1 rounded-xl text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse flex items-center gap-1"
-                    title={`${collisionReport.totalCollisions} collision(s) detected`}
-                  >
-                    <AlertTriangle className="w-3 h-3 text-rose-400" />
-                    <span>{collisionReport.totalCollisions} Overlap</span>
-                  </span>
-                )}
-              </div>
-
-              {/* Cluster 4: Theme Toggle & Cloud Actions */}
-              <div className="flex items-center gap-1.5">
-                {/* Theme Switcher Button */}
-                <button
-                  onClick={handleToggleTheme}
-                  className={`p-1.5 rounded-xl border transition flex items-center gap-1 text-xs font-semibold cursor-pointer ${
-                    isDark
-                      ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
-                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-                  }`}
-                  title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
-                >
-                  {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-500" />}
-                </button>
-
-                {/* Projects Switcher */}
-                <button
-                  onClick={() => setIsClientSelectModalOpen(true)}
-                  className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1 text-xs font-semibold cursor-pointer ${
-                    isDark
-                      ? 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-800'
-                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-                  }`}
-                  title="Switch Client Project Plan"
-                >
-                  <FolderOpen className="w-3.5 h-3.5 text-indigo-400" />
-                  <span className="hidden sm:inline">Projects</span>
-                </button>
-
-                {/* Save Button */}
-                <button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer ${
-                    isDark
-                      ? 'bg-slate-900 hover:bg-slate-800 text-indigo-300 border-indigo-500/30'
-                      : 'bg-white hover:bg-slate-100 text-indigo-700 border-indigo-300 shadow-2xs'
-                  }`}
-                  title="Save plan to backend"
-                >
-                  <Save className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>{isSaving ? 'Saving...' : 'Save'}</span>
-                </button>
-
-                {/* Share Button */}
-                <button
-                  onClick={() => setIsShareModalOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
-                  title="Share 3D Client Presentation Link"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  <span>Share</span>
-                </button>
-
-                {/* Pro Status or Upgrade Trigger with Razorpay */}
-                {isProOrAdmin ? (
+                {/* 4. Pro CAD & Smart Design Tools */}
+                <div className="flex items-center gap-1.5">
+                  {/* 3D Catalog & Inspector Toggle */}
                   <button
-                    onClick={() => handleOpenUpgrade()}
-                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                      isDark
-                        ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
-                        : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
+                    onClick={() => setIsInspectorOpen(!isInspectorOpen)}
+                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
+                      isInspectorOpen
+                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
+                        : isDark
+                        ? 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-800'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
                     }`}
-                    title="Your Account has Pro / Enterprise Access"
+                    title="Toggle 3D Catalog & Inspector Panel"
                   >
-                    <Crown className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="hidden sm:inline">{remainingPassText}</span>
+                    <Box className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Catalog</span>
                   </button>
-                ) : (
+
+                  {/* Blueprint Scan Importer */}
                   <button
-                    onClick={() => handleOpenUpgrade()}
-                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-blue-500/25 transition active:scale-95 flex items-center gap-1.5 cursor-pointer animate-pulse"
-                    title="Get 2-Day Trial (₹200), Monthly (₹999), or Annual Pass"
+                    onClick={() => setIsBlueprintModalOpen(true)}
+                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+                    }`}
+                    title="Import Blueprint Scan Overlay"
                   >
-                    <Crown className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Get Pass</span>
+                    <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="hidden xl:inline">Blueprint</span>
                   </button>
-                )}
+
+                  {/* Cost Estimator & BOM */}
+                  <button
+                    onClick={() => setIsCostEstimatorModalOpen(true)}
+                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-900 hover:bg-slate-800 text-emerald-300 border-emerald-500/30'
+                        : 'bg-white hover:bg-slate-100 text-emerald-700 border-emerald-300 shadow-2xs'
+                    }`}
+                    title="Bill of Materials (BOM) & Project Cost Estimator"
+                  >
+                    <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="hidden xl:inline">Cost / BOM</span>
+                  </button>
+
+                  {/* AI Room Styler */}
+                  <button
+                    onClick={() => setIsAiStylerModalOpen(true)}
+                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-900 hover:bg-slate-800 text-fuchsia-300 border-fuchsia-500/30'
+                        : 'bg-white hover:bg-slate-100 text-fuchsia-700 border-fuchsia-300 shadow-2xs'
+                    }`}
+                    title="AI Room Styler & Color Theme Generator"
+                  >
+                    <Wand2 className="w-3.5 h-3.5 text-fuchsia-400" />
+                    <span className="hidden xl:inline">AI Styler</span>
+                  </button>
+
+                  {/* Grid Preferences */}
+                  <button
+                    onClick={() => setIsPreferencesModalOpen(true)}
+                    className={`p-1.5 rounded-xl border transition cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+                    }`}
+                    title="Grid & Unit Preferences"
+                  >
+                    <Sliders className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+
+                  {/* Collision Warning Badge (Only when detected) */}
+                  {collisionReport.totalCollisions > 0 && (
+                    <span
+                      className="px-2 py-1 rounded-xl text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse flex items-center gap-1"
+                      title={`${collisionReport.totalCollisions} collision(s) detected`}
+                    >
+                      <AlertTriangle className="w-3 h-3 text-rose-400" />
+                      <span>{collisionReport.totalCollisions} Overlap</span>
+                    </span>
+                  )}
+                </div>
+
+                {/* Vertical Divider */}
+                <div className={`w-[1px] h-6 shrink-0 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+
+                {/* 5. Projects & Cloud Actions */}
+                <div className="flex items-center gap-1.5">
+                  {/* Projects Switcher */}
+                  <button
+                    onClick={() => {
+                      setProjectManagerTab('projects');
+                      setIsProjectManagerOpen(true);
+                    }}
+                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1 text-xs font-semibold cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-800'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+                    }`}
+                    title="My Saved Projects & Pre-defined Starter Houses"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="hidden sm:inline">Projects ({userProjects.length})</span>
+                  </button>
+
+                  {/* New Starter Project (Sweet Home 3D Demos) */}
+                  <button
+                    onClick={() => setIsSelectDemoModalOpen(true)}
+                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1 text-xs font-semibold cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-900 hover:bg-slate-800 text-emerald-300 border-emerald-500/30'
+                        : 'bg-white hover:bg-slate-100 text-emerald-700 border-emerald-300 shadow-2xs'
+                    }`}
+                    title="Select a Demo (Sweet Home 3D Starter Houses)"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="hidden md:inline">New (Demos)</span>
+                  </button>
+
+                  {/* Export / Download Project JSON */}
+                  <button
+                    onClick={() => exportPlanAsJson(plan, currentUser)}
+                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1 text-xs font-semibold cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-900 hover:bg-slate-800 text-sky-300 border-sky-500/30'
+                        : 'bg-white hover:bg-slate-100 text-sky-700 border-sky-300 shadow-2xs'
+                    }`}
+                    title="Download Project as .sweethome.json file"
+                  >
+                    <Download className="w-3.5 h-3.5 text-sky-400" />
+                    <span className="hidden lg:inline">Download</span>
+                  </button>
+
+                  {/* Import / Upload Project JSON */}
+                  <button
+                    onClick={() => directImportFileInputRef.current?.click()}
+                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1 text-xs font-semibold cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-900 hover:bg-slate-800 text-amber-300 border-amber-500/30'
+                        : 'bg-white hover:bg-slate-100 text-amber-700 border-amber-300 shadow-2xs'
+                    }`}
+                    title="Import .sweethome.json and continue designing"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="hidden lg:inline">Import</span>
+                  </button>
+                  <input
+                    ref={directImportFileInputRef}
+                    type="file"
+                    accept=".json,.sweethome"
+                    onChange={handleDirectImportFile}
+                    className="hidden"
+                  />
+
+                  {/* Save Button */}
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-900 hover:bg-slate-800 text-indigo-300 border-indigo-500/30'
+                        : 'bg-white hover:bg-slate-100 text-indigo-700 border-indigo-300 shadow-2xs'
+                    }`}
+                    title="Save plan to cloud and local storage"
+                  >
+                    <Save className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                  </button>
+
+                  {/* Share Presentation Link */}
+                  <button
+                    onClick={() => setIsShareModalOpen(true)}
+                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white text-xs font-bold shadow-sm transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                    title="Share 3D Client Presentation Link"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>Share</span>
+                  </button>
+
+                  {/* Pro Status or Upgrade Trigger */}
+                  {isProOrAdmin ? (
+                    <button
+                      onClick={() => handleOpenUpgrade()}
+                      className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        isDark
+                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
+                          : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
+                      }`}
+                      title="Your Account has Pro / Enterprise Access"
+                    >
+                      <Crown className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="hidden lg:inline">{remainingPassText}</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleOpenUpgrade()}
+                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-sm transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                      title="Get Pro Studio Pass"
+                    >
+                      <Crown className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Pass</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1425,6 +1622,33 @@ export default function HomeStudioPage() {
           setCurrentUser(updated);
         }}
         initialFeatureHighlight={upgradeHighlight}
+      />
+
+      {/* Project Center Modal: User Saved Projects, Pre-defined Starter Houses & JSON Import/Export */}
+      <ProjectManagerModal
+        isOpen={isProjectManagerOpen}
+        onClose={() => setIsProjectManagerOpen(false)}
+        currentUser={currentUser}
+        currentPlan={plan}
+        userProjects={userProjects}
+        onOpenProject={handleOpenUserProject}
+        onSaveNewProject={handleSaveNewUserProject}
+        onDeleteProject={handleDeleteUserProject}
+        theme={theme}
+        defaultTab={projectManagerTab}
+      />
+
+      {/* Sweet Home 3D "Select a demo" Onboarding Dialog */}
+      <SelectDemoModal
+        isOpen={isSelectDemoModalOpen}
+        onClose={() => setIsSelectDemoModalOpen(false)}
+        onSelectDemo={handleSelectDemoPlan}
+        onOpenExistingProjects={() => {
+          setProjectManagerTab('projects');
+          setIsProjectManagerOpen(true);
+        }}
+        currentUser={currentUser}
+        theme={theme}
       />
     </div>
   );

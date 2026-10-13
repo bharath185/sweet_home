@@ -408,6 +408,82 @@ export function getProceduralTexture(textureType: string, tintHex?: string): THR
       break;
     }
 
+    case 'carpet_plush':
+    case 'carpet_woven': {
+      const baseColor = tintHex || '#0f766e';
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      // Delicate woven micro-grid
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.04)';
+      for (let y = 0; y < 1024; y += 4) {
+        ctx.fillRect(0, y, 1024, 1);
+      }
+      for (let x = 0; x < 1024; x += 4) {
+        ctx.fillRect(x, 0, 1, 1024);
+      }
+
+      // Organic tufted fiber stipples (creates soft plush carpet pile look)
+      for (let i = 0; i < 22000; i++) {
+        const nx = Math.random() * 1024;
+        const ny = Math.random() * 1024;
+        const isLight = Math.random() > 0.45;
+        ctx.fillStyle = isLight ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.08)';
+        ctx.fillRect(nx, ny, 2, 2);
+      }
+      break;
+    }
+
+    case 'hardwood_plank': {
+      ctx.fillStyle = tintHex || '#c89666';
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      const plankHeight = 72;
+      const plankLen = 420;
+      for (let y = 0; y < 1024; y += plankHeight) {
+        // Horizontal plank seam & bevel
+        ctx.fillStyle = 'rgba(45, 25, 12, 0.4)';
+        ctx.fillRect(0, y, 1024, 2.5);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+        ctx.fillRect(0, y + 2.5, 1024, 1.2);
+
+        // Staggered vertical end-joints
+        const rowIdx = Math.floor(y / plankHeight);
+        const shiftX = (rowIdx % 3) * (plankLen / 3);
+        for (let x = -plankLen; x < 1024 + plankLen; x += plankLen) {
+          const jointX = x + shiftX;
+          if (jointX >= 0 && jointX < 1024) {
+            ctx.fillStyle = 'rgba(45, 25, 12, 0.35)';
+            ctx.fillRect(jointX, y, 2.5, plankHeight);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+            ctx.fillRect(jointX + 2.5, y, 1.2, plankHeight);
+          }
+        }
+
+        // Natural wood grain filaments
+        ctx.fillStyle = 'rgba(70, 40, 20, 0.07)';
+        for (let g = 0; g < 7; g++) {
+          const gy = y + 8 + g * 9;
+          ctx.fillRect(0, gy, 1024, 1.2);
+        }
+      }
+      break;
+    }
+
+    case 'matte_wall_paint': {
+      ctx.fillStyle = tintHex || '#f8fafc';
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      // Fine architectural eggshell roller stippling
+      for (let i = 0; i < 28000; i++) {
+        const nx = Math.random() * 1024;
+        const ny = Math.random() * 1024;
+        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.035)';
+        ctx.fillRect(nx, ny, 1.5, 1.5);
+      }
+      break;
+    }
+
     default: {
       ctx.fillStyle = tintHex || '#ffffff';
       ctx.fillRect(0, 0, 1024, 1024);
