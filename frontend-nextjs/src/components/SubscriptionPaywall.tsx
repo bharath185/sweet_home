@@ -42,6 +42,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
   const [pricingPlans, setPricingPlans] = useState<Record<string, PlanDetail>>(PRICING_PLANS);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [activePolicy, setActivePolicy] = useState<'terms' | 'privacy' | 'refund' | 'contact' | null>(null);
 
   useEffect(() => {
     fetchActivePricingPlans().then((live) => {
@@ -411,8 +412,116 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
             <span>•</span>
             <span>Instant Activation</span>
           </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[10px] text-slate-500">
+            <button
+              type="button"
+              onClick={() => setActivePolicy('terms')}
+              className="hover:text-indigo-400 transition underline underline-offset-2"
+            >
+              Terms & Conditions
+            </button>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => setActivePolicy('privacy')}
+              className="hover:text-indigo-400 transition underline underline-offset-2"
+            >
+              Privacy Policy
+            </button>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => setActivePolicy('refund')}
+              className="hover:text-indigo-400 transition underline underline-offset-2"
+            >
+              Refund Policy
+            </button>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => setActivePolicy('contact')}
+              className="hover:text-indigo-400 transition underline underline-offset-2"
+            >
+              Contact Us
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Compliance Policy Modal */}
+      {activePolicy && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 text-slate-200 shadow-2xl relative max-h-[85vh] overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => setActivePolicy(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white text-lg font-bold"
+            >
+              ✕
+            </button>
+
+            {activePolicy === 'terms' && (
+              <div>
+                <h3 className="text-base font-bold text-white mb-2">Terms & Conditions</h3>
+                <p className="text-xs text-slate-300 leading-relaxed mb-2">
+                  Welcome to SweetHome 3D Studio (prigenix.com). By purchasing an access pass (Trial, Monthly, or Annual), you receive a personal, non-exclusive license to utilize our cloud-based 3D architectural blueprinting, interior layout planner, and high-resolution rendering tools during your subscription period.
+                </p>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  All floor plans and exports generated are owned by you. Subscriptions do not renew automatically; your pass simply expires at the end of the selected duration unless manually renewed.
+                </p>
+              </div>
+            )}
+
+            {activePolicy === 'privacy' && (
+              <div>
+                <h3 className="text-base font-bold text-white mb-2">Privacy Policy</h3>
+                <p className="text-xs text-slate-300 leading-relaxed mb-2">
+                  We respect your data privacy. SweetHome 3D Studio collects only your name and email address for account authentication and licensing pass verification.
+                </p>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Payment processing is securely handled end-to-end by Cashfree Payments. We do not store your credit/debit card numbers or UPI MPINs on our servers.
+                </p>
+              </div>
+            )}
+
+            {activePolicy === 'refund' && (
+              <div>
+                <h3 className="text-base font-bold text-white mb-2">Refund & Cancellation Policy</h3>
+                <p className="text-xs text-slate-300 leading-relaxed mb-2">
+                  We want you to be completely satisfied with SweetHome 3D Studio. If you experience technical errors or the software does not work as advertised within 48 hours of purchase, you may request a full refund.
+                </p>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  To request a refund, please email our support team with your Cashfree Order ID. Refunds will be processed back to the original payment source within 5-7 business days.
+                </p>
+              </div>
+            )}
+
+            {activePolicy === 'contact' && (
+              <div>
+                <h3 className="text-base font-bold text-white mb-2">Contact Us</h3>
+                <p className="text-xs text-slate-300 leading-relaxed mb-2">
+                  Have questions about your pass, billing, or technical features? Reach out directly:
+                </p>
+                <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700 text-xs text-slate-300 space-y-1">
+                  <p><strong>Service:</strong> SweetHome 3D Studio Architecture & Design</p>
+                  <p><strong>Website:</strong> https://3dstudio.prigenix.com</p>
+                  <p><strong>Support Email:</strong> support@prigenix.com / bharath@prigenix.com</p>
+                  <p><strong>Response Time:</strong> Within 24 Hours</p>
+                </div>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setActivePolicy(null)}
+              className="mt-5 w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white transition"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
