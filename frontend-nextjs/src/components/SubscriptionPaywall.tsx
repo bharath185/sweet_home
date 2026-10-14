@@ -39,7 +39,15 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
   isRefreshing = false,
 }) => {
   const [selectedPlan, setSelectedPlan] = useState<PlanId>('monthly');
-  const [pricingPlans, setPricingPlans] = useState<Record<string, PlanDetail>>(PRICING_PLANS);
+  const [pricingPlans, setPricingPlans] = useState<Record<string, PlanDetail>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('sweethome_cached_plans');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return PRICING_PLANS;
+  });
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activePolicy, setActivePolicy] = useState<'terms' | 'privacy' | 'refund' | 'contact' | null>(null);
@@ -48,6 +56,9 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
     fetchActivePricingPlans().then((live) => {
       if (live) {
         setPricingPlans({ ...live });
+        try {
+          localStorage.setItem('sweethome_cached_plans', JSON.stringify(live));
+        } catch {}
       }
     });
   }, []);
@@ -264,7 +275,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
               </div>
               <h3 className="text-lg font-bold text-white">{pricingPlans.trial_2days?.name || '2-Day Trial'}</h3>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹{pricingPlans.trial_2days?.priceINR?.toLocaleString('en-IN') || '200'}</span>
+                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹{pricingPlans.trial_2days?.priceINR?.toLocaleString('en-IN') ?? 2}</span>
                 <span className="text-xs text-slate-400">{pricingPlans.trial_2days?.periodLabel || '/ 48 hrs'}</span>
               </div>
               <p className="text-xs text-slate-400 mt-2">
@@ -311,7 +322,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                 <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
               </h3>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹{pricingPlans.monthly?.priceINR?.toLocaleString('en-IN') || '999'}</span>
+                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹{pricingPlans.monthly?.priceINR?.toLocaleString('en-IN') ?? 3}</span>
                 <span className="text-xs text-slate-400">{pricingPlans.monthly?.periodLabel || '/ month'}</span>
               </div>
               <p className="text-xs text-slate-400 mt-2">
@@ -358,7 +369,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                 <Crown className="w-4 h-4 text-yellow-400" />
               </h3>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹{pricingPlans.yearly?.priceINR?.toLocaleString('en-IN') || '9,590'}</span>
+                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹{pricingPlans.yearly?.priceINR?.toLocaleString('en-IN') ?? 4}</span>
                 <span className="text-xs text-slate-400">{pricingPlans.yearly?.periodLabel || '/ year'}</span>
               </div>
               <p className="text-xs text-slate-400 mt-2">

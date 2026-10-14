@@ -68,9 +68,9 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
     durationDays: number;
     badge?: string;
   }>>({
-    trial_2days: { priceINR: 200, name: '2-Day Full Access Trial', durationDays: 2, badge: 'Quick Test' },
-    monthly: { priceINR: 999, name: 'Monthly Pro Pass', durationDays: 30, badge: 'Most Popular' },
-    yearly: { priceINR: 9590, name: 'Annual Pro Pass', durationDays: 365, badge: 'Save 20%' },
+    trial_2days: { priceINR: 2, name: '2-Day Full Access Trial', durationDays: 2, badge: 'Quick Test' },
+    monthly: { priceINR: 3, name: 'Monthly Pro Pass', durationDays: 30, badge: 'Most Popular' },
+    yearly: { priceINR: 4, name: 'Annual Pro Pass', durationDays: 365, badge: 'Save 20%' },
   });
 
   const [isSavingSettings, setIsSavingSettings] = useState(false);

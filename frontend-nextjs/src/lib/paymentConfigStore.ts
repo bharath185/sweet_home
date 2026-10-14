@@ -30,6 +30,7 @@ export interface FullPaymentSystemConfig {
 }
 
 const CONFIG_FILE_PATH = path.join(process.cwd(), 'data', 'payment_config.json');
+const TMP_CONFIG_FILE_PATH = path.join('/tmp', 'payment_config.json');
 
 // Default initial configuration
 const DEFAULT_PLANS: Record<string, PlanConfigItem> = {
@@ -38,7 +39,7 @@ const DEFAULT_PLANS: Record<string, PlanConfigItem> = {
     name: '2-Day Full Access Trial',
     badge: 'Quick Test',
     tier: 'TRIAL',
-    priceINR: 200,
+    priceINR: 2,
     durationDays: 2,
     periodLabel: 'for 2 days (48 Hours)',
     description: 'Complete unrestricted access to all studio tools, multi-floor drafting, and raytracing for 48 hours.',
@@ -58,7 +59,7 @@ const DEFAULT_PLANS: Record<string, PlanConfigItem> = {
     name: 'Monthly Pro Pass',
     badge: 'Most Popular',
     tier: 'PRO',
-    priceINR: 999,
+    priceINR: 3,
     durationDays: 30,
     periodLabel: 'per month (30 Days)',
     description: 'Full uninterrupted studio access for professional residential architects and interior designers.',
@@ -79,7 +80,7 @@ const DEFAULT_PLANS: Record<string, PlanConfigItem> = {
     name: 'Annual Pro Pass',
     badge: 'Best Value • Save 20%',
     tier: 'PRO',
-    priceINR: 9590,
+    priceINR: 4,
     durationDays: 365,
     periodLabel: 'per year (365 Days)',
     description: 'Best value for design practices. 365 days of full unlimited studio access with an automatic discount.',
@@ -101,6 +102,20 @@ const DEFAULT_PLANS: Record<string, PlanConfigItem> = {
 let cachedConfig: FullPaymentSystemConfig | null = null;
 
 function loadConfigFromDisk(): FullPaymentSystemConfig {
+  // Check /tmp first for latest dynamic settings saved on serverless
+  try {
+    if (fs.existsSync(TMP_CONFIG_FILE_PATH)) {
+      const raw = fs.readFileSync(TMP_CONFIG_FILE_PATH, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.gateway && parsed.plans) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    // ignore
+  }
+
+  // Then check persistent repository config file
   try {
     if (fs.existsSync(CONFIG_FILE_PATH)) {
       const raw = fs.readFileSync(CONFIG_FILE_PATH, 'utf-8');
@@ -116,7 +131,7 @@ function loadConfigFromDisk(): FullPaymentSystemConfig {
   // Initial default populated with environment variables if present
   const defaultGateway: PaymentGatewayConfig = {
     activeGateway: (process.env.NEXT_PUBLIC_PAYMENT_GATEWAY as any) || 'cashfree',
-    environment: ((process.env.CASHFREE_ENVIRONMENT || 'SANDBOX').toUpperCase() as any) === 'PRODUCTION' ? 'PRODUCTION' : 'SANDBOX',
+    environment: ((process.env.CASHFREE_ENVIRONMENT || 'PRODUCTION').toUpperCase() as any) === 'SANDBOX' ? 'SANDBOX' : 'PRODUCTION',
     cashfreeAppId: process.env.CASHFREE_APP_ID || process.env.NEXT_PUBLIC_CASHFREE_APP_ID || '',
     cashfreeSecretKey: process.env.CASHFREE_SECRET_KEY || '',
     razorpayKeyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '',
@@ -134,6 +149,7 @@ function loadConfigFromDisk(): FullPaymentSystemConfig {
 }
 
 function saveConfigToDisk(config: FullPaymentSystemConfig) {
+  // Attempt to write to CONFIG_FILE_PATH
   try {
     const dir = path.dirname(CONFIG_FILE_PATH);
     if (!fs.existsSync(dir)) {
@@ -141,7 +157,17 @@ function saveConfigToDisk(config: FullPaymentSystemConfig) {
     }
     fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(config, null, 2), 'utf-8');
   } catch (err) {
-    console.warn('[PaymentConfigStore] Error saving config file to disk:', err);
+    // Expected on read-only environments like Vercel lambdas
+  }
+
+  // Always attempt to write to /tmp on serverless environments
+  try {
+    const tmpDir = path.dirname(TMP_CONFIG_FILE_PATH);
+    if (fs.existsSync(tmpDir)) {
+      fs.writeFileSync(TMP_CONFIG_FILE_PATH, JSON.stringify(config, null, 2), 'utf-8');
+    }
+  } catch (err) {
+    // ignore
   }
 }
 

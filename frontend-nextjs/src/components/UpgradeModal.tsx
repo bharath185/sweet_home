@@ -23,9 +23,11 @@ import { User } from '../types/plan';
 import {
   PRICING_PLANS,
   PlanId,
+  PlanDetail,
   saveSubscriptionLocally,
   hasActiveSubscription,
   getSubscriptionRemainingText,
+  fetchActivePricingPlans,
 } from '../services/subscriptionService';
 import { initiateCashfreeCheckout } from '../services/cashfreeClient';
 
@@ -46,6 +48,28 @@ export default function UpgradeModal({
 }: UpgradeModalProps) {
   const [isLoadingPlan, setIsLoadingPlan] = useState<PlanId | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pricingPlans, setPricingPlans] = useState<Record<string, PlanDetail>>(PRICING_PLANS);
+  const [gatewayEnv, setGatewayEnv] = useState<'PRODUCTION' | 'SANDBOX'>('PRODUCTION');
+
+  React.useEffect(() => {
+    if (isOpen) {
+      fetchActivePricingPlans().then((live) => {
+        if (live) setPricingPlans({ ...live });
+      });
+
+      fetch('/api/plans')
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.plans) {
+            setPricingPlans({ ...data.plans });
+          }
+          if (data.gateway?.environment) {
+            setGatewayEnv(data.gateway.environment);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
 
   const [successInfo, setSuccessInfo] = useState<{
     tier: string;
@@ -77,7 +101,7 @@ export default function UpgradeModal({
     setErrorMessage(null);
     setIsLoadingPlan(planId);
 
-    const planConfig = PRICING_PLANS[planId];
+    const planConfig = pricingPlans[planId] || PRICING_PLANS[planId];
     const durationDays = planConfig?.durationDays || (planId === 'trial_2days' ? 2 : planId === 'yearly' ? 365 : 30);
 
     try {
@@ -224,16 +248,20 @@ export default function UpgradeModal({
               )}
             </div>
 
-            {/* Exclusive Payment Gateway Badge: Cashfree Developer Mode */}
+            {/* Exclusive Payment Gateway Badge: Cashfree */}
             <div className="flex items-center justify-center gap-2 mb-8">
               <div className="px-4 py-2 rounded-2xl bg-[#0f172a] border border-purple-500/40 text-purple-200 text-xs font-bold flex items-center gap-2.5 shadow-md shadow-purple-500/10">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50" />
                 <span>Cashfree Payments</span>
-                <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-extrabold uppercase tracking-wide">
-                  Developer Mode (Sandbox)
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide border ${
+                  gatewayEnv === 'PRODUCTION'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                }`}>
+                  {gatewayEnv === 'PRODUCTION' ? 'Live Production' : 'Developer Sandbox'}
                 </span>
                 <span className="text-[11px] text-slate-400">
-                  • Official JS SDK v3
+                  • Instant UPI, Cards & NetBanking
                 </span>
               </div>
             </div>
@@ -246,25 +274,29 @@ export default function UpgradeModal({
               </div>
             )}
 
-            {/* Pricing Cards Grid (3 Options: 2-Day Trial ₹200 | Monthly ₹999 | Annual 20% Off ₹9,590) */}
+            {/* Dynamic Pricing Cards Grid (All amounts synchronized with Admin Config) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-              {/* CARD 1: 2-DAY TRIAL PASS (₹200) */}
+              {/* CARD 1: TRIAL PASS */}
               <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-600 transition-all">
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                       <Clock className="w-4 h-4 text-amber-400" />
-                      2-Day Trial Pass
+                      {pricingPlans.trial_2days?.name || '2-Day Trial Pass'}
                     </h3>
                     <span className="px-2.5 py-0.5 text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-md">
-                      ₹100 / day
+                      {pricingPlans.trial_2days?.badge || 'Quick Test'}
                     </span>
                   </div>
 
                   <div className="mb-4">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold text-white">₹200</span>
-                      <span className="text-slate-400 text-xs">/ 2 days (48 Hours)</span>
+                      <span className="text-4xl font-extrabold text-white">
+                        ₹{pricingPlans.trial_2days?.priceINR?.toLocaleString('en-IN') ?? 2}
+                      </span>
+                      <span className="text-slate-400 text-xs">
+                        {pricingPlans.trial_2days?.periodLabel || '/ 2 days (48 Hours)'}
+                      </span>
                     </div>
                     <div className="text-[11px] text-amber-400/90 mt-1 font-medium">
                       One-time payment • No auto-recurring charges
@@ -272,17 +304,17 @@ export default function UpgradeModal({
                   </div>
 
                   <p className="text-xs text-slate-300 mb-6">
-                    Perfect for a quick walkthrough, exploring all features, or rapid project creation.
+                    {pricingPlans.trial_2days?.description || 'Perfect for a quick walkthrough, exploring all features, or rapid project creation.'}
                   </p>
 
                   <div className="space-y-3 mb-6">
                     <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span><strong>48 Hours Full Access</strong> to all features</span>
+                      <span><strong>{pricingPlans.trial_2days?.durationDays || 2} Days Full Access</strong> to all features</span>
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Multi-Floor Architecture (Ground, 1st, 2nd)</span>
+                      <span>Multi-Floor Architecture Drafting</span>
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
@@ -307,57 +339,61 @@ export default function UpgradeModal({
                   {isLoadingPlan === 'trial_2days' ? (
                     <span className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Connecting to Cashfree Developer Sandbox...
+                      Connecting to Cashfree...
                     </span>
                   ) : (
                     <>
                       <Zap className="w-4 h-4 text-amber-400 fill-current" />
-                      Pay ₹200 with Cashfree (Sandbox)
+                      Pay ₹{pricingPlans.trial_2days?.priceINR?.toLocaleString('en-IN') ?? 2} with Cashfree
                     </>
                   )}
                 </button>
               </div>
 
-              {/* CARD 2: MONTHLY PRO PASS (₹999) - HIGHLIGHTED */}
+              {/* CARD 2: MONTHLY PRO PASS */}
               <div className="relative bg-gradient-to-b from-blue-900/40 via-slate-800/90 to-slate-800/95 border-2 border-blue-500 rounded-2xl p-6 flex flex-col justify-between shadow-xl shadow-blue-500/15 hover:border-blue-400 transition-all scale-[1.02]">
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[11px] font-bold rounded-full uppercase tracking-wider shadow-md flex items-center gap-1.5">
                   <Crown className="w-3.5 h-3.5" />
-                  Most Popular
+                  {pricingPlans.monthly?.badge || 'Most Popular'}
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-4 mt-1">
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
                       <Calendar className="w-4 h-4 text-blue-400" />
-                      Monthly Pass
+                      {pricingPlans.monthly?.name || 'Monthly Pass'}
                     </h3>
                     <span className="px-2.5 py-0.5 text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-md">
-                      Flexible
+                      {pricingPlans.monthly?.durationDays || 30} Days
                     </span>
                   </div>
 
                   <div className="mb-4">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold text-white">₹999</span>
-                      <span className="text-slate-400 text-xs">/ month (30 Days)</span>
+                      <span className="text-4xl font-extrabold text-white">
+                        ₹{pricingPlans.monthly?.priceINR?.toLocaleString('en-IN') ?? 3}
+                      </span>
+                      <span className="text-slate-400 text-xs">
+                        {pricingPlans.monthly?.periodLabel || '/ month (30 Days)'}
+                      </span>
                     </div>
                     <div className="text-[11px] text-emerald-400 mt-1 font-medium">
-                      All inclusive • UPI, Cards, NetBanking, EMI
+                      All inclusive • UPI, Cards, NetBanking
                     </div>
                   </div>
 
                   <p className="text-xs text-slate-300 mb-6">
-                    Full architectural power for independent designers, interior experts, and builders.
+                    {pricingPlans.monthly?.description || 'Full architectural power for independent designers, interior experts, and builders.'}
                   </p>
 
                   <div className="space-y-3 mb-6">
                     <div className="flex items-start gap-2.5 text-xs text-slate-100 font-medium">
                       <Layers className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                      <span><strong>30 Days Full Access</strong> to all studio features</span>
+                      <span><strong>{pricingPlans.monthly?.durationDays || 30} Days Full Access</strong> to all features</span>
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Unlimited Multi-Floor Architecture (All levels)</span>
+                      <span>Unlimited Multi-Floor Architecture Drafting</span>
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Camera className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
@@ -373,7 +409,7 @@ export default function UpgradeModal({
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Sparkles className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                      <span>Cloud Project Save & Share Presentation Link</span>
+                      <span>Cloud Project Save & Sync Across Devices</span>
                     </div>
                   </div>
                 </div>
@@ -386,56 +422,52 @@ export default function UpgradeModal({
                   {isLoadingPlan === 'monthly' ? (
                     <span className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Connecting to Cashfree Developer Sandbox...
+                      Connecting to Cashfree...
                     </span>
                   ) : (
                     <>
                       <Zap className="w-4 h-4 fill-current" />
-                      Pay ₹999 with Cashfree (Sandbox)
+                      Pay ₹{pricingPlans.monthly?.priceINR?.toLocaleString('en-IN') ?? 3} with Cashfree
                     </>
                   )}
                 </button>
               </div>
 
-              {/* CARD 3: ANNUAL PRO PASS (20% DISCOUNT - ₹9,590) */}
+              {/* CARD 3: ANNUAL PRO PASS */}
               <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-600 transition-all">
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                       <Crown className="w-4 h-4 text-emerald-400" />
-                      Annual Pass
+                      {pricingPlans.yearly?.name || 'Annual Pass'}
                     </h3>
                     <span className="px-2.5 py-0.5 text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-md">
-                      20% OFF
+                      {pricingPlans.yearly?.badge || 'Save 20%'}
                     </span>
                   </div>
 
                   <div className="mb-4">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold text-white">₹9,590</span>
-                      <span className="text-slate-400 text-xs">/ year</span>
+                      <span className="text-4xl font-extrabold text-white">
+                        ₹{pricingPlans.yearly?.priceINR?.toLocaleString('en-IN') ?? 4}
+                      </span>
+                      <span className="text-slate-400 text-xs">
+                        {pricingPlans.yearly?.periodLabel || '/ year (365 Days)'}
+                      </span>
                     </div>
                     <div className="text-[11px] text-emerald-400 mt-1 font-semibold">
-                      ₹799 / month • Save ₹2,398 / year (20% Discount)
+                      Best value • Continuous 365-day access
                     </div>
                   </div>
 
                   <p className="text-xs text-slate-300 mb-6">
-                    Best value for design practices and full-time professionals needing 365 days of continuous access.
+                    {pricingPlans.yearly?.description || 'Best value for design practices and full-time professionals needing 365 days of continuous access.'}
                   </p>
 
                   <div className="space-y-3 mb-6">
                     <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span><strong>365 Days (1 Full Year)</strong> Unrestricted Access</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Save 20% compared to paying monthly</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Unlimited Multi-Floor Blueprints & Projects</span>
+                      <span><strong>{pricingPlans.yearly?.durationDays || 365} Days</strong> Unrestricted Access</span>
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
@@ -443,7 +475,15 @@ export default function UpgradeModal({
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-slate-200">
                       <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                      <span>Unlimited Multi-Floor Blueprints & Projects</span>
+                    </div>
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
+                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                       <span>Full Commercial Client Presentation License</span>
+                    </div>
+                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
+                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                      <span>Dedicated Technical & Email Support</span>
                     </div>
                   </div>
                 </div>
@@ -456,12 +496,12 @@ export default function UpgradeModal({
                   {isLoadingPlan === 'yearly' ? (
                     <span className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Connecting to Cashfree Developer Sandbox...
+                      Connecting to Cashfree...
                     </span>
                   ) : (
                     <>
                       <Crown className="w-4 h-4" />
-                      Pay ₹9,590 with Cashfree (Sandbox)
+                      Pay ₹{pricingPlans.yearly?.priceINR?.toLocaleString('en-IN') ?? 4} with Cashfree
                     </>
                   )}
                 </button>
@@ -477,10 +517,10 @@ export default function UpgradeModal({
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1.5">
                   <CreditCard className="w-4 h-4 text-blue-400" />
-                  UPI (GPay, PhonePe, Paytm), Cards, NetBanking, EMI
+                  UPI (GPay, PhonePe, Paytm), Cards, NetBanking
                 </span>
                 <span className="font-semibold text-slate-300 flex items-center gap-1">
-                  Powered exclusively by <span className="text-sky-400 font-bold">Cashfree Payments Developer Mode</span>
+                  Powered by <span className="text-sky-400 font-bold">Cashfree Payments</span>
                 </span>
               </div>
             </div>
