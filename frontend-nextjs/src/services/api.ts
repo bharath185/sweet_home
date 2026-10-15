@@ -945,6 +945,18 @@ export async function toggleUserStatus(userId: string): Promise<boolean> {
 
 export async function fetchFloorTemplates(): Promise<FloorTemplate[]> {
   try {
+    const res = await fetch('/api/templates', { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return data;
+      }
+    }
+  } catch (err) {
+    console.warn('Templates /api/templates offline, trying legacy fallback...', err);
+  }
+
+  try {
     const res = await fetch(`${API_BASE}/plan/templates`, { cache: 'no-store' });
     if (res.ok) {
       return await res.json();
@@ -953,9 +965,9 @@ export async function fetchFloorTemplates(): Promise<FloorTemplate[]> {
     console.warn('Templates API offline, using defaults.', err);
   }
   return [
-    { id: 'plan-sarah-suite', name: 'Modern 2-Bedroom Suite', description: 'Spacious open living room with master suite.', floors: 2, area: '59 m²' },
-    { id: 'plan-david-villa', name: 'Luxury Multi-Story Villa', description: 'Grand foyer with private suites and jacuzzi.', floors: 2, area: '90 m²' },
-    { id: 'plan-emma-studio', name: 'Urban Studio Loft', description: 'Minimalist open-plan studio layout.', floors: 1, area: '20 m²' },
+    { id: 'starter-sarah-suite', name: 'Modern 2-Bedroom Suite', description: 'Spacious open living room with master suite.', floors: 2, area: '59 m²' },
+    { id: 'starter-david-villa', name: 'Luxury Multi-Story Villa', description: 'Grand foyer with private suites and jacuzzi.', floors: 2, area: '90 m²' },
+    { id: 'starter-emma-studio', name: 'Urban Studio Loft', description: 'Minimalist open-plan studio layout.', floors: 1, area: '20 m²' },
   ];
 }
 

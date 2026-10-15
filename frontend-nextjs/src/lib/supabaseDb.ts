@@ -18,6 +18,21 @@ export interface DbProjectRecord {
   updated_at?: string;
 }
 
+export interface DbTemplateRecord {
+  id: string;
+  name: string;
+  category: string;
+  description?: string;
+  floors: number;
+  area?: string;
+  badge?: string;
+  thumbnail?: string;
+  data: any;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 /**
  * Normalizes identifier
  */
@@ -294,3 +309,124 @@ export async function getAllTransactionsFromDb(): Promise<PaymentTransactionReco
     return [];
   }
 }
+
+/**
+ * 9. Get all active templates from Supabase
+ */
+export async function getAllTemplatesFromDb(): Promise<DbTemplateRecord[]> {
+  const admin = getSupabaseAdmin();
+  if (!admin) return [];
+
+  try {
+    const { data, error } = await admin
+      .from('templates')
+      .select('*')
+      .eq('is_active', true)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.warn('[SupabaseDb] getAllTemplatesFromDb error:', error.message);
+      return [];
+    }
+    return (data || []) as DbTemplateRecord[];
+  } catch (err: any) {
+    console.warn('[SupabaseDb] getAllTemplatesFromDb exception:', err.message);
+    return [];
+  }
+}
+
+/**
+ * 10. Get a single template by ID
+ */
+export async function getTemplateByIdFromDb(templateId: string): Promise<DbTemplateRecord | null> {
+  const admin = getSupabaseAdmin();
+  if (!admin || !templateId) return null;
+
+  try {
+    const { data, error } = await admin
+      .from('templates')
+      .select('*')
+      .eq('id', templateId)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[SupabaseDb] getTemplateByIdFromDb error:', error.message);
+      return null;
+    }
+    return data as DbTemplateRecord | null;
+  } catch (err: any) {
+    console.warn('[SupabaseDb] getTemplateByIdFromDb exception:', err.message);
+    return null;
+  }
+}
+
+/**
+ * 11. Upsert a template design in Supabase
+ */
+export async function saveTemplateInDb(template: {
+  id: string;
+  name: string;
+  category?: string;
+  description?: string;
+  floors?: number;
+  area?: string;
+  badge?: string;
+  thumbnail?: string;
+  data: any;
+  is_active?: boolean;
+}): Promise<DbTemplateRecord | null> {
+  const admin = getSupabaseAdmin();
+  if (!admin || !template.id) return null;
+
+  try {
+    const payload = {
+      id: template.id,
+      name: template.name,
+      category: template.category || 'Apartment',
+      description: template.description || '',
+      floors: template.floors || (template.data?.floors?.length || 1),
+      area: template.area || 'Spacious Suite',
+      badge: template.badge || null,
+      thumbnail: template.thumbnail || null,
+      data: template.data,
+      is_active: template.is_active !== false,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await admin
+      .from('templates')
+      .upsert(payload, { onConflict: 'id' })
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[SupabaseDb] saveTemplateInDb error:', error.message);
+      return null;
+    }
+    return data as DbTemplateRecord | null;
+  } catch (err: any) {
+    console.warn('[SupabaseDb] saveTemplateInDb exception:', err.message);
+    return null;
+  }
+}
+
+/**
+ * 12. Delete a template from Supabase
+ */
+export async function deleteTemplateInDb(templateId: string): Promise<boolean> {
+  const admin = getSupabaseAdmin();
+  if (!admin || !templateId) return false;
+
+  try {
+    const { error } = await admin.from('templates').delete().eq('id', templateId);
+    if (error) {
+      console.warn('[SupabaseDb] deleteTemplateInDb error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err: any) {
+    console.warn('[SupabaseDb] deleteTemplateInDb exception:', err.message);
+    return false;
+  }
+}
+

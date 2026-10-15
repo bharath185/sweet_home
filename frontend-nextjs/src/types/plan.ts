@@ -201,6 +201,11 @@ export interface FloorTemplate {
   description: string;
   floors: number;
   area: string;
+  category?: string;
+  badge?: string;
+  thumbnail?: string;
+  plan?: HomePlan;
+  data?: HomePlan;
 }
 
 export interface CollisionReport {

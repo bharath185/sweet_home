@@ -84,7 +84,9 @@ import {
   deleteUserProject,
   exportPlanAsJson,
   parseAndValidateProjectJson,
+  STARTER_TEMPLATES,
 } from '../services/projectService';
+import { SWEET_HOME_DEMOS } from '../services/demoPlans';
 import {
   canAccessFeature,
   getUserSubscriptionTier,
@@ -679,7 +681,7 @@ export default function HomeStudioPage() {
 
   const handleSelectDemoPlan = (selectedPlan: HomePlan) => {
     if (currentUser) {
-      const updatedList = saveUserProject(currentUser.id, selectedPlan);
+      const updatedList = saveUserProject(currentUser.id, selectedPlan, currentUser.email);
       setUserProjects(updatedList);
     }
     setPlan(selectedPlan);
@@ -687,9 +689,74 @@ export default function HomeStudioPage() {
     historyIndexRef.current = 0;
     setCanUndo(false);
     setCanRedo(false);
+    setActiveFloor(selectedPlan.currentFloor || 0);
     setActiveView('split');
     sessionStorage.setItem('sweethome_initial_demo_selected', 'true');
     setIsSelectDemoModalOpen(false);
+  };
+
+  const handleOpenStudioWithTemplate = (tplId: string) => {
+    // 1. Look in loaded templates array (which comes from Supabase Cloud DB)
+    const found = templates.find((t) => t.id === tplId);
+    if (found && (found.plan || found.data)) {
+      const planToLoad: HomePlan = JSON.parse(JSON.stringify(found.plan || found.data));
+      planToLoad.id = `proj_${currentUser?.id || 'admin'}_${Date.now()}`;
+      planToLoad.updatedAt = new Date().toISOString();
+      if (currentUser) {
+        const updatedList = saveUserProject(currentUser.id, planToLoad, currentUser.email);
+        setUserProjects(updatedList);
+      }
+      setPlan(planToLoad);
+      historyRef.current = [JSON.parse(JSON.stringify(planToLoad))];
+      historyIndexRef.current = 0;
+      setCanUndo(false);
+      setCanRedo(false);
+      setActiveFloor(planToLoad.currentFloor || 0);
+      setActiveView('split');
+      return;
+    }
+
+    // 2. Look in SWEET_HOME_DEMOS
+    const demo = SWEET_HOME_DEMOS.find((d) => d.id === tplId);
+    if (demo) {
+      const cloned: HomePlan = JSON.parse(JSON.stringify(demo.plan));
+      cloned.id = `proj_${currentUser?.id || 'admin'}_${Date.now()}`;
+      cloned.updatedAt = new Date().toISOString();
+      if (currentUser) {
+        const updatedList = saveUserProject(currentUser.id, cloned, currentUser.email);
+        setUserProjects(updatedList);
+      }
+      setPlan(cloned);
+      historyRef.current = [JSON.parse(JSON.stringify(cloned))];
+      historyIndexRef.current = 0;
+      setCanUndo(false);
+      setCanRedo(false);
+      setActiveFloor(cloned.currentFloor || 0);
+      setActiveView('split');
+      return;
+    }
+
+    // 3. Look in STARTER_TEMPLATES
+    const starter = STARTER_TEMPLATES.find((s) => s.id === tplId);
+    if (starter) {
+      const cloned: HomePlan = JSON.parse(JSON.stringify(starter.basePlan));
+      cloned.id = `proj_${currentUser?.id || 'admin'}_${Date.now()}`;
+      cloned.updatedAt = new Date().toISOString();
+      if (currentUser) {
+        const updatedList = saveUserProject(currentUser.id, cloned, currentUser.email);
+        setUserProjects(updatedList);
+      }
+      setPlan(cloned);
+      historyRef.current = [JSON.parse(JSON.stringify(cloned))];
+      historyIndexRef.current = 0;
+      setCanUndo(false);
+      setCanRedo(false);
+      setActiveFloor(cloned.currentFloor || 0);
+      setActiveView('split');
+      return;
+    }
+
+    setActiveView('split');
   };
 
   const handleAddCustomItem = async (newItem: CatalogItem, autoPlaceInScene?: boolean) => {
@@ -778,18 +845,39 @@ export default function HomeStudioPage() {
   };
 
   const handleStartNewDesignForClient = (client: User, templateId?: string) => {
+    let basePlan: HomePlan = sampleDefaultPlan;
+    if (templateId === 'duplex_2floor' || templateId === 'starter-sarah-suite') {
+      const found = STARTER_TEMPLATES.find((s) => s.id === 'starter-sarah-suite');
+      if (found) basePlan = found.basePlan;
+    } else if (templateId === 'studio_apt' || templateId === 'starter-emma-studio' || templateId === 'studio') {
+      const found = STARTER_TEMPLATES.find((s) => s.id === 'starter-emma-studio');
+      if (found) basePlan = found.basePlan;
+    } else if (templateId) {
+      const match = templates.find((t) => t.id === templateId);
+      if (match && (match.plan || match.data)) {
+        basePlan = match.plan || match.data;
+      }
+    }
+
     const freshPlan: HomePlan = {
-      ...sampleDefaultPlan,
+      ...JSON.parse(JSON.stringify(basePlan)),
       id: `plan_${client.id}_${Date.now()}`,
       name: `${client.name}'s Residence`,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
+    if (client.id) {
+      const updatedList = saveUserProject(client.id, freshPlan, client.email);
+      if (currentUser?.id === client.id) {
+        setUserProjects(updatedList);
+      }
+    }
     setPlan(freshPlan);
     historyRef.current = [JSON.parse(JSON.stringify(freshPlan))];
     historyIndexRef.current = 0;
     setCanUndo(false);
     setCanRedo(false);
+    setActiveFloor(freshPlan.currentFloor || 0);
     setIsClientSelectModalOpen(false);
     setActiveView('split');
   };
@@ -962,7 +1050,7 @@ export default function HomeStudioPage() {
             theme={theme}
             onToggleTheme={handleToggleTheme}
             onOpenStudioWithTemplate={(tplId) => {
-              setActiveView('split');
+              handleOpenStudioWithTemplate(tplId);
             }}
             onOpenClientPlan={(planId) => {
               handleSelectClientProject(planId);

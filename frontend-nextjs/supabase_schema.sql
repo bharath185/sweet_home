@@ -70,10 +70,27 @@ CREATE TABLE IF NOT EXISTS public.app_config (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. DISABLE ROW LEVEL SECURITY (RLS) FOR INITIAL SEAMLESS SETUP
+-- 5. TEMPLATES TABLE (Architectural & Demo Design Templates)
+CREATE TABLE IF NOT EXISTS public.templates (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  category TEXT DEFAULT 'Apartment',
+  description TEXT,
+  floors INTEGER DEFAULT 1,
+  area TEXT,
+  badge TEXT,
+  thumbnail TEXT,
+  data JSONB NOT NULL,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6. DISABLE ROW LEVEL SECURITY (RLS) FOR INITIAL SEAMLESS SETUP
 -- (You can enable RLS policies later once authentication is locked down)
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payment_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY;
 
@@ -83,6 +100,9 @@ CREATE POLICY "Allow all access to users" ON public.users FOR ALL USING (true) W
 
 DROP POLICY IF EXISTS "Allow all access to projects" ON public.projects;
 CREATE POLICY "Allow all access to projects" ON public.projects FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all access to templates" ON public.templates;
+CREATE POLICY "Allow all access to templates" ON public.templates FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Allow all access to transactions" ON public.payment_transactions;
 CREATE POLICY "Allow all access to transactions" ON public.payment_transactions FOR ALL USING (true) WITH CHECK (true);

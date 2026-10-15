@@ -430,6 +430,118 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return ['ALL', ...Array.from(set)];
   }, [catalog]);
 
+  // --- TEMPLATE DESIGNS STATE (Cloud Database Synced) ---
+  const [templateList, setTemplateList] = useState<FloorTemplate[]>(templates || []);
+  const [templateSearchQuery, setTemplateSearchQuery] = useState('');
+  const [templateCategoryFilter, setTemplateCategoryFilter] = useState('ALL');
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState('');
+  const [newTemplateCategory, setNewTemplateCategory] = useState('Apartment');
+  const [newTemplateDesc, setNewTemplateDesc] = useState('');
+  const [templateActionNotice, setTemplateActionNotice] = useState<string | null>(null);
+
+  const refreshTemplatesList = async () => {
+    try {
+      const res = await fetch('/api/templates');
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) {
+        setTemplateList(data);
+      }
+    } catch (err) {
+      console.warn('Failed to refresh templates:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (templates && templates.length > 0) {
+      setTemplateList(templates);
+    } else {
+      refreshTemplatesList();
+    }
+  }, [templates]);
+
+  const templateCategories = useMemo(() => {
+    const set = new Set(templateList.map((t) => (t.category || 'Apartment').toUpperCase()));
+    return ['ALL', ...Array.from(set)];
+  }, [templateList]);
+
+  const filteredTemplates = useMemo(() => {
+    return templateList.filter((tpl) => {
+      const q = templateSearchQuery.toLowerCase();
+      const matchSearch =
+        !templateSearchQuery ||
+        tpl.name.toLowerCase().includes(q) ||
+        (tpl.description && tpl.description.toLowerCase().includes(q)) ||
+        (tpl.category && tpl.category.toLowerCase().includes(q));
+
+      const cat = (tpl.category || 'Apartment').toUpperCase();
+      const matchCat = templateCategoryFilter === 'ALL' || cat === templateCategoryFilter;
+      return matchSearch && matchCat;
+    });
+  }, [templateList, templateSearchQuery, templateCategoryFilter]);
+
+  const handleSaveCurrentPlanAsTemplate = async () => {
+    if (!newTemplateName.trim()) {
+      alert('Please enter a template name.');
+      return;
+    }
+    setIsSavingTemplate(true);
+    try {
+      const tplId = `tpl_${Date.now()}`;
+      const payload = {
+        id: tplId,
+        name: newTemplateName.trim(),
+        category: newTemplateCategory,
+        description: newTemplateDesc.trim() || `${newTemplateCategory} architectural design template`,
+        floors: plan?.floors?.length || 1,
+        area: `${(plan?.rooms?.reduce((acc: number, r: any) => acc + (r.areaSquareMeters || 0), 0) || 45).toFixed(0)} m²`,
+        badge: newTemplateCategory,
+        thumbnail: 'topdown',
+        data: plan,
+      };
+
+      const res = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        setTemplateActionNotice(`Template "${newTemplateName}" saved successfully to Cloud DB!`);
+        setShowSaveTemplateModal(false);
+        setNewTemplateName('');
+        setNewTemplateDesc('');
+        await refreshTemplatesList();
+        setTimeout(() => setTemplateActionNotice(null), 4000);
+      } else {
+        alert('Failed to save template to database.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error saving template');
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId: string, templateName: string) => {
+    if (!confirm(`Are you sure you want to delete template "${templateName}" from database?`)) return;
+    try {
+      const res = await fetch(`/api/templates?id=${encodeURIComponent(templateId)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setTemplateActionNotice(`Template "${templateName}" removed from database.`);
+        setTemplateList((prev) => prev.filter((t) => t.id !== templateId));
+        setTimeout(() => setTemplateActionNotice(null), 3000);
+      } else {
+        alert('Failed to delete template from database.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error deleting template');
+    }
+  };
+
   return (
     <div className={`flex-1 flex h-full overflow-hidden select-none font-sans transition-colors duration-200 ${
       isLight ? 'bg-[#f8fafc] text-slate-800' : 'bg-[#080d19] text-slate-100'
@@ -617,6 +729,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <Box className="w-4 h-4 text-purple-500" />
                 <span className="truncate">3D Model Catalog</span>
               </button>
+
+              <button
+                onClick={() => handleSelectTab('floors')}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                  activeTab === 'floors'
+                    ? isLight
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white text-slate-900 shadow-xs'
+                    : isLight
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+              >
+                <Building className="w-4 h-4 text-sky-500" />
+                <span className="truncate">Floor Templates</span>
+              </button>
             </div>
           </div>
         </nav>
@@ -652,6 +780,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {activeTab === 'payments' && 'Cashfree Payments & Revenue Ledger'}
                 {(activeTab === 'email_config' || (activeTab as string) === 'sms_gateway') && 'Email & Mobile OTP Gateways Setup'}
                 {activeTab === 'catalog' && '3D Furniture & Models Catalog'}
+                {activeTab === 'floors' && 'Architectural Floor Templates'}
               </h1>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
                 {activeTab === 'overview' && 'Real-time studio health, user acquisitions, and gateway telemetry.'}
@@ -661,6 +790,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {activeTab === 'payments' && 'Live Cashfree PG reconciliations, transaction audit proofs, and exports.'}
                 {(activeTab === 'email_config' || (activeTab as string) === 'sms_gateway') && 'Configure Resend/SMTP email delivery and Fast2SMS/Twilio mobile OTP dispatchers side-by-side in one screen.'}
                 {activeTab === 'catalog' && 'Manage 3D furniture models, categories, materials, and asset dimensions.'}
+                {activeTab === 'floors' && 'Cloud database-backed architectural floor plans, residential duplexes, and starter templates.'}
               </p>
             </div>
           </div>
@@ -1852,6 +1982,281 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================= */}
+          {/* TAB 8: FLOOR TEMPLATES & ARCHITECTURAL DESIGNS          */}
+          {/* ======================================================= */}
+          {activeTab === 'floors' && (
+            <div className="space-y-6">
+              {/* Notice Banner */}
+              {templateActionNotice && (
+                <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center justify-between animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{templateActionNotice}</span>
+                  </div>
+                  <button onClick={() => setTemplateActionNotice(null)} className="hover:opacity-75">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Action & Filter Toolbar */}
+              <div className={`p-4 rounded-2xl border transition-colors ${
+                isLight ? 'bg-white border-slate-200/80 shadow-xs' : 'bg-[#0B0F17] border-slate-800'
+              }`}>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  {/* Search Bar */}
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search design templates by name or category..."
+                      value={templateSearchQuery}
+                      onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                      className={`w-full pl-9 pr-4 py-2 rounded-xl text-xs border focus:outline-hidden transition-all ${
+                        isLight
+                          ? 'bg-slate-50 border-slate-200 text-slate-900 focus:border-sky-500 focus:bg-white'
+                          : 'bg-slate-900/60 border-slate-700 text-white focus:border-sky-500'
+                      }`}
+                    />
+                  </div>
+
+                  {/* Top Action Buttons */}
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      onClick={refreshTemplatesList}
+                      className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition ${
+                        isLight
+                          ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                          : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                      }`}
+                      title="Sync from Cloud Supabase Database"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Sync Cloud</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setNewTemplateName(plan?.name ? `${plan.name} Template` : 'New Custom Template');
+                        setShowSaveTemplateModal(true);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Save Studio Plan as Template</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Category Filter Pills */}
+                <div className="flex flex-wrap items-center gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                  <span className="text-[11px] font-bold text-slate-400 mr-1">Categories:</span>
+                  {templateCategories.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setTemplateCategoryFilter(cat)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                        templateCategoryFilter === cat
+                          ? 'bg-sky-500 text-white shadow-xs'
+                          : isLight
+                          ? 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                  <span className="ml-auto text-[11px] text-slate-400 font-medium">
+                    Showing {filteredTemplates.length} of {templateList.length} templates
+                  </span>
+                </div>
+              </div>
+
+              {/* Template Cards Grid */}
+              {filteredTemplates.length === 0 ? (
+                <div className={`p-12 text-center rounded-2xl border ${
+                  isLight ? 'bg-white border-slate-200 text-slate-500' : 'bg-[#0B0F17] border-slate-800 text-slate-400'
+                }`}>
+                  <Building className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">No template designs found</h3>
+                  <p className="text-xs text-slate-400 mt-1">Try adjusting your search query or save the current studio plan as a template.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredTemplates.map((tpl) => {
+                    const planData = tpl.plan || tpl.data;
+                    const roomsCount = planData?.rooms?.length || 0;
+                    const furnitureCount = planData?.furniture?.length || 0;
+                    const wallsCount = planData?.walls?.length || 0;
+                    const floorsCount = tpl.floors || planData?.floors?.length || 1;
+
+                    return (
+                      <div
+                        key={tpl.id}
+                        className={`rounded-2xl border p-4 flex flex-col justify-between transition-all duration-200 hover:shadow-lg ${
+                          isLight
+                            ? 'bg-white border-slate-200/90 hover:border-sky-300'
+                            : 'bg-[#0B0F17] border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div>
+                          {/* Card Top Badges */}
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/60">
+                              {tpl.category || 'Apartment'}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                {floorsCount} {floorsCount === 1 ? 'Floor' : 'Floors'}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
+                                {tpl.area || 'Spacious'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Template Title */}
+                          <h3 className="text-sm font-bold text-slate-900 dark:text-white line-clamp-1 mb-1">
+                            {tpl.name}
+                          </h3>
+
+                          {/* Description */}
+                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-3">
+                            {tpl.description || 'Pre-configured architectural layout ready for interior design and walkthrough.'}
+                          </p>
+
+                          {/* Plan Statistics */}
+                          <div className="grid grid-cols-3 gap-1.5 py-2 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60 text-[11px] mb-3">
+                            <div className="text-center">
+                              <span className="text-[10px] text-slate-400 block">Rooms</span>
+                              <span className="font-bold text-slate-700 dark:text-slate-200">{roomsCount}</span>
+                            </div>
+                            <div className="text-center border-x border-slate-200/60 dark:border-slate-800">
+                              <span className="text-[10px] text-slate-400 block">Furniture</span>
+                              <span className="font-bold text-slate-700 dark:text-slate-200">{furnitureCount}</span>
+                            </div>
+                            <div className="text-center">
+                              <span className="text-[10px] text-slate-400 block">Walls</span>
+                              <span className="font-bold text-slate-700 dark:text-slate-200">{wallsCount}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Card Bottom Actions */}
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                          <button
+                            onClick={() => onOpenStudioWithTemplate(tpl.id)}
+                            className="flex-1 py-1.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Load into Studio</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}
+                            className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                            title="Delete template from database"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Modal: Save Current Studio Plan as Cloud Template */}
+          {showSaveTemplateModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+              <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl animate-in zoom-in-95 ${
+                isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-900 border-slate-800 text-white'
+              }`}>
+                <h3 className="text-base font-bold mb-1">Save Studio Plan as Template</h3>
+                <p className="text-xs text-slate-400 mb-4">
+                  Saves the current 2D/3D studio blueprint directly to Supabase Cloud PostgreSQL as a reusable design template.
+                </p>
+
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-bold mb-1">Template Name</label>
+                    <input
+                      type="text"
+                      value={newTemplateName}
+                      onChange={(e) => setNewTemplateName(e.target.value)}
+                      placeholder="e.g. Modern Scandinavian Penthouse"
+                      className={`w-full px-3.5 py-2 rounded-xl text-xs border focus:outline-hidden ${
+                        isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-slate-800 border-slate-700 text-white'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold mb-1">Category</label>
+                    <select
+                      value={newTemplateCategory}
+                      onChange={(e) => setNewTemplateCategory(e.target.value)}
+                      className={`w-full px-3.5 py-2 rounded-xl text-xs border focus:outline-hidden ${
+                        isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-slate-800 border-slate-700 text-white'
+                      }`}
+                    >
+                      <option value="Apartment">Apartment</option>
+                      <option value="Duplex">Duplex</option>
+                      <option value="Villa">Villa</option>
+                      <option value="House">House</option>
+                      <option value="Studio">Studio</option>
+                      <option value="Commercial">Commercial</option>
+                      <option value="Blank">Blank Canvas</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold mb-1">Description (Optional)</label>
+                    <textarea
+                      rows={2}
+                      value={newTemplateDesc}
+                      onChange={(e) => setNewTemplateDesc(e.target.value)}
+                      placeholder="Brief architectural details (rooms, theme, style)..."
+                      className={`w-full px-3.5 py-2 rounded-xl text-xs border focus:outline-hidden ${
+                        isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-slate-800 border-slate-700 text-white'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-end gap-2.5">
+                  <button
+                    onClick={() => setShowSaveTemplateModal(false)}
+                    disabled={isSavingTemplate}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveCurrentPlanAsTemplate}
+                    disabled={isSavingTemplate}
+                    className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingTemplate ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Saving to Cloud DB...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Save to Supabase DB</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           )}
