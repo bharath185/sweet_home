@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getPaymentSystemConfig,
+  getPaymentSystemConfigAsync,
   updatePaymentSystemConfig,
   getActiveCashfreeCredentials,
+  getActiveRazorpayCredentials,
 } from '@/lib/paymentConfigStore';
 import { purgeNonAdminUsers } from '@/lib/paymentStore';
+import { saveAppConfigInDb } from '@/lib/supabaseDb';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,28 +20,46 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized. Admin only.' }, { status: 403 });
     }
 
-    const config = getPaymentSystemConfig();
+    const config = await getPaymentSystemConfigAsync();
     const cfCreds = getActiveCashfreeCredentials();
+    const rzpCreds = getActiveRazorpayCredentials();
 
     // Mask secret keys for safe UI inspection
-    const maskedSecret = config.gateway.cashfreeSecretKey
+    const maskedCashfreeSecret = config.gateway.cashfreeSecretKey
       ? config.gateway.cashfreeSecretKey.length > 8
         ? `${config.gateway.cashfreeSecretKey.slice(0, 4)}••••••••${config.gateway.cashfreeSecretKey.slice(-4)}`
         : '••••••••'
       : '';
 
-    return NextResponse.json({
-      success: true,
-      config: {
-        ...config,
-        gateway: {
-          ...config.gateway,
-          cashfreeSecretKeyMasked: maskedSecret,
-          hasSecretKey: Boolean(config.gateway.cashfreeSecretKey),
-          isConfigured: cfCreds.isConfigured,
+    const maskedRazorpaySecret = config.gateway.razorpayKeySecret
+      ? config.gateway.razorpayKeySecret.length > 8
+        ? `${config.gateway.razorpayKeySecret.slice(0, 4)}••••••••${config.gateway.razorpayKeySecret.slice(-4)}`
+        : '••••••••'
+      : '';
+
+    return NextResponse.json(
+      {
+        success: true,
+        config: {
+          ...config,
+          gateway: {
+            ...config.gateway,
+            activeGateway: config.gateway.activeGateway || 'cashfree',
+            cashfreeSecretKeyMasked: maskedCashfreeSecret,
+            hasSecretKey: Boolean(config.gateway.cashfreeSecretKey),
+            isConfigured: cfCreds.isConfigured,
+            razorpayKeyId: config.gateway.razorpayKeyId || rzpCreds.keyId,
+            razorpayKeySecretMasked: maskedRazorpaySecret,
+            isRazorpayConfigured: rzpCreds.isConfigured,
+          },
         },
       },
-    });
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json(
       { success: false, error: err.message || 'Error fetching payment config' },
@@ -99,11 +122,21 @@ export async function POST(req: NextRequest) {
       plans: Object.keys(planUpdates).length > 0 ? planUpdates : undefined,
     });
 
-    return NextResponse.json({
-      success: true,
-      message: 'Payment gateway settings and plan pricing updated successfully.',
-      config: updatedConfig,
-    });
+    // Asynchronously save to Supabase Cloud Database for persistent storage
+    await saveAppConfigInDb('payment_config', updatedConfig);
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: 'Payment gateway settings and plan pricing updated successfully.',
+        config: updatedConfig,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json(
       { success: false, error: err.message || 'Error updating payment config' },

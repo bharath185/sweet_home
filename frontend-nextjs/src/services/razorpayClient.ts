@@ -119,6 +119,8 @@ export async function initiateSubscriptionCheckout({
               signature: response.razorpay_signature,
               planId,
               userId: user?.id,
+              userEmail: user?.email,
+              userName: user?.name,
             }),
           });
 

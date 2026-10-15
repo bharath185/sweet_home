@@ -30,6 +30,7 @@ import {
   fetchActivePricingPlans,
 } from '../services/subscriptionService';
 import { initiateCashfreeCheckout } from '../services/cashfreeClient';
+import { initiateSubscriptionCheckout as initiateRazorpayCheckout } from '../services/razorpayClient';
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -50,6 +51,7 @@ export default function UpgradeModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pricingPlans, setPricingPlans] = useState<Record<string, PlanDetail>>(PRICING_PLANS);
   const [gatewayEnv, setGatewayEnv] = useState<'PRODUCTION' | 'SANDBOX'>('PRODUCTION');
+  const [activeGateway, setActiveGateway] = useState<'cashfree' | 'razorpay'>('cashfree');
 
   React.useEffect(() => {
     if (isOpen) {
@@ -57,17 +59,29 @@ export default function UpgradeModal({
         if (live) setPricingPlans({ ...live });
       });
 
-      fetch('/api/plans')
+      fetch('/api/payment-config')
         .then((r) => r.json())
         .then((data) => {
           if (data.plans) {
             setPricingPlans({ ...data.plans });
           }
-          if (data.gateway?.environment) {
-            setGatewayEnv(data.gateway.environment);
+          if (data.activeGateway) {
+            setActiveGateway(data.activeGateway);
+          }
+          if (data.environment) {
+            setGatewayEnv(data.environment);
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          fetch('/api/plans')
+            .then((r) => r.json())
+            .then((data) => {
+              if (data.plans) setPricingPlans({ ...data.plans });
+              if (data.gateway?.activeGateway) setActiveGateway(data.gateway.activeGateway);
+              if (data.gateway?.environment) setGatewayEnv(data.gateway.environment);
+            })
+            .catch(() => {});
+        });
     }
   }, [isOpen]);
 
@@ -76,7 +90,7 @@ export default function UpgradeModal({
     planName: string;
     durationDays: number;
     paymentId: string;
-    gateway: 'cashfree';
+    gateway: 'cashfree' | 'razorpay';
     paymentMethod?: string;
   } | null>(null);
 
@@ -104,50 +118,72 @@ export default function UpgradeModal({
     const planConfig = pricingPlans[planId] || PRICING_PLANS[planId];
     const durationDays = planConfig?.durationDays || (planId === 'trial_2days' ? 2 : planId === 'yearly' ? 365 : 30);
 
-    try {
-      await initiateCashfreeCheckout({
-        planId,
-        user: currentUser,
-        redirectTarget: '_modal',
-        onSuccess: (result) => {
-          setIsLoadingPlan(null);
-          triggerConfetti();
+    const onPaymentSuccess = (result: {
+      tier: 'TRIAL' | 'PRO' | 'ENTERPRISE';
+      paymentId: string;
+      subscriptionToken?: string;
+      orderId?: string;
+      durationDays?: number;
+    }) => {
+      setIsLoadingPlan(null);
+      triggerConfetti();
 
-          if (currentUser) {
-            const updated = saveSubscriptionLocally(
-              currentUser,
-              result.tier,
-              result.paymentId,
-              result.subscriptionToken,
-              result.orderId,
-              result.durationDays || durationDays,
-              planId as any,
-              'cashfree'
-            );
-            if (onUserUpdated) {
-              onUserUpdated(updated);
-            }
-          }
+      if (currentUser) {
+        const updated = saveSubscriptionLocally(
+          currentUser,
+          result.tier,
+          result.paymentId,
+          result.subscriptionToken || '',
+          result.orderId,
+          result.durationDays || durationDays,
+          planId as any,
+          activeGateway
+        );
+        if (onUserUpdated) {
+          onUserUpdated(updated);
+        }
+      }
 
-          setSuccessInfo({
-            tier: result.tier,
-            planName: planConfig?.name || 'Studio Access Pass',
-            durationDays: result.durationDays || durationDays,
-            paymentId: result.paymentId,
-            gateway: 'cashfree',
-          });
-        },
-        onError: (errMsg) => {
-          setIsLoadingPlan(null);
-          setErrorMessage(errMsg);
-        },
-        onDismiss: () => {
-          setIsLoadingPlan(null);
-        },
+      setSuccessInfo({
+        tier: result.tier,
+        planName: planConfig?.name || 'Studio Access Pass',
+        durationDays: result.durationDays || durationDays,
+        paymentId: result.paymentId,
+        gateway: activeGateway,
       });
+    };
+
+    const onPaymentError = (errMsg: string) => {
+      setIsLoadingPlan(null);
+      setErrorMessage(errMsg);
+    };
+
+    const onPaymentDismiss = () => {
+      setIsLoadingPlan(null);
+    };
+
+    try {
+      if (activeGateway === 'razorpay') {
+        await initiateRazorpayCheckout({
+          planId,
+          user: currentUser,
+          onSuccess: onPaymentSuccess,
+          onError: onPaymentError,
+          onDismiss: onPaymentDismiss,
+        });
+      } else {
+        await initiateCashfreeCheckout({
+          planId,
+          user: currentUser,
+          redirectTarget: '_modal',
+          onSuccess: onPaymentSuccess,
+          onError: onPaymentError,
+          onDismiss: onPaymentDismiss,
+        });
+      }
     } catch (err: any) {
       setIsLoadingPlan(null);
-      setErrorMessage(err.message || 'Failed to initialize Cashfree payment.');
+      setErrorMessage(err.message || `Failed to initialize ${activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'} payment.`);
     }
   };
 
@@ -339,12 +375,12 @@ export default function UpgradeModal({
                   {isLoadingPlan === 'trial_2days' ? (
                     <span className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Connecting to Cashfree...
+                      Connecting to {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}...
                     </span>
                   ) : (
                     <>
                       <Zap className="w-4 h-4 text-amber-400 fill-current" />
-                      Pay ₹{pricingPlans.trial_2days?.priceINR?.toLocaleString('en-IN') ?? 2} with Cashfree
+                      Pay ₹{pricingPlans.trial_2days?.priceINR?.toLocaleString('en-IN') ?? 2} with {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}
                     </>
                   )}
                 </button>
@@ -422,12 +458,12 @@ export default function UpgradeModal({
                   {isLoadingPlan === 'monthly' ? (
                     <span className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Connecting to Cashfree...
+                      Connecting to {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}...
                     </span>
                   ) : (
                     <>
                       <Zap className="w-4 h-4 fill-current" />
-                      Pay ₹{pricingPlans.monthly?.priceINR?.toLocaleString('en-IN') ?? 3} with Cashfree
+                      Pay ₹{pricingPlans.monthly?.priceINR?.toLocaleString('en-IN') ?? 3} with {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}
                     </>
                   )}
                 </button>
@@ -496,12 +532,12 @@ export default function UpgradeModal({
                   {isLoadingPlan === 'yearly' ? (
                     <span className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Connecting to Cashfree...
+                      Connecting to {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}...
                     </span>
                   ) : (
                     <>
                       <Crown className="w-4 h-4" />
-                      Pay ₹{pricingPlans.yearly?.priceINR?.toLocaleString('en-IN') ?? 4} with Cashfree
+                      Pay ₹{pricingPlans.yearly?.priceINR?.toLocaleString('en-IN') ?? 4} with {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}
                     </>
                   )}
                 </button>
@@ -520,7 +556,7 @@ export default function UpgradeModal({
                   UPI (GPay, PhonePe, Paytm), Cards, NetBanking
                 </span>
                 <span className="font-semibold text-slate-300 flex items-center gap-1">
-                  Powered by <span className="text-sky-400 font-bold">Cashfree Payments</span>
+                  Powered by <span className="text-sky-400 font-bold">{activeGateway === 'razorpay' ? 'Razorpay Secure' : 'Cashfree Payments'}</span>
                 </span>
               </div>
             </div>

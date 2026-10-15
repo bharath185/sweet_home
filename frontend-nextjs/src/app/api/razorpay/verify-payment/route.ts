@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { getPlanConfig, getActiveRazorpayCredentials, getPaymentSystemConfigAsync } from '@/lib/paymentConfigStore';
+import { setUserPaymentStatus, recordPaymentTransaction } from '@/lib/paymentStore';
+import { upsertUserInDb, saveTransactionInDb } from '@/lib/supabaseDb';
 
-const SERVER_PLAN_CONFIG: Record<string, { durationDays: number; tier: 'TRIAL' | 'PRO'; name: string }> = {
-  trial_2days: { durationDays: 2, tier: 'TRIAL', name: '2-Day Studio Trial Pass' },
-  monthly: { durationDays: 30, tier: 'PRO', name: 'Monthly Studio Pass' },
-  yearly: { durationDays: 365, tier: 'PRO', name: 'Annual Studio Pass (20% Off)' },
-  // Backward compatibility aliases
-  pro_monthly: { durationDays: 30, tier: 'PRO', name: 'Monthly Studio Pass' },
-  pro_yearly: { durationDays: 365, tier: 'PRO', name: 'Annual Studio Pass (20% Off)' },
-};
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 function generateSubscriptionToken(payload: object, secret: string): string {
   const payloadStr = Buffer.from(JSON.stringify(payload)).toString('base64');
@@ -18,8 +16,9 @@ function generateSubscriptionToken(payload: object, secret: string): string {
 
 export async function POST(req: NextRequest) {
   try {
+    await getPaymentSystemConfigAsync();
     const body = await req.json();
-    const { orderId, paymentId, signature, planId, userId } = body;
+    const { orderId, paymentId, signature, planId, userId, userEmail, userName } = body;
 
     if (!orderId || !paymentId || !planId) {
       return NextResponse.json(
@@ -28,7 +27,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const planConfig = SERVER_PLAN_CONFIG[planId];
+    const planConfig = getPlanConfig(planId);
     if (!planConfig) {
       return NextResponse.json(
         { error: 'Invalid planId supplied' },
@@ -36,12 +35,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    const rzpCreds = getActiveRazorpayCredentials();
+    const keySecret = rzpCreds.keySecret;
     const subSecret = process.env.SUBSCRIPTION_JWT_SECRET || keySecret || 'sweethome-prod-sub-crypto-secret-key-2026';
     const isSimulatedOrder = orderId.startsWith('order_sim_') || paymentId.startsWith('pay_sim_');
 
     // 1. Live Razorpay Cryptographic Verification
-    if (!isSimulatedOrder && keySecret && !keySecret.includes('YourRazorpay')) {
+    if (!isSimulatedOrder && rzpCreds.isConfigured) {
       if (!signature) {
         return NextResponse.json(
           { error: 'Payment signature missing for live transaction' },
@@ -67,10 +67,16 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Generate Cryptographically Signed Subscription Token with precise duration
-    const durationDays = planConfig.durationDays;
+    const durationDays = planConfig.durationDays || (planId === 'trial_2days' ? 2 : planId === 'yearly' ? 365 : 30);
     const expiresAt = Date.now() + durationDays * 24 * 60 * 60 * 1000;
+    const effectiveUserId = userId || 'anonymous';
+    const customerEmail = userEmail || '';
+    const customerName = userName || 'SweetHome Architect';
+
     const tokenPayload = {
-      userId: userId || 'anonymous',
+      userId: effectiveUserId,
+      email: customerEmail,
+      gateway: 'razorpay',
       tier: planConfig.tier,
       planId,
       durationDays,
@@ -82,18 +88,68 @@ export async function POST(req: NextRequest) {
 
     const subscriptionToken = generateSubscriptionToken(tokenPayload, subSecret);
 
-    return NextResponse.json({
-      success: true,
-      tier: planConfig.tier,
-      planId,
-      durationDays,
-      planName: planConfig.name,
-      paymentId,
+    // 3. Mark User as Paid in Memory and Supabase PostgreSQL
+    const userPayload = {
+      userId: effectiveUserId,
+      email: customerEmail,
+      name: customerName,
+      payment_status: 'paid' as const,
+      plan: planId,
+      paid_at: new Date().toISOString(),
+      expires_at: new Date(expiresAt).toISOString(),
+      cashfree_order_id: orderId,
+      cashfree_payment_id: paymentId,
+      is_free_trial: false,
+    };
+    setUserPaymentStatus(userPayload);
+    if (customerEmail) {
+      await upsertUserInDb({
+        ...userPayload,
+        email: customerEmail,
+        id: effectiveUserId,
+      });
+    }
+
+    // 4. Record Transaction in Memory and Supabase Ledger
+    const txPayload = {
+      id: `tx_${paymentId}`,
       orderId,
-      subscriptionToken,
+      paymentId,
+      userId: effectiveUserId,
+      customerName: customerName || 'SweetHome Customer',
+      customerEmail: customerEmail || 'customer@sweethome.io',
+      planId,
+      planName: planConfig.name,
+      amount: Number(planConfig.priceINR),
+      gateway: 'razorpay' as const,
+      status: 'PAID' as const,
+      paymentMethod: 'razorpay_checkout',
+      createdAt: new Date().toISOString(),
       expiresAt: new Date(expiresAt).toISOString(),
-      message: `Payment verified successfully! Your ${planConfig.name} is now active!`,
-    });
+      rawEvent: { orderId, paymentId, signature, planId },
+    };
+    recordPaymentTransaction(txPayload);
+    await saveTransactionInDb(txPayload);
+
+    return NextResponse.json(
+      {
+        success: true,
+        tier: planConfig.tier,
+        planId,
+        durationDays,
+        planName: planConfig.name,
+        paymentId,
+        orderId,
+        subscriptionToken,
+        expiresAt: new Date(expiresAt).toISOString(),
+        message: `Payment verified successfully! Your ${planConfig.name} is now active!`,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        },
+      }
+    );
   } catch (error: any) {
     console.error('Error verifying Razorpay payment:', error);
     return NextResponse.json(

@@ -174,13 +174,28 @@ function saveConfigToDisk(config: FullPaymentSystemConfig) {
 /**
  * Returns the full payment configuration (gateway keys + plans pricing)
  */
-/**
- * Returns the full payment configuration (gateway keys + plans pricing)
- */
 export function getPaymentSystemConfig(): FullPaymentSystemConfig {
   // Always load from disk to ensure real-time persistence across requests
   cachedConfig = loadConfigFromDisk();
   return cachedConfig;
+}
+
+/**
+ * Loads configuration asynchronously from Supabase app_config table with disk fallback
+ */
+export async function getPaymentSystemConfigAsync(): Promise<FullPaymentSystemConfig> {
+  try {
+    const { getAppConfigFromDb } = await import('./supabaseDb');
+    const dbConfig = await getAppConfigFromDb<FullPaymentSystemConfig>('payment_config');
+    if (dbConfig && dbConfig.gateway && dbConfig.plans) {
+      cachedConfig = dbConfig;
+      saveConfigToDisk(dbConfig);
+      return dbConfig;
+    }
+  } catch (err) {
+    // fallback to disk or defaults
+  }
+  return getPaymentSystemConfig();
 }
 
 /**
@@ -285,6 +300,42 @@ export function getActiveCashfreeCredentials(): {
 }
 
 /**
+ * Returns the effective live Razorpay credentials
+ */
+export function getActiveRazorpayCredentials(): {
+  keyId: string;
+  keySecret: string;
+  isConfigured: boolean;
+} {
+  const config = getPaymentSystemConfig();
+  const keyId =
+    config.gateway.razorpayKeyId?.trim() ||
+    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() ||
+    process.env.RAZORPAY_KEY_ID?.trim() ||
+    '';
+  const keySecret =
+    config.gateway.razorpayKeySecret?.trim() ||
+    process.env.RAZORPAY_KEY_SECRET?.trim() ||
+    '';
+
+  const isConfigured =
+    Boolean(keyId) &&
+    Boolean(keySecret) &&
+    !keyId.includes('YourRazorpay') &&
+    !keySecret.includes('YourRazorpay');
+
+  return { keyId, keySecret, isConfigured };
+}
+
+/**
+ * Returns currently active payment gateway ('cashfree' or 'razorpay')
+ */
+export function getActivePaymentGateway(): 'cashfree' | 'razorpay' {
+  const config = getPaymentSystemConfig();
+  return config.gateway.activeGateway || 'cashfree';
+}
+
+/**
  * Returns single plan configuration by planId with fallback
  */
 export function getPlanConfig(planId: string): PlanConfigItem | null {
@@ -293,3 +344,4 @@ export function getPlanConfig(planId: string): PlanConfigItem | null {
   const normalizedId = planId === 'pro_monthly' ? 'monthly' : planId === 'pro_yearly' ? 'yearly' : planId;
   return config.plans[normalizedId] || config.plans[planId] || null;
 }
+

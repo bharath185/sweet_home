@@ -30,7 +30,7 @@ export interface PaymentTransactionRecord {
   planId: 'trial_2days' | 'monthly' | 'yearly' | string;
   planName: string;
   amount: number; // in INR
-  gateway: 'cashfree';
+  gateway: 'cashfree' | 'razorpay';
   status: 'PAID' | 'REFUNDED' | 'FAILED' | 'PENDING' | 'USER_DROPPED';
   paymentMethod: string;
   createdAt: string;
@@ -350,6 +350,8 @@ export function recordTransaction(tx: PaymentTransactionRecord): void {
     transactions.unshift(tx);
   }
 }
+
+export const recordPaymentTransaction = recordTransaction;
 
 /**
  * Returns all transactions for the admin dashboard or audit log

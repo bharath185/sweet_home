@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { setUserPaymentStatus, recordTransaction } from '@/lib/paymentStore';
-import { getPlanConfig, getActiveCashfreeCredentials } from '@/lib/paymentConfigStore';
+import { getPlanConfig, getActiveCashfreeCredentials, getPaymentSystemConfigAsync } from '@/lib/paymentConfigStore';
 import { upsertUserInDb, saveTransactionInDb } from '@/lib/supabaseDb';
 
 function generateSubscriptionToken(payload: object, secret: string): string {
@@ -12,6 +12,7 @@ function generateSubscriptionToken(payload: object, secret: string): string {
 
 export async function POST(req: NextRequest) {
   try {
+    await getPaymentSystemConfigAsync();
     const body = await req.json();
     const { orderId, planId, userId } = body;
 

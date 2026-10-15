@@ -1,42 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { getPlanConfig, getActiveRazorpayCredentials, getPaymentSystemConfigAsync } from '@/lib/paymentConfigStore';
 
-// Fixed server-side pricing in INR paise (1 INR = 100 paise)
-// Client CANNOT tamper with prices.
-const SERVER_PLAN_PRICES_PAISE: Record<string, { amount: number; durationDays: number; tier: 'TRIAL' | 'PRO'; name: string }> = {
-  trial_2days: { amount: 200 * 100, durationDays: 2, tier: 'TRIAL', name: '2-Day Studio Trial Pass' },
-  monthly: { amount: 999 * 100, durationDays: 30, tier: 'PRO', name: 'Monthly Studio Pass' },
-  yearly: { amount: 9590 * 100, durationDays: 365, tier: 'PRO', name: 'Annual Studio Pass (20% Off)' },
-  // Backward compatibility aliases
-  pro_monthly: { amount: 999 * 100, durationDays: 30, tier: 'PRO', name: 'Monthly Studio Pass' },
-  pro_yearly: { amount: 9590 * 100, durationDays: 365, tier: 'PRO', name: 'Annual Studio Pass (20% Off)' },
-};
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 export async function POST(req: NextRequest) {
   try {
+    await getPaymentSystemConfigAsync();
     const body = await req.json();
     const { planId, userId, userEmail, userName } = body;
 
-    if (!planId || !SERVER_PLAN_PRICES_PAISE[planId]) {
+    const planConfig = getPlanConfig(planId);
+    if (!planId || !planConfig) {
       return NextResponse.json(
         { error: 'Invalid planId. Must be one of trial_2days, monthly, or yearly.' },
         { status: 400 }
       );
     }
 
-    const planConfig = SERVER_PLAN_PRICES_PAISE[planId];
-    const amountInPaise = planConfig.amount;
+    const amountInPaise = Math.round(Number(planConfig.priceINR) * 100);
     const currency = 'INR';
     const receipt = `rcpt_${(userId || 'guest').toString().slice(-6)}_${Date.now().toString().slice(-6)}`;
 
-    const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    const rzpCreds = getActiveRazorpayCredentials();
+    const keyId = rzpCreds.keyId;
+    const keySecret = rzpCreds.keySecret;
 
     // 1. Live Razorpay API Order Creation
-    if (!keyId || !keySecret || keyId.includes('YourRazorpay')) {
+    if (!rzpCreds.isConfigured) {
       return NextResponse.json(
         {
-          error: 'Razorpay API credentials (NEXT_PUBLIC_RAZORPAY_KEY_ID & RAZORPAY_KEY_SECRET) are not configured on Vercel. Please provide your Razorpay keys to enable live Razorpay checkout.',
+          error: 'Razorpay API credentials (Key ID & Key Secret) are not configured. Please add your Razorpay keys in the Admin Dashboard or Vercel environment.',
           code: 'MISSING_RAZORPAY_KEYS',
         },
         { status: 400 }

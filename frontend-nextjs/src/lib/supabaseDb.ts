@@ -430,3 +430,55 @@ export async function deleteTemplateInDb(templateId: string): Promise<boolean> {
   }
 }
 
+/**
+ * 13. Get app configuration from Supabase (e.g. key = 'payment_config')
+ */
+export async function getAppConfigFromDb<T = any>(key: string): Promise<T | null> {
+  const admin = getSupabaseAdmin();
+  if (!admin || !key) return null;
+
+  try {
+    const { data, error } = await admin
+      .from('app_config')
+      .select('value')
+      .eq('key', key)
+      .maybeSingle();
+
+    if (error) {
+      console.warn(`[SupabaseDb] getAppConfigFromDb(${key}) error:`, error.message);
+      return null;
+    }
+    return data ? (data.value as T) : null;
+  } catch (err: any) {
+    console.warn(`[SupabaseDb] getAppConfigFromDb(${key}) exception:`, err.message);
+    return null;
+  }
+}
+
+/**
+ * 14. Save app configuration to Supabase
+ */
+export async function saveAppConfigInDb(key: string, value: any): Promise<boolean> {
+  const admin = getSupabaseAdmin();
+  if (!admin || !key) return false;
+
+  try {
+    const { error } = await admin
+      .from('app_config')
+      .upsert(
+        { key, value, updated_at: new Date().toISOString() },
+        { onConflict: 'key' }
+      );
+
+    if (error) {
+      console.warn(`[SupabaseDb] saveAppConfigInDb(${key}) error:`, error.message);
+      return false;
+    }
+    return true;
+  } catch (err: any) {
+    console.warn(`[SupabaseDb] saveAppConfigInDb(${key}) exception:`, err.message);
+    return false;
+  }
+}
+
+

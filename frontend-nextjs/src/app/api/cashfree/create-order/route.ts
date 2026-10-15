@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { recordPendingOrder, setUserPaymentStatus } from '@/lib/paymentStore';
-import { getPlanConfig, getActiveCashfreeCredentials } from '@/lib/paymentConfigStore';
+import { getPlanConfig, getActiveCashfreeCredentials, getPaymentSystemConfigAsync } from '@/lib/paymentConfigStore';
 
 export async function POST(req: NextRequest) {
   try {
+    await getPaymentSystemConfigAsync();
     const body = await req.json();
     const { planId, userId, userEmail, userName, userPhone } = body;
 

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getPaymentSystemConfig, getActiveCashfreeCredentials } from '@/lib/paymentConfigStore';
+import { getPaymentSystemConfigAsync, getActiveCashfreeCredentials } from '@/lib/paymentConfigStore';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const config = getPaymentSystemConfig();
+    const config = await getPaymentSystemConfigAsync();
     const cfCreds = getActiveCashfreeCredentials();
 
     return NextResponse.json({

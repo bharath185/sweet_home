@@ -19,6 +19,7 @@ import {
 import { User, PaymentStatus } from '../types/plan';
 import { PRICING_PLANS, PlanId, PlanDetail, saveSubscriptionLocally, fetchActivePricingPlans } from '../services/subscriptionService';
 import { initiateCashfreeCheckout } from '../services/cashfreeClient';
+import { initiateSubscriptionCheckout as initiateRazorpayCheckout } from '../services/razorpayClient';
 import confetti from 'canvas-confetti';
 
 interface SubscriptionPaywallProps {
@@ -48,6 +49,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
     }
     return PRICING_PLANS;
   });
+  const [activeGateway, setActiveGateway] = useState<'cashfree' | 'razorpay'>('cashfree');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activePolicy, setActivePolicy] = useState<'terms' | 'privacy' | 'refund' | 'contact' | null>(null);
@@ -61,6 +63,29 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
         } catch {}
       }
     });
+
+    fetch('/api/payment-config')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.plans) {
+          setPricingPlans({ ...data.plans });
+          try {
+            localStorage.setItem('sweethome_cached_plans', JSON.stringify(data.plans));
+          } catch {}
+        }
+        if (data.activeGateway) {
+          setActiveGateway(data.activeGateway);
+        }
+      })
+      .catch(() => {
+        fetch('/api/plans')
+          .then((r) => r.json())
+          .then((data) => {
+            if (data.plans) setPricingPlans({ ...data.plans });
+            if (data.gateway?.activeGateway) setActiveGateway(data.gateway.activeGateway);
+          })
+          .catch(() => {});
+      });
   }, []);
 
   const triggerConfetti = () => {
@@ -76,38 +101,60 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
     const planConfig = pricingPlans[planId] || PRICING_PLANS[planId];
     const durationDays = planConfig?.durationDays || (planId === 'trial_2days' ? 2 : planId === 'yearly' ? 365 : 30);
 
-    try {
-      await initiateCashfreeCheckout({
-        planId,
-        user: currentUser,
-        redirectTarget: '_modal',
-        onSuccess: (result) => {
-          setIsProcessing(false);
-          triggerConfetti();
+    const onPaymentSuccess = (result: {
+      tier: 'TRIAL' | 'PRO' | 'ENTERPRISE';
+      paymentId: string;
+      subscriptionToken?: string;
+      orderId?: string;
+      durationDays?: number;
+    }) => {
+      setIsProcessing(false);
+      triggerConfetti();
 
-          const updated = saveSubscriptionLocally(
-            currentUser,
-            result.tier,
-            result.paymentId,
-            result.subscriptionToken,
-            result.orderId,
-            result.durationDays || durationDays,
-            planId as any,
-            'cashfree'
-          );
-          onUserUpdated(updated);
-        },
-        onError: (errMsg) => {
-          setIsProcessing(false);
-          setErrorMessage(errMsg);
-        },
-        onDismiss: () => {
-          setIsProcessing(false);
-        },
-      });
+      const updated = saveSubscriptionLocally(
+        currentUser,
+        result.tier,
+        result.paymentId,
+        result.subscriptionToken || '',
+        result.orderId,
+        result.durationDays || durationDays,
+        planId as any,
+        activeGateway
+      );
+      onUserUpdated(updated);
+    };
+
+    const onPaymentError = (errMsg: string) => {
+      setIsProcessing(false);
+      setErrorMessage(errMsg);
+    };
+
+    const onPaymentDismiss = () => {
+      setIsProcessing(false);
+    };
+
+    try {
+      if (activeGateway === 'razorpay') {
+        await initiateRazorpayCheckout({
+          planId,
+          user: currentUser,
+          onSuccess: onPaymentSuccess,
+          onError: onPaymentError,
+          onDismiss: onPaymentDismiss,
+        });
+      } else {
+        await initiateCashfreeCheckout({
+          planId,
+          user: currentUser,
+          redirectTarget: '_modal',
+          onSuccess: onPaymentSuccess,
+          onError: onPaymentError,
+          onDismiss: onPaymentDismiss,
+        });
+      }
     } catch (err: any) {
       setIsProcessing(false);
-      setErrorMessage(err.message || 'Error launching Cashfree checkout.');
+      setErrorMessage(err.message || `Error launching ${activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'} checkout.`);
     }
   };
 
@@ -403,7 +450,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
             {isProcessing ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Connecting to Cashfree...</span>
+                <span>Connecting to {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}...</span>
               </>
             ) : (
               <>
@@ -412,7 +459,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                     ? 'Renew Pass'
                     : status === 'failed'
                     ? 'Retry Checkout'
-                    : `Subscribe to ${PRICING_PLANS[selectedPlan]?.name || 'Studio Pass'}`}
+                    : `Subscribe to ${pricingPlans[selectedPlan]?.name || PRICING_PLANS[selectedPlan]?.name || 'Studio Pass'}`}
                 </span>
                 <ArrowRight className="w-4 h-4" />
               </>
@@ -422,7 +469,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
           <div className="mt-4 flex items-center justify-center gap-4 text-[11px] text-slate-400">
             <span className="flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              Secured by Cashfree
+              Secured by {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}
             </span>
             <span>•</span>
             <span>UPI, Cards & NetBanking</span>

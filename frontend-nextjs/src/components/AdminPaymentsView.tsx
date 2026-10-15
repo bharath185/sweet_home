@@ -52,13 +52,21 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
     cashfreeSecretKey: string;
     cashfreeSecretKeyMasked: string;
     isConfigured: boolean;
+    razorpayKeyId: string;
+    razorpayKeySecret: string;
+    razorpayKeySecretMasked: string;
+    isRazorpayConfigured: boolean;
   }>({
     activeGateway: 'cashfree',
-    environment: 'SANDBOX',
+    environment: 'PRODUCTION',
     cashfreeAppId: '',
     cashfreeSecretKey: '',
     cashfreeSecretKeyMasked: '',
     isConfigured: false,
+    razorpayKeyId: '',
+    razorpayKeySecret: '',
+    razorpayKeySecretMasked: '',
+    isRazorpayConfigured: false,
   });
 
   // Dynamic Plans Settings State
@@ -110,11 +118,15 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
         if (data.config.gateway) {
           setGatewaySettings({
             activeGateway: data.config.gateway.activeGateway || 'cashfree',
-            environment: data.config.gateway.environment || 'SANDBOX',
+            environment: data.config.gateway.environment || 'PRODUCTION',
             cashfreeAppId: data.config.gateway.cashfreeAppId || '',
             cashfreeSecretKey: '',
             cashfreeSecretKeyMasked: data.config.gateway.cashfreeSecretKeyMasked || '',
             isConfigured: data.config.gateway.isConfigured || false,
+            razorpayKeyId: data.config.gateway.razorpayKeyId || '',
+            razorpayKeySecret: '',
+            razorpayKeySecretMasked: data.config.gateway.razorpayKeySecretMasked || '',
+            isRazorpayConfigured: data.config.gateway.isRazorpayConfigured || false,
           });
         }
         if (data.config.plans) {
@@ -172,6 +184,8 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
             environment: gatewaySettings.environment,
             cashfreeAppId: gatewaySettings.cashfreeAppId,
             cashfreeSecretKey: gatewaySettings.cashfreeSecretKey || undefined,
+            razorpayKeyId: gatewaySettings.razorpayKeyId,
+            razorpayKeySecret: gatewaySettings.razorpayKeySecret || undefined,
           },
           plans: plansSettings,
         }),
@@ -358,110 +372,242 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
                   <Key className="w-4 h-4" />
                 </div>
                 <div>
-                  <h2 className="text-sm sm:text-base font-bold">Payment Gateway Credentials</h2>
+                  <h2 className="text-sm sm:text-base font-bold">Payment Gateway Switcher & Credentials</h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Configure your live Cashfree credentials for collecting customer payments
+                    Enable either Cashfree or Razorpay (one active at a time). Customer checkouts immediately route to your active gateway.
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
-                  gatewaySettings.isConfigured
+                  gatewaySettings.activeGateway === 'razorpay'
+                    ? gatewaySettings.isRazorpayConfigured
+                      ? 'bg-blue-500/10 text-blue-500 border-blue-500/30'
+                      : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+                    : gatewaySettings.isConfigured
                     ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
                     : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
                 }`}>
-                  {gatewaySettings.isConfigured ? '🟢 Live Ready' : '🟡 Needs Keys'}
+                  {gatewaySettings.activeGateway === 'razorpay'
+                    ? (gatewaySettings.isRazorpayConfigured ? '🟢 Razorpay Active (Live Ready)' : '🟡 Razorpay Active (Needs Keys)')
+                    : (gatewaySettings.isConfigured ? '🟢 Cashfree Active (Live Ready)' : '🟡 Cashfree Active (Needs Keys)')}
                 </span>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Environment (Production vs Sandbox) */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Environment Mode
-                </label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setGatewaySettings((s) => ({ ...s, environment: 'PRODUCTION' }))}
-                    className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-                      gatewaySettings.environment === 'PRODUCTION'
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                        : isLight ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-slate-900 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    <span>🔴 PRODUCTION (Live)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setGatewaySettings((s) => ({ ...s, environment: 'SANDBOX' }))}
-                    className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-                      gatewaySettings.environment === 'SANDBOX'
-                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                        : isLight ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-slate-900 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    <span>🧪 SANDBOX (Testing)</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Active Provider */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Active Provider
-                </label>
-                <div className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-between ${
-                  isLight ? 'bg-slate-100 border-slate-200 text-slate-800' : 'bg-slate-900 border-slate-800 text-slate-200'
-                }`}>
-                  <span>Cashfree Payments PG</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-500 font-bold">UPI, Cards, NetBanking</span>
-                </div>
-              </div>
-
-              {/* Cashfree App ID */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                  <span>Cashfree App ID (Client ID)</span>
-                  <span className="text-[10px] font-normal text-slate-400">e.g. 14430251...</span>
-                </label>
-                <input
-                  type="text"
-                  value={gatewaySettings.cashfreeAppId}
-                  onChange={(e) => setGatewaySettings((s) => ({ ...s, cashfreeAppId: e.target.value }))}
-                  placeholder="e.g. 14430251a388dbe1368bfe972915203441"
-                  className={`w-full px-3 py-2 rounded-xl border text-xs font-mono transition focus:outline-none focus:ring-2 focus:ring-amber-500 ${
-                    isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-white'
+            {/* SECTION 1: ONE AT A TIME ACTIVE GATEWAY SELECTOR */}
+            <div className="mb-5">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                Active Payment Gateway (Select which gateway should process customer payments):
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Cashfree Toggle Option */}
+                <div
+                  onClick={() => setGatewaySettings((s) => ({ ...s, activeGateway: 'cashfree' }))}
+                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
+                    gatewaySettings.activeGateway === 'cashfree'
+                      ? 'border-sky-500 bg-sky-50/50 dark:bg-sky-950/20 shadow-md ring-2 ring-sky-500/20'
+                      : isLight
+                      ? 'border-slate-200 bg-slate-50/60 hover:border-slate-300'
+                      : 'border-slate-800 bg-slate-900/40 hover:border-slate-700'
                   }`}
-                />
-                {gatewaySettings.cashfreeAppId?.startsWith('cfsk_') && (
-                  <p className="mt-1 text-[11px] text-amber-500 font-medium">
-                    ⚠️ Note: Keys starting with <code>cfsk_</code> are Secret Keys. The system will auto-swap this for you.
-                  </p>
-                )}
-              </div>
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                        gatewaySettings.activeGateway === 'cashfree' ? 'border-sky-500 bg-sky-500' : 'border-slate-400'
+                      }`}>
+                        {gatewaySettings.activeGateway === 'cashfree' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-extrabold text-slate-900 dark:text-white">Cashfree Payments</h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Modal checkout with UPI, Cards & NetBanking</p>
+                      </div>
+                    </div>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                      gatewaySettings.activeGateway === 'cashfree'
+                        ? 'bg-sky-500 text-white'
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}>
+                      {gatewaySettings.activeGateway === 'cashfree' ? 'ENABLED' : 'DISABLED'}
+                    </span>
+                  </div>
+                </div>
 
-              {/* Cashfree Secret Key */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                  <span>Cashfree Secret Key</span>
-                  {gatewaySettings.cashfreeSecretKeyMasked && (
-                    <span className="text-[10px] font-mono text-emerald-400 font-semibold">Active: {gatewaySettings.cashfreeSecretKeyMasked}</span>
+                {/* Razorpay Toggle Option */}
+                <div
+                  onClick={() => setGatewaySettings((s) => ({ ...s, activeGateway: 'razorpay' }))}
+                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
+                    gatewaySettings.activeGateway === 'razorpay'
+                      ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 shadow-md ring-2 ring-blue-500/20'
+                      : isLight
+                      ? 'border-slate-200 bg-slate-50/60 hover:border-slate-300'
+                      : 'border-slate-800 bg-slate-900/40 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                        gatewaySettings.activeGateway === 'razorpay' ? 'border-blue-500 bg-blue-500' : 'border-slate-400'
+                      }`}>
+                        {gatewaySettings.activeGateway === 'razorpay' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-extrabold text-slate-900 dark:text-white">Razorpay Payments</h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Checkout v1 with UPI QR, Cards & Wallets</p>
+                      </div>
+                    </div>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                      gatewaySettings.activeGateway === 'razorpay'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}>
+                      {gatewaySettings.activeGateway === 'razorpay' ? 'ENABLED' : 'DISABLED'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 2: ENVIRONMENT SELECTOR */}
+            <div className="mb-5">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Environment Mode (applies to active gateway)
+              </label>
+              <div className="flex items-center gap-2 max-w-md">
+                <button
+                  type="button"
+                  onClick={() => setGatewaySettings((s) => ({ ...s, environment: 'PRODUCTION' }))}
+                  className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    gatewaySettings.environment === 'PRODUCTION'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                      : isLight ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-slate-900 border-slate-800 text-slate-400'
+                  }`}
+                >
+                  <span>🔴 PRODUCTION (Live)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGatewaySettings((s) => ({ ...s, environment: 'SANDBOX' }))}
+                  className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    gatewaySettings.environment === 'SANDBOX'
+                      ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                      : isLight ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-slate-900 border-slate-800 text-slate-400'
+                  }`}
+                >
+                  <span>🧪 SANDBOX (Testing)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* SECTION 3: CREDENTIALS (DUAL SECTIONS) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-3 border-t border-slate-200 dark:border-slate-800">
+              {/* Cashfree Credentials Card */}
+              <div className={`p-4 rounded-xl border ${
+                gatewaySettings.activeGateway === 'cashfree'
+                  ? 'border-sky-400/80 bg-sky-50/20 dark:bg-sky-950/10'
+                  : 'border-slate-200 dark:border-slate-800 opacity-75'
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-sky-500" />
+                    <span>Cashfree API Keys</span>
+                  </h4>
+                  {gatewaySettings.activeGateway === 'cashfree' && (
+                    <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-900/40 px-2 py-0.5 rounded">
+                      ACTIVE GATEWAY
+                    </span>
                   )}
-                </label>
-                <input
-                  type="password"
-                  value={gatewaySettings.cashfreeSecretKey}
-                  onChange={(e) => setGatewaySettings((s) => ({ ...s, cashfreeSecretKey: e.target.value }))}
-                  placeholder={gatewaySettings.cashfreeSecretKeyMasked ? 'Key configured (leave blank to keep current)' : 'cfsk_ma_prod_... paste secret key here'}
-                  className={`w-full px-3 py-2 rounded-xl border text-xs font-mono transition focus:outline-none focus:ring-2 focus:ring-amber-500 ${
-                    isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-white'
-                  }`}
-                />
-                <p className="mt-1 text-[10px] text-slate-400">
-                  Starts with <code>cfsk_ma_prod_</code> in Production or <code>cfsk_ma_test_</code> in Sandbox.
-                </p>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                      Cashfree App ID (Client ID)
+                    </label>
+                    <input
+                      type="text"
+                      value={gatewaySettings.cashfreeAppId}
+                      onChange={(e) => setGatewaySettings((s) => ({ ...s, cashfreeAppId: e.target.value }))}
+                      placeholder="e.g. 14430251a388dbe1368bfe972915203441"
+                      className={`w-full px-3 py-1.5 rounded-lg border text-xs font-mono transition focus:outline-hidden ${
+                        isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-white'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                      <span>Cashfree Secret Key</span>
+                      {gatewaySettings.cashfreeSecretKeyMasked && (
+                        <span className="text-[10px] font-mono text-emerald-500 font-semibold">Active: {gatewaySettings.cashfreeSecretKeyMasked}</span>
+                      )}
+                    </label>
+                    <input
+                      type="password"
+                      value={gatewaySettings.cashfreeSecretKey}
+                      onChange={(e) => setGatewaySettings((s) => ({ ...s, cashfreeSecretKey: e.target.value }))}
+                      placeholder={gatewaySettings.cashfreeSecretKeyMasked ? 'Key configured (leave blank to keep current)' : 'cfsk_ma_prod_... paste secret key here'}
+                      className={`w-full px-3 py-1.5 rounded-lg border text-xs font-mono transition focus:outline-hidden ${
+                        isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-white'
+                      }`}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Razorpay Credentials Card */}
+              <div className={`p-4 rounded-xl border ${
+                gatewaySettings.activeGateway === 'razorpay'
+                  ? 'border-blue-400/80 bg-blue-50/20 dark:bg-blue-950/10'
+                  : 'border-slate-200 dark:border-slate-800 opacity-75'
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span>Razorpay API Keys</span>
+                  </h4>
+                  {gatewaySettings.activeGateway === 'razorpay' && (
+                    <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded">
+                      ACTIVE GATEWAY
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                      Razorpay Key ID
+                    </label>
+                    <input
+                      type="text"
+                      value={gatewaySettings.razorpayKeyId}
+                      onChange={(e) => setGatewaySettings((s) => ({ ...s, razorpayKeyId: e.target.value }))}
+                      placeholder="e.g. rzp_live_... or rzp_test_..."
+                      className={`w-full px-3 py-1.5 rounded-lg border text-xs font-mono transition focus:outline-hidden ${
+                        isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-white'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                      <span>Razorpay Key Secret</span>
+                      {gatewaySettings.razorpayKeySecretMasked && (
+                        <span className="text-[10px] font-mono text-emerald-500 font-semibold">Active: {gatewaySettings.razorpayKeySecretMasked}</span>
+                      )}
+                    </label>
+                    <input
+                      type="password"
+                      value={gatewaySettings.razorpayKeySecret}
+                      onChange={(e) => setGatewaySettings((s) => ({ ...s, razorpayKeySecret: e.target.value }))}
+                      placeholder={gatewaySettings.razorpayKeySecretMasked ? 'Key configured (leave blank to keep current)' : 'Paste Razorpay secret key here'}
+                      className={`w-full px-3 py-1.5 rounded-lg border text-xs font-mono transition focus:outline-hidden ${
+                        isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-950 border-slate-700 text-white'
+                      }`}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
