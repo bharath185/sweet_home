@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTransactions, recordTransaction } from '@/lib/paymentStore';
 import { getActiveCashfreeCredentials } from '@/lib/paymentConfigStore';
+import { getAllTransactionsFromDb, saveTransactionInDb } from '@/lib/supabaseDb';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,8 +39,11 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 2. Compute Aggregations from unified transaction ledger (Real payments only)
-    const allTransactions = getTransactions();
+    // 2. Fetch from Supabase Cloud Ledger first with fallback to memory
+    let allTransactions = await getAllTransactionsFromDb();
+    if (!allTransactions || allTransactions.length === 0) {
+      allTransactions = getTransactions() as any;
+    }
     const totalRevenue = allTransactions.reduce((acc, tx) => acc + tx.amount, 0);
     const cashfreeRevenue = allTransactions.filter((tx) => tx.gateway === 'cashfree').reduce(
       (acc, tx) => acc + tx.amount,

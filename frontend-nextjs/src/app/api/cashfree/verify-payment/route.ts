@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { setUserPaymentStatus, recordTransaction } from '@/lib/paymentStore';
 import { getPlanConfig, getActiveCashfreeCredentials } from '@/lib/paymentConfigStore';
+import { upsertUserInDb, saveTransactionInDb } from '@/lib/supabaseDb';
 
 function generateSubscriptionToken(payload: object, secret: string): string {
   const payloadStr = Buffer.from(JSON.stringify(payload)).toString('base64');
@@ -107,21 +108,30 @@ export async function POST(req: NextRequest) {
 
     const subscriptionToken = generateSubscriptionToken(tokenPayload, subSecret);
 
-    // 3. Mark User as Paid in Server-Side Store
-    setUserPaymentStatus({
+    // 3. Mark User as Paid in Server-Side Store & Supabase
+    const userPayload = {
       userId: effectiveUserId,
       email: customerEmail,
       name: customerName,
-      payment_status: 'paid',
+      payment_status: 'paid' as const,
       plan: planId,
       paid_at: new Date().toISOString(),
       expires_at: new Date(expiresAt).toISOString(),
       cashfree_order_id: orderId,
       cashfree_payment_id: paymentId,
-    });
+      is_free_trial: false,
+    };
+    setUserPaymentStatus(userPayload);
+    if (customerEmail) {
+      await upsertUserInDb({
+        ...userPayload,
+        email: customerEmail,
+        id: effectiveUserId,
+      });
+    }
 
-    // 4. Record Transaction in Ledger
-    recordTransaction({
+    // 4. Record Transaction in Ledger & Supabase
+    const txPayload = {
       id: `tx_${paymentId}`,
       orderId,
       paymentId,
@@ -131,13 +141,15 @@ export async function POST(req: NextRequest) {
       planId,
       planName: planConfig.name,
       amount: expectedAmount,
-      gateway: 'cashfree',
-      status: 'PAID',
+      gateway: 'cashfree' as const,
+      status: 'PAID' as const,
       paymentMethod: 'Cashfree PG',
       createdAt: new Date().toISOString(),
       expiresAt: new Date(expiresAt).toISOString(),
       rawEvent: orderData,
-    });
+    };
+    recordTransaction(txPayload);
+    await saveTransactionInDb(txPayload);
 
     return NextResponse.json({
       success: true,

@@ -79,6 +79,7 @@ import { SelectDemoModal } from '../components/SelectDemoModal';
 import {
   UserProjectSummary,
   getUserProjects,
+  syncUserProjectsWithCloud,
   saveUserProject,
   deleteUserProject,
   exportPlanAsJson,
@@ -405,6 +406,11 @@ export default function HomeStudioPage() {
         setUserRole(u.role);
         const projs = getUserProjects(u.id);
         setUserProjects(projs);
+        syncUserProjectsWithCloud(u.id, u.email).then((cloudProjs) => {
+          if (cloudProjs && cloudProjs.length > 0) {
+            setUserProjects(cloudProjs);
+          }
+        });
         if (u.role === 'ADMIN') {
           setActiveView('dashboard');
         } else {
@@ -513,6 +519,14 @@ export default function HomeStudioPage() {
     refreshUserPaymentStatus(userToSet);
     const projs = getUserProjects(userToSet.id);
     setUserProjects(projs);
+    syncUserProjectsWithCloud(userToSet.id, userToSet.email).then((cloudProjs) => {
+      if (cloudProjs && cloudProjs.length > 0) {
+        setUserProjects(cloudProjs);
+        if (user.role !== 'ADMIN') {
+          setPlan(cloudProjs[0].plan);
+        }
+      }
+    });
 
     if (user.role === 'ADMIN') {
       setActiveView('dashboard');
@@ -595,7 +609,7 @@ export default function HomeStudioPage() {
   const handleSave = async () => {
     setIsSaving(true);
     if (currentUser) {
-      const updatedList = saveUserProject(currentUser.id, plan);
+      const updatedList = saveUserProject(currentUser.id, plan, currentUser.email);
       setUserProjects(updatedList);
     }
     try {
@@ -620,7 +634,7 @@ export default function HomeStudioPage() {
 
   const handleSaveNewUserProject = (newPlan: HomePlan) => {
     if (currentUser) {
-      const updatedList = saveUserProject(currentUser.id, newPlan);
+      const updatedList = saveUserProject(currentUser.id, newPlan, currentUser.email);
       setUserProjects(updatedList);
     }
     setPlan(newPlan);

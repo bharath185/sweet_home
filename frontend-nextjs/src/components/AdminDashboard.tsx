@@ -134,13 +134,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userFilterRole, setUserFilterRole] = useState<'ALL' | 'ADMIN' | 'DESIGNER' | 'PAID' | 'UNPAID'>('ALL');
 
-  // Load registered users from localStorage & sync
-  const refreshUsersList = () => {
+  // Load registered users from Supabase Cloud Database & sync
+  const refreshUsersList = async () => {
     if (typeof window === 'undefined') return;
     try {
       const stored = localStorage.getItem('sweethome_registered_users');
       if (stored) {
         setRegisteredAccounts(JSON.parse(stored));
+      }
+      const res = await fetch('/api/users');
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) {
+        const cloudRecords: StoredRegisteredRecord[] = data.map((u: any) => ({
+          user: {
+            id: u.id,
+            name: u.name || 'User',
+            email: u.email,
+            role: u.role,
+            isOnline: u.isOnline ?? false,
+            assignedPlan: u.assignedPlan || 'plan-sarah-suite',
+            createdAt: u.createdAt || 'Recently',
+            payment_status: u.payment_status || 'unpaid',
+            plan: u.plan || null,
+            expires_at: u.expires_at || null,
+          },
+          phone: u.phone || '',
+          email: u.email,
+          username: u.phone || u.email,
+          passwordHash: '',
+        }));
+        setRegisteredAccounts(cloudRecords);
       }
     } catch (e) {
       console.warn('Failed to load registered accounts:', e);

@@ -171,7 +171,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
   // ==========================================
   // 1. SIGN IN: USERNAME & PASSWORD AUTHENTICATION
   // ==========================================
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -190,6 +190,45 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
     }
 
     setIsLoading(true);
+
+    // 1. Check Cloud Database (Supabase) for cross-device authentication
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: cleanIdentifier, password: cleanPassword }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.user) {
+        const u = data.user;
+        const finalUser: UserType = {
+          id: u.id,
+          name: u.name || cleanIdentifier,
+          email: u.email,
+          role: u.role || 'DESIGNER',
+          isOnline: true,
+          assignedPlan: 'plan-sarah-suite',
+          createdAt: u.created_at || 'Today',
+          payment_status: u.payment_status || (data.isAdmin ? 'paid' : 'unpaid'),
+          plan: u.plan,
+          isFreeTrial: u.is_free_trial,
+          trialStartedAt: u.trial_started_at,
+          trialExpiresAt: u.trial_expires_at,
+          expires_at: u.expires_at,
+          subscriptionTier: data.isAdmin ? 'PRO' : (u.is_free_trial ? 'TRIAL' : (u.payment_status === 'paid' ? 'PRO' : 'FREE')),
+          subscriptionStatus: data.isPaid ? 'active' : 'inactive',
+        };
+        onLogin(finalUser);
+        setIsLoading(false);
+        return;
+      } else if (res.status === 401) {
+        setErrorMessage(data.error || 'Incorrect password. Please try again.');
+        setIsLoading(false);
+        return;
+      }
+    } catch (apiErr) {
+      console.warn('Database login check failed, checking local accounts:', apiErr);
+    }
 
     setTimeout(() => {
       // A. Match Demo Accounts (by username or email)
@@ -358,7 +397,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
   // ==========================================
   // 3. CREATE ACCOUNT: STEP 2 - VERIFY OTP & REGISTER
   // ==========================================
-  const handleVerifyOtpAndRegister = (e: React.FormEvent) => {
+  const handleVerifyOtpAndRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -390,27 +429,46 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      const userId = `u_m_${cleanPhone}`;
+    try {
+      // 1. Persist user and 48-Hour Free Trial in Supabase Cloud Database
+      const regRes = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: cleanName,
+          phone: cleanPhone,
+          email: cleanEmail,
+          password: cleanPassword,
+        }),
+      });
+      const regData = await regRes.json();
+      if (!regRes.ok || !regData.success) {
+        setErrorMessage(regData.error || 'Failed to create account in database.');
+        setIsLoading(false);
+        return;
+      }
 
-      // New account with DESIGNER role and UNPAID status
+      const dbUser = regData.user;
       const newUser: UserType = {
-        id: userId,
-        name: cleanName,
-        email: cleanEmail,
-        role: 'DESIGNER',
+        id: dbUser.id,
+        name: dbUser.name || cleanName,
+        email: dbUser.email || cleanEmail,
+        role: dbUser.role || 'DESIGNER',
         isOnline: true,
         assignedPlan: 'plan-sarah-suite',
         createdAt: 'Just now',
-        payment_status: 'unpaid',
-        plan: null as any,
-        paid_at: null as any,
-        expires_at: null as any,
-        subscriptionTier: 'FREE',
-        subscriptionStatus: 'inactive',
+        payment_status: dbUser.payment_status || 'paid',
+        plan: 'trial_48h',
+        paid_at: dbUser.paid_at || null,
+        expires_at: dbUser.expires_at || dbUser.trial_expires_at,
+        isFreeTrial: true,
+        trialStartedAt: dbUser.trial_started_at,
+        trialExpiresAt: dbUser.trial_expires_at,
+        subscriptionTier: 'TRIAL',
+        subscriptionStatus: 'active',
       };
 
-      // 1. Dispatch credentials email via backend API route
+      // 2. Dispatch credentials email
       try {
         fetch('/api/auth/send-credentials-email', {
           method: 'POST',
@@ -424,22 +482,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
         }).catch((err) => console.warn('Email API dispatch notice:', err));
       } catch (err) {}
 
-      // 2. Sync with backend payment store
-      try {
-        fetch('/api/user/status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: newUser.id,
-            email: newUser.email,
-            name: newUser.name,
-            role: newUser.role,
-            payment_status: 'unpaid',
-          }),
-        }).catch(() => {});
-      } catch (err) {}
-
-      // 3. Save in localStorage for future sign-ins
+      // 3. Save in localStorage for offline caching
       try {
         const registered = getStoredRegisteredUsers();
         const updated = [
@@ -461,14 +504,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
 
       setTimeout(() => {
         setIsLoading(false);
-        const trialUser = start48HourFreeTrialLocally(newUser);
         if (onSignUp) {
-          onSignUp(trialUser);
+          onSignUp(newUser);
         } else {
-          onLogin(trialUser);
+          onLogin(newUser);
         }
       }, 700);
-    }, 400);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Error completing registration');
+      setIsLoading(false);
+    }
   };
 
   return (

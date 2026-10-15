@@ -6,6 +6,7 @@ import {
   getEffectivePaymentStatus,
   startOrGet48HourFreeTrial,
 } from '@/lib/paymentStore';
+import { findUserInDb, upsertUserInDb } from '@/lib/supabaseDb';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,6 @@ export async function GET(req: NextRequest) {
     const userId = searchParams.get('userId') || req.headers.get('x-user-id');
     const email = searchParams.get('email') || req.headers.get('x-user-email');
     const roleHeader = req.headers.get('x-user-role');
-    const autoTrial = searchParams.get('autoTrial') === 'true';
 
     if (!userId && !email) {
       return NextResponse.json(
@@ -24,9 +24,19 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    let record = getUserPaymentStatus({ userId, email });
+    // 1. Try querying Supabase first for persistent cross-device truth
+    let record: any = null;
+    const lookupKey = email || userId || '';
+    const dbUser = await findUserInDb(lookupKey);
+    if (dbUser) {
+      record = dbUser;
+      // Populate local memory cache
+      setUserPaymentStatus(dbUser);
+    } else {
+      record = getUserPaymentStatus({ userId, email });
+    }
 
-    // If user is Admin (by role or seed email)
+    // 2. If user is Admin (by role or seed email)
     const isAdmin =
       roleHeader === 'ADMIN' ||
       record?.role === 'ADMIN' ||
@@ -54,12 +64,17 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // If non-admin user is logging in and has no record yet -> Grant 48-Hour Free Trial!
+    // 3. If non-admin user is logging in and has no record yet -> Grant 48-Hour Free Trial!
     if (!record) {
       record = startOrGet48HourFreeTrial({
         userId,
         email,
         role: 'DESIGNER',
+      });
+      // Persist in Supabase immediately
+      await upsertUserInDb({
+        ...record,
+        email: email || `${userId}@user.local`,
       });
     }
 
@@ -112,6 +127,10 @@ export async function POST(req: NextRequest) {
         name,
         role,
       });
+      await upsertUserInDb({
+        ...trialRecord,
+        email: email || `${userId}@user.local`,
+      });
       return NextResponse.json({
         success: true,
         user: trialRecord,
@@ -131,6 +150,11 @@ export async function POST(req: NextRequest) {
       trial_started_at,
       trial_expires_at,
       is_free_trial,
+    });
+
+    await upsertUserInDb({
+      ...updated,
+      email: email || `${userId}@user.local`,
     });
 
     return NextResponse.json({

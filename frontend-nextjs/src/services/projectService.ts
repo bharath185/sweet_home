@@ -131,7 +131,45 @@ export function getUserProjects(userId: string): UserProjectSummary[] {
   }
 }
 
-export function saveUserProject(userId: string, plan: HomePlan): UserProjectSummary[] {
+/**
+ * Fetches user projects from Supabase Cloud Database and updates local cache
+ */
+export async function syncUserProjectsWithCloud(userId: string, userEmail?: string): Promise<UserProjectSummary[]> {
+  if (typeof window === 'undefined' || !userId) return [];
+  try {
+    const res = await fetch(`/api/projects?userId=${encodeURIComponent(userId)}&email=${encodeURIComponent(userEmail || '')}`);
+    const data = await res.json();
+    if (res.ok && data.success && Array.isArray(data.projects)) {
+      const cloudSummaries: UserProjectSummary[] = data.projects.map((p: any) => ({
+        id: p.id,
+        name: p.name || 'Untitled Project',
+        userId: p.user_id || userId,
+        createdAt: p.created_at || new Date().toISOString(),
+        updatedAt: p.updated_at || new Date().toISOString(),
+        floorsCount: p.data?.floors?.length || 1,
+        roomsCount: p.data?.rooms?.length || 0,
+        furnitureCount: p.data?.furniture?.length || 0,
+        plan: p.data,
+      }));
+
+      // Merge cloud projects with local storage
+      const local = getUserProjects(userId);
+      const mergedMap = new Map<string, UserProjectSummary>();
+      for (const p of cloudSummaries) mergedMap.set(p.id, p);
+      for (const p of local) {
+        if (!mergedMap.has(p.id)) mergedMap.set(p.id, p);
+      }
+      const mergedList = Array.from(mergedMap.values());
+      localStorage.setItem(getStorageKey(userId), JSON.stringify(mergedList));
+      return mergedList;
+    }
+  } catch (e) {
+    console.warn('Could not sync cloud projects:', e);
+  }
+  return getUserProjects(userId);
+}
+
+export function saveUserProject(userId: string, plan: HomePlan, userEmail?: string): UserProjectSummary[] {
   if (typeof window === 'undefined' || !userId) return [];
   try {
     const current = getUserProjects(userId);
@@ -160,6 +198,20 @@ export function saveUserProject(userId: string, plan: HomePlan): UserProjectSumm
     localStorage.setItem(getStorageKey(userId), JSON.stringify(updatedList));
     // Also save individual plan cache
     localStorage.setItem(`sweethome_plan_${plan.id}`, JSON.stringify(summary.plan));
+
+    // Asynchronously synchronize to Supabase Cloud Database
+    fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: plan.id,
+        userId,
+        userEmail: userEmail || undefined,
+        name: plan.name || 'Untitled Project',
+        data: summary.plan,
+      }),
+    }).catch((err) => console.warn('Cloud project sync notice:', err));
+
     return updatedList;
   } catch (err) {
     console.error('Failed to save project', err);
@@ -174,6 +226,12 @@ export function deleteUserProject(userId: string, projectId: string): UserProjec
     const updated = current.filter((p) => p.id !== projectId);
     localStorage.setItem(getStorageKey(userId), JSON.stringify(updated));
     localStorage.removeItem(`sweethome_plan_${projectId}`);
+
+    // Asynchronously delete from Supabase Cloud Database
+    fetch(`/api/projects?id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+    }).catch((err) => console.warn('Cloud project delete notice:', err));
+
     return updated;
   } catch (err) {
     console.error('Failed to delete project', err);
