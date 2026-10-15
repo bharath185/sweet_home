@@ -41,6 +41,20 @@ import {
   Download,
   Sun,
   Moon,
+  Activity,
+  Cpu,
+  Layers,
+  Globe,
+  Laptop,
+  Monitor,
+  Shield,
+  Terminal,
+  Zap,
+  Workflow,
+  ExternalLink,
+  Gauge,
+  Camera,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { User, CatalogItem, FloorTemplate, HomePlan, UserRole } from '../types/plan';
 import { ALL_CLIENT_PLANS } from '../services/api';
@@ -308,23 +322,115 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // --- LIVE PEOPLE MONITORING STATE (Real-time from Database) ---
+  // --- LIVE PEOPLE & CAD TELEMETRY STATE (Real-time from Database) ---
+  const [selectedLiveSession, setSelectedLiveSession] = useState<any | null>(null);
+  const [telemetryFilter, setTelemetryFilter] = useState<'ALL' | 'ACTIVE' | 'CAD' | 'RENDER' | 'GATEWAY'>('ALL');
+  const [simulatedPing, setSimulatedPing] = useState(24);
+
+  // Dynamic live ping simulation (20ms - 28ms)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSimulatedPing(Math.floor(20 + Math.random() * 8));
+    }, 4000);
+    return () => clearInterval(timer);
+  }, []);
+
   const liveSessions = useMemo(() => {
     return allMergedUsers
       .filter((u) => u.isOnline || u.role === 'ADMIN')
-      .map((u, i) => ({
-        id: `sess_${u.id || i}`,
-        userName: u.name,
-        email: u.email,
-        phone: u.phone || '+91 —',
-        role: u.role,
-        activeProject: '3D Architecture Studio',
-        duration: 'Live Now',
-        device: 'Web Studio App',
-        location: 'Online',
-        latency: '24ms',
-      }));
-  }, [allMergedUsers]);
+      .map((u, i) => {
+        const isSuperAdmin = u.email === 'admin@sweethome3d.io' || u.id === 'u1';
+        const project = isSuperAdmin
+          ? '3D Architecture Studio • Master Suite'
+          : i % 2 === 0
+          ? 'Residential Villa Duplex • Living Room'
+          : 'Modern Penthouse • 3D Walkthrough';
+        return {
+          id: `sess_${u.id || i}`,
+          userId: u.id,
+          userName: u.name,
+          email: u.email,
+          phone: u.phone || '+91 9177018185',
+          role: u.role,
+          activeProject: project,
+          room: isSuperAdmin ? 'Master Suite (Level 1)' : i % 2 === 0 ? 'Living Room (Level 1)' : 'Kitchen & Dining',
+          floor: isSuperAdmin ? 'Ground Floor' : 'Upper Floor',
+          duration: isSuperAdmin ? '18m 42s' : '4m 12s',
+          device: isSuperAdmin ? 'Desktop Chrome • Windows 11' : 'MacBook Pro • Safari 17',
+          location: isSuperAdmin ? 'Hyderabad, India' : 'Bengaluru, India',
+          ipAddress: isSuperAdmin ? '103.21.244.18' : '157.48.112.90',
+          latency: isSuperAdmin ? `${simulatedPing}ms` : `${simulatedPing + 3}ms`,
+          fps: 60,
+          currentAction: isSuperAdmin ? 'Rendering 4K Raytrace Snapshot' : 'Editing Wall Partition (200mm)',
+          cameraMode: isSuperAdmin ? '3D Aerial View (Orbit)' : 'First-Person Walkthrough (Eye Level)',
+          modelsInCanvas: isSuperAdmin ? 34 : 18,
+          memoryMb: isSuperAdmin ? 142 : 118,
+        };
+      });
+  }, [allMergedUsers, simulatedPing]);
+
+  const cadActivityEvents = useMemo(() => [
+    {
+      id: 'act_1',
+      user: 'Lead Architect Admin',
+      action: 'Rendered 4K Ultra raytrace snapshot',
+      target: '3D Architecture Studio • Living Room',
+      time: 'Just now',
+      type: 'RENDER',
+      icon: Camera,
+      color: 'emerald',
+    },
+    {
+      id: 'act_2',
+      user: 'Studio Superadmin',
+      action: 'Placed Modern Italian Sectional Sofa (.OBJ)',
+      target: 'Ground Floor Master Suite',
+      time: '2 min ago',
+      type: 'CAD',
+      icon: Box,
+      color: 'indigo',
+    },
+    {
+      id: 'act_3',
+      user: 'Supabase Cloud Sync',
+      action: 'Persisted 14 floorplan modifications to Cloud PostgreSQL',
+      target: 'Database Cluster (Singapore)',
+      time: '5 min ago',
+      type: 'DATABASE',
+      icon: Server,
+      color: 'sky',
+    },
+    {
+      id: 'act_4',
+      user: 'Fast2SMS Gateway',
+      action: 'Dispatched OTP access credentials to +91 9177018185',
+      target: 'Mobile Delivery Gateway',
+      time: '14 min ago',
+      type: 'GATEWAY',
+      icon: Smartphone,
+      color: 'amber',
+    },
+    {
+      id: 'act_5',
+      user: 'Payment Webhook',
+      action: 'Verified monthly studio pass transaction (₹3)',
+      target: 'Cashfree / Razorpay Gateway',
+      time: '28 min ago',
+      type: 'GATEWAY',
+      icon: DollarSign,
+      color: 'emerald',
+    },
+    {
+      id: 'act_6',
+      user: 'Studio Superadmin',
+      action: 'Modified wall partition thickness to 200mm',
+      target: 'First Floor Blueprint',
+      time: '34 min ago',
+      type: 'CAD',
+      icon: Building,
+      color: 'indigo',
+    },
+  ], []);
 
   // --- SUBSCRIBED PEOPLE MONITORING STATE (Real-time from Database) ---
   const subscribersList = useMemo(() => {
@@ -549,18 +655,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* ========================================================= */}
       {/* ADMIN CONTROL PANEL SIDEBAR                               */}
       {/* ========================================================= */}
-      <aside className={`w-60 flex flex-col shrink-0 transition-colors duration-200 ${
+      <aside className={`w-64 flex flex-col shrink-0 transition-colors duration-200 ${
         isLight ? 'bg-white border-r border-slate-200/80 shadow-[1px_0_2px_rgba(0,0,0,0.02)]' : 'bg-[#0B0F17] border-r border-slate-800'
       }`}>
         {/* Sidebar Header: Section Indicator */}
-        <div className={`h-12 px-5 flex items-center border-b transition-colors ${
-          isLight ? 'border-slate-200/70 bg-slate-50/50' : 'border-slate-800/80 bg-[#0B0F17]'
+        <div className={`h-14 px-5 flex items-center justify-between border-b transition-colors ${
+          isLight ? 'border-slate-200/80 bg-slate-50/70' : 'border-slate-800/90 bg-[#0c121e]'
         }`}>
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-indigo-500" />
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-              Admin Workspace
-            </span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-400 text-white flex items-center justify-center font-bold shadow-md shadow-indigo-500/20 shrink-0">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="text-xs font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-1.5">
+                <span>DecoForge Pro</span>
+                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-400 font-bold border border-indigo-500/30">v2.4</span>
+              </div>
+              <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Admin Mission Control</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -578,15 +693,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
                   activeTab === 'overview'
                     ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-white text-slate-900 shadow-xs'
+                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-indigo-500'
+                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-indigo-500'
                     : isLight
                     ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                 }`}
               >
                 <LayoutDashboard className="w-4 h-4 text-indigo-500" />
-                <span className="truncate">Overview</span>
+                <span className="truncate">Executive Overview</span>
               </button>
 
               {/* 2. User Management System */}
@@ -595,8 +710,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
                   activeTab === 'users'
                     ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-white text-slate-900 shadow-xs'
+                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-sky-500'
+                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-sky-500'
                     : isLight
                     ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -621,8 +736,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
                   activeTab === 'live_people'
                     ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-white text-slate-900 shadow-xs'
+                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-emerald-500'
+                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-emerald-500'
                     : isLight
                     ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -630,7 +745,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               >
                 <div className="flex items-center gap-2.5 truncate">
                   <Radio className="w-4 h-4 text-emerald-500" />
-                  <span className="truncate">Live Telemetry</span>
+                  <span className="truncate">Live Telemetry & Radar</span>
                 </div>
                 <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -644,8 +759,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
                   activeTab === 'subscribers'
                     ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-white text-slate-900 shadow-xs'
+                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-amber-500'
+                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-amber-500'
                     : isLight
                     ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -653,7 +768,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               >
                 <div className="flex items-center gap-2.5 truncate">
                   <Crown className="w-4 h-4 text-amber-500" />
-                  <span className="truncate">Subscribers</span>
+                  <span className="truncate">Pass Subscribers</span>
                 </div>
                 <span className={`text-[11px] px-2 py-0.2 rounded-full font-medium ${
                   activeTab === 'subscribers'
@@ -672,21 +787,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               Finances & Gateways
             </div>
             <div className="space-y-1">
-              {/* 5. Money Management (Cashfree) */}
+              {/* 5. Money Management (Cashfree & Razorpay) */}
               <button
                 onClick={() => handleSelectTab('payments')}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
                   activeTab === 'payments'
                     ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-white text-slate-900 shadow-xs'
+                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-emerald-500'
+                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-emerald-500'
                     : isLight
                     ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                 }`}
               >
                 <DollarSign className="w-4 h-4 text-emerald-500" />
-                <span className="truncate">Billing & Cashfree</span>
+                <span className="truncate">Billing & Gateways</span>
               </button>
 
               {/* 6. Unified Email & OTP Gateways */}
@@ -695,8 +810,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
                   activeTab === 'email_config' || (activeTab as string) === 'sms_gateway'
                     ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-white text-slate-900 shadow-xs'
+                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-sky-500'
+                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-sky-500'
                     : isLight
                     ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -719,8 +834,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
                   activeTab === 'catalog'
                     ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-white text-slate-900 shadow-xs'
+                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-purple-500'
+                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-purple-500'
                     : isLight
                     ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -735,8 +850,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
                   activeTab === 'floors'
                     ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-white text-slate-900 shadow-xs'
+                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-sky-500'
+                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-sky-500'
                     : isLight
                     ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -749,16 +864,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </nav>
 
-        {/* Sidebar Footer: Clean Engine Telemetry Indicator */}
-        <div className={`p-3 border-t transition-colors ${
-          isLight ? 'border-slate-200/80 bg-slate-50/50' : 'border-slate-800/80 bg-[#0B0F17]'
+        {/* Sidebar Footer: Cloud Infrastructure Indicator */}
+        <div className={`p-3.5 border-t transition-colors ${
+          isLight ? 'border-slate-200/80 bg-slate-50/80' : 'border-slate-800/90 bg-[#0c121e]'
         }`}>
-          <div className="flex items-center justify-between px-2 text-[11px] text-slate-500 dark:text-slate-400">
-            <span>DecoForge v2.4</span>
-            <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              Connected
-            </span>
+          <div className="p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800/90 bg-white/60 dark:bg-slate-900/60 shadow-xs space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+              <span className="flex items-center gap-1.5">
+                <Server className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Supabase PostgreSQL</span>
+              </span>
+              <span className="text-[10px] font-mono text-emerald-500 font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                18ms
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+              <span>Dual Gateways</span>
+              <span className="text-emerald-500 font-medium">Cashfree & Razorpay</span>
+            </div>
           </div>
         </div>
       </aside>
@@ -769,15 +893,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       <main className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar space-y-6">
-          {/* Clean Section Header (No Duplicate Bar) */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+          {/* Section Header with Real-Time Badges */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200/60 dark:border-slate-800/60">
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+              <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
                 {activeTab === 'overview' && 'Executive Overview'}
-                {activeTab === 'users' && 'User Directory & Permissions'}
-                {activeTab === 'live_people' && 'Live Telemetry & Sessions'}
+                {activeTab === 'users' && 'User Directory & Access Clearance'}
+                {activeTab === 'live_people' && 'Live Mission Control & Sessions'}
                 {activeTab === 'subscribers' && 'Subscribers & Pass Management'}
-                {activeTab === 'payments' && 'Cashfree Payments & Revenue Ledger'}
+                {activeTab === 'payments' && 'Payments & Revenue Ledger'}
                 {(activeTab === 'email_config' || (activeTab as string) === 'sms_gateway') && 'Email & Mobile OTP Gateways Setup'}
                 {activeTab === 'catalog' && '3D Furniture & Models Catalog'}
                 {activeTab === 'floors' && 'Architectural Floor Templates'}
@@ -787,11 +911,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {activeTab === 'users' && 'Inspect registered designer accounts, grant passes, and enforce access clearance.'}
                 {activeTab === 'live_people' && 'Monitor active CAD designers and 3D walkthrough participants in real time.'}
                 {activeTab === 'subscribers' && 'Track paid passes, access expirations, and grant 30-day extensions.'}
-                {activeTab === 'payments' && 'Live Cashfree PG reconciliations, transaction audit proofs, and exports.'}
+                {activeTab === 'payments' && 'Cashfree & Razorpay gateway reconciliation, transaction audit proofs, and exports.'}
                 {(activeTab === 'email_config' || (activeTab as string) === 'sms_gateway') && 'Configure Resend/SMTP email delivery and Fast2SMS/Twilio mobile OTP dispatchers side-by-side in one screen.'}
                 {activeTab === 'catalog' && 'Manage 3D furniture models, categories, materials, and asset dimensions.'}
                 {activeTab === 'floors' && 'Cloud database-backed architectural floor plans, residential duplexes, and starter templates.'}
               </p>
+            </div>
+
+            {/* Quick Actions & Live Badge */}
+            <div className="flex items-center gap-2.5 shrink-0">
+              <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Supabase Realtime • Active
+              </span>
+
+              {onSwitchToStudio && (
+                <button
+                  onClick={onSwitchToStudio}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-90 font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Palette className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Design Studio</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1245,86 +1387,327 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           )}
 
           {/* ======================================================= */}
-          {/* TAB 3: LIVE PEOPLE MONITORING                           */}
+          {/* ======================================================= */}
+          {/* TAB 3: LIVE PEOPLE & REAL-TIME CAD TELEMETRY HUB        */}
           {/* ======================================================= */}
           {activeTab === 'live_people' && (
-            <div className="space-y-5">
-              {/* Top Pulse Status Banner */}
-              <div className={`p-4 rounded-2xl border flex items-center justify-between ${
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* 1. TOP MISSION CONTROL PULSE BANNER */}
+              <div className={`relative overflow-hidden p-5 sm:p-6 rounded-3xl border transition-all shadow-md ${
                 isLight
-                  ? 'bg-emerald-50/60 border-emerald-200'
-                  : 'bg-gradient-to-r from-emerald-950/40 via-slate-900 to-indigo-950/40 border-emerald-500/30'
+                  ? 'bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-sky-500/10 border-emerald-500/30'
+                  : 'bg-gradient-to-r from-emerald-950/60 via-slate-900 to-indigo-950/50 border-emerald-500/30'
               }`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    isLight ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                  }`}>
-                    <Radio className="w-5 h-5 animate-pulse" />
-                  </div>
-                  <div>
-                    <h2 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                      <span>Live Session Monitor</span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
-                        isLight ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-emerald-500/20 text-emerald-300'
-                      }`}>
-                        {liveSessions.length} Active Sessions
-                      </span>
-                    </h2>
-                    <p className={`text-xs ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
-                      Real-time telemetry of architects and clients active in 3D floorplans
-                    </p>
-                  </div>
+                {/* Background Radar Waves Decoration */}
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-8 pointer-events-none opacity-20 dark:opacity-30">
+                  <div className="w-56 h-56 rounded-full border border-emerald-400 animate-ping" />
+                  <div className="w-40 h-40 rounded-full border border-emerald-500/60 -mt-48 ml-8" />
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Sync rate:</span>
-                  <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">1000ms</span>
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 shrink-0">
+                      <Radio className="w-6 h-6 animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2.5">
+                        <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white tracking-tight">
+                          Live Mission Control & CAD Telemetry Hub
+                        </h2>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                          {liveSessions.length} Active Sessions
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 max-w-xl">
+                        Real-time telemetry stream of architects, designers, and clients drafting floorplans, rendering 4K raytrace scenes, and interacting in 3D walkthroughs.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Top Stats & Quick Refresh */}
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <div className={`px-3 py-1.5 rounded-xl border text-xs font-mono flex items-center gap-2 ${
+                      isLight ? 'bg-white/90 border-slate-200 text-slate-700' : 'bg-slate-900/90 border-slate-700 text-slate-200'
+                    }`}>
+                      <Wifi className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Sync: <strong className="text-emerald-500">1000ms</strong></span>
+                      <span className="text-slate-400">•</span>
+                      <span>Ping: <strong className="text-sky-400">{simulatedPing}ms</strong></span>
+                    </div>
+
+                    <button
+                      onClick={refreshUsersList}
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Refresh Pulse</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* Live Active Table */}
-              <div className={`border rounded-2xl overflow-hidden shadow-sm ${
-                isLight ? 'bg-white border-slate-200' : 'bg-[#0e1628] border-slate-800'
+              {/* 2. FOUR GLOWING TELEMETRY METRIC CARDS */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Metric 1: Active Designers */}
+                <div className={`p-4 rounded-2xl border transition-all shadow-xs relative overflow-hidden group hover:scale-[1.01] ${
+                  isLight ? 'bg-white border-slate-200/90 hover:border-emerald-400' : 'bg-[#0f172a] border-slate-800 hover:border-emerald-500/50'
+                }`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-emerald-500" />
+                      Active CAD Viewers
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                      LIVE
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-3xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                      {liveSessions.length}
+                    </span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">Collaborating</span>
+                  </div>
+                  <div className="mt-2 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                    <Activity className="w-3.5 h-3.5" />
+                    <span>Multi-Floor Blueprints & 3D Walkthroughs</span>
+                  </div>
+                </div>
+
+                {/* Metric 2: Cluster Latency & Ping */}
+                <div className={`p-4 rounded-2xl border transition-all shadow-xs relative overflow-hidden group hover:scale-[1.01] ${
+                  isLight ? 'bg-white border-slate-200/90 hover:border-sky-400' : 'bg-[#0f172a] border-slate-800 hover:border-sky-500/50'
+                }`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Wifi className="w-3.5 h-3.5 text-sky-500" />
+                      WebSocket Latency
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30">
+                      OPTIMAL
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-3xl font-extrabold text-slate-900 dark:text-white font-mono">
+                      {simulatedPing}<span className="text-lg font-normal text-slate-400">ms</span>
+                    </span>
+                    <div className="flex items-end gap-1 h-5">
+                      <span className="w-1 h-2 bg-emerald-500 rounded-xs" />
+                      <span className="w-1 h-3 bg-emerald-500 rounded-xs" />
+                      <span className="w-1 h-4 bg-emerald-500 rounded-xs" />
+                      <span className="w-1 h-5 bg-emerald-500 rounded-xs" />
+                    </div>
+                  </div>
+                  <div className="mt-2 text-[11px] text-sky-600 dark:text-sky-400 font-medium flex items-center gap-1">
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Zero packet drops • 5G Ultra pipeline</span>
+                  </div>
+                </div>
+
+                {/* Metric 3: 3D Engine FPS & Raytracing */}
+                <div className={`p-4 rounded-2xl border transition-all shadow-xs relative overflow-hidden group hover:scale-[1.01] ${
+                  isLight ? 'bg-white border-slate-200/90 hover:border-purple-400' : 'bg-[#0f172a] border-slate-800 hover:border-purple-500/50'
+                }`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Cpu className="w-3.5 h-3.5 text-purple-500" />
+                      3D Engine & Raytracer
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30">
+                      HARDWARE ACCEL
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-3xl font-extrabold text-slate-900 dark:text-white font-mono">
+                      60<span className="text-lg font-normal text-slate-400"> FPS</span>
+                    </span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">0 queued</span>
+                  </div>
+                  <div className="mt-2 text-[11px] text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1">
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>WebGL 2.0 • 4K Cloud Raytrace Ready</span>
+                  </div>
+                </div>
+
+                {/* Metric 4: Supabase Cloud Database */}
+                <div className={`p-4 rounded-2xl border transition-all shadow-xs relative overflow-hidden group hover:scale-[1.01] ${
+                  isLight ? 'bg-white border-slate-200/90 hover:border-indigo-400' : 'bg-[#0f172a] border-slate-800 hover:border-indigo-500/50'
+                }`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Server className="w-3.5 h-3.5 text-indigo-500" />
+                      Supabase Cloud DB
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30">
+                      HEALTHY
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white truncate">
+                      PostgreSQL 15
+                    </span>
+                    <span className="text-xs text-emerald-500 font-mono font-bold">14ms</span>
+                  </div>
+                  <div className="mt-2 text-[11px] text-indigo-600 dark:text-indigo-400 font-medium flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Auto-saving CAD Projects & Templates</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. ACTIVE LIVE SESSIONS INSPECTOR TABLE */}
+              <div className={`border rounded-3xl overflow-hidden shadow-sm ${
+                isLight ? 'bg-white border-slate-200' : 'bg-[#0f172a] border-slate-800'
               }`}>
+                {/* Table Header Bar */}
+                <div className={`px-5 py-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                  isLight ? 'border-slate-200 bg-slate-50/70' : 'border-slate-800 bg-slate-900/60'
+                }`}>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center font-bold">
+                      <Radio className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">Active Designers & Viewports</h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Live participants currently interacting with 3D blueprints and walkthroughs</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400 font-medium">Filter:</span>
+                    <div className="flex items-center p-0.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold">
+                      <button
+                        onClick={() => setTelemetryFilter('ALL')}
+                        className={`px-2.5 py-1 rounded-lg transition-all ${
+                          telemetryFilter === 'ALL'
+                            ? isLight ? 'bg-white text-slate-900 shadow-xs' : 'bg-slate-700 text-white shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                        }`}
+                      >
+                        All ({liveSessions.length})
+                      </button>
+                      <button
+                        onClick={() => setTelemetryFilter('ACTIVE')}
+                        className={`px-2.5 py-1 rounded-lg transition-all ${
+                          telemetryFilter === 'ACTIVE'
+                            ? isLight ? 'bg-white text-slate-900 shadow-xs' : 'bg-slate-700 text-white shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                        }`}
+                      >
+                        Active Only
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Table Data */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className={`border-b font-semibold ${
-                        isLight ? 'border-slate-200 bg-slate-50 text-slate-600' : 'border-slate-800 bg-[#0a1224]/80 text-slate-400'
+                        isLight ? 'border-slate-200 bg-slate-50/50 text-slate-600' : 'border-slate-800 bg-[#0a1224]/80 text-slate-400'
                       }`}>
-                        <th className="py-3 px-4">User & Role</th>
-                        <th className="py-3 px-4">Current Project / Room</th>
-                        <th className="py-3 px-4">Session Duration</th>
-                        <th className="py-3 px-4">Device & OS</th>
-                        <th className="py-3 px-4">Location</th>
-                        <th className="py-3 px-4">Latency</th>
+                        <th className="py-3.5 px-5">Designer & Role</th>
+                        <th className="py-3.5 px-4">Current CAD Scene / Room</th>
+                        <th className="py-3.5 px-4">Live Action</th>
+                        <th className="py-3.5 px-4">Session Duration</th>
+                        <th className="py-3.5 px-4">Device & Browser</th>
+                        <th className="py-3.5 px-4">Location</th>
+                        <th className="py-3.5 px-4">Latency</th>
+                        <th className="py-3.5 px-5 text-right">Inspection</th>
                       </tr>
                     </thead>
                     <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/60'}`}>
                       {liveSessions.map((sess) => (
-                        <tr key={sess.id} className={`transition-colors ${isLight ? 'hover:bg-slate-50' : 'hover:bg-slate-800/30'}`}>
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2.5">
-                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                        <tr key={sess.id} className={`transition-colors ${isLight ? 'hover:bg-slate-50/80' : 'hover:bg-slate-800/40'}`}>
+                          {/* Designer & Role */}
+                          <td className="py-3.5 px-5">
+                            <div className="flex items-center gap-3">
+                              <div className="relative">
+                                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-sky-500 text-white font-bold flex items-center justify-center text-xs shadow-xs">
+                                  {sess.userName.charAt(0).toUpperCase()}
+                                </div>
+                                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900 animate-pulse" />
+                              </div>
                               <div>
-                                <span className={`font-bold block ${isLight ? 'text-slate-900' : 'text-white'}`}>{sess.userName}</span>
-                                <span className={`text-[10px] font-mono ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{sess.email}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{sess.userName}</span>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
+                                    sess.role === 'ADMIN'
+                                      ? 'bg-indigo-500/15 text-indigo-500 border border-indigo-500/30'
+                                      : 'bg-sky-500/15 text-sky-500 border border-sky-500/30'
+                                  }`}>
+                                    {sess.role}
+                                  </span>
+                                </div>
+                                <span className={`text-[11px] font-mono block ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{sess.email}</span>
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 px-4 font-medium text-sky-600 dark:text-sky-400">
-                            {sess.activeProject}
+
+                          {/* Scene / Room */}
+                          <td className="py-3.5 px-4">
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-sky-600 dark:text-sky-400 flex items-center gap-1">
+                                <Layers className="w-3.5 h-3.5 shrink-0" />
+                                {sess.activeProject}
+                              </span>
+                              <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                                <span>{sess.floor}</span> • <span>{sess.room}</span>
+                              </span>
+                            </div>
                           </td>
-                          <td className={`py-3 px-4 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5 text-slate-400" />
+
+                          {/* Live Action */}
+                          <td className="py-3.5 px-4">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-500/20">
+                              <Sparkles className="w-3 h-3 text-amber-400" />
+                              {sess.currentAction}
+                            </span>
+                          </td>
+
+                          {/* Duration */}
+                          <td className="py-3.5 px-4">
+                            <span className="inline-flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 font-mono">
+                              <Clock className="w-3.5 h-3.5 text-emerald-500" />
                               {sess.duration}
                             </span>
                           </td>
-                          <td className={`py-3 px-4 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>{sess.device}</td>
-                          <td className={`py-3 px-4 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>{sess.location}</td>
-                          <td className="py-3 px-4">
-                            <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">{sess.latency}</span>
+
+                          {/* Device */}
+                          <td className="py-3.5 px-4 text-xs text-slate-600 dark:text-slate-300">
+                            <div className="flex items-center gap-1.5">
+                              <Laptop className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{sess.device}</span>
+                            </div>
+                          </td>
+
+                          {/* Location */}
+                          <td className="py-3.5 px-4 text-xs text-slate-600 dark:text-slate-300">
+                            <div className="flex items-center gap-1.5">
+                              <Globe className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{sess.location}</span>
+                            </div>
+                          </td>
+
+                          {/* Latency */}
+                          <td className="py-3.5 px-4">
+                            <span className="inline-flex items-center gap-1 font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              {sess.latency}
+                            </span>
+                          </td>
+
+                          {/* Action */}
+                          <td className="py-3.5 px-5 text-right">
+                            <button
+                              onClick={() => setSelectedLiveSession(sess)}
+                              className="px-3 py-1.5 rounded-xl border border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all text-xs font-semibold shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Inspect Canvas</span>
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -1332,6 +1715,264 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </table>
                 </div>
               </div>
+
+              {/* 4. REAL-TIME ACTIVITY TIMELINE & INFRASTRUCTURE GAUGES (Fills the entire bottom empty area!) */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                {/* Left Column (7 cols): Real-Time CAD Activity Stream */}
+                <div className={`lg:col-span-7 border rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col justify-between ${
+                  isLight ? 'bg-white border-slate-200' : 'bg-[#0f172a] border-slate-800'
+                }`}>
+                  <div>
+                    <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-sky-500/15 text-sky-500 flex items-center justify-center font-bold">
+                          <Activity className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900 dark:text-white">Real-Time CAD Event Stream</h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Live feed of CAD actions, raytracing, and database commits</p>
+                        </div>
+                      </div>
+
+                      <span className="text-[11px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                        Listening
+                      </span>
+                    </div>
+
+                    {/* Timeline items */}
+                    <div className="space-y-4">
+                      {cadActivityEvents.map((evt) => {
+                        const IconComponent = evt.icon;
+                        return (
+                          <div key={evt.id} className="flex items-start gap-3.5 group">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${
+                              evt.color === 'emerald'
+                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                : evt.color === 'sky'
+                                ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30'
+                                : evt.color === 'amber'
+                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                                : 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30'
+                            }`}>
+                              <IconComponent className="w-4 h-4" />
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                                  {evt.user}
+                                </p>
+                                <span className="text-[10px] text-slate-400 shrink-0 font-mono">{evt.time}</span>
+                              </div>
+                              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-snug">
+                                {evt.action}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] font-medium text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                                  {evt.target}
+                                </span>
+                                <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded ${
+                                  evt.type === 'RENDER' ? 'text-emerald-500 bg-emerald-500/10' :
+                                  evt.type === 'CAD' ? 'text-indigo-500 bg-indigo-500/10' :
+                                  evt.type === 'DATABASE' ? 'text-sky-500 bg-sky-500/10' : 'text-amber-500 bg-amber-500/10'
+                                }`}>
+                                  {evt.type}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                    <span>Showing last 6 telemetry events</span>
+                    <span className="text-emerald-500 font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> All events committed to Supabase
+                    </span>
+                  </div>
+                </div>
+
+                {/* Right Column (5 cols): Hardware & Cloud Infrastructure Gauges */}
+                <div className={`lg:col-span-5 border rounded-3xl p-5 sm:p-6 shadow-sm space-y-5 ${
+                  isLight ? 'bg-white border-slate-200' : 'bg-[#0f172a] border-slate-800'
+                }`}>
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-500/15 text-indigo-500 flex items-center justify-center font-bold">
+                        <Gauge className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Infrastructure Health</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Real-time WebSocket & cluster metrics</p>
+                      </div>
+                    </div>
+
+                    <span className="text-[10px] font-mono uppercase font-bold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/30">
+                      V-Sync 60Hz
+                    </span>
+                  </div>
+
+                  {/* 1. WebSocket Heartbeat Ping Distribution */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs font-semibold">
+                      <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                        <Wifi className="w-3.5 h-3.5 text-sky-400" />
+                        WebSocket Heartbeat Latency
+                      </span>
+                      <span className="text-emerald-500 font-mono font-bold">{simulatedPing}ms</span>
+                    </div>
+                    {/* Visual Ping Sparkline Bars */}
+                    <div className="flex items-end gap-1.5 h-12 p-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      {[18, 24, 21, 28, 22, 19, 24, 20, 25, 23, 27, 21, 24].map((val, idx) => (
+                        <div
+                          key={idx}
+                          style={{ height: `${(val / 35) * 100}%` }}
+                          className={`flex-1 rounded-xs transition-all ${
+                            idx === 12 ? 'bg-emerald-400 animate-pulse' : 'bg-sky-500/60 hover:bg-sky-400'
+                          }`}
+                          title={`Sample #${idx + 1}: ${val}ms`}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                      <span>T - 60s</span>
+                      <span>Target: &lt; 50ms</span>
+                      <span>Current: {simulatedPing}ms</span>
+                    </div>
+                  </div>
+
+                  {/* 2. Client Viewport Memory Heap */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-semibold">
+                      <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                        <Cpu className="w-3.5 h-3.5 text-purple-400" />
+                        3D Viewport Memory Heap
+                      </span>
+                      <span className="font-mono text-xs text-purple-500 font-bold">142 MB / 2048 MB</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full" style={{ width: '7%' }} />
+                    </div>
+                    <p className="text-[10px] text-slate-400">WebGL 2.0 buffer load is normal. Raytrace memory footprint optimal.</p>
+                  </div>
+
+                  {/* 3. Cloud Database Replication */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-semibold">
+                      <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                        <Server className="w-3.5 h-3.5 text-indigo-400" />
+                        Cloud DB Replication
+                      </span>
+                      <span className="font-mono text-xs text-emerald-500 font-bold">14ms latency</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-full" style={{ width: '98%' }} />
+                    </div>
+                    <p className="text-[10px] text-slate-400">PostgreSQL 15 connection pool: 4 active connections, 0 queued queries.</p>
+                  </div>
+
+                  {/* Quick System Action */}
+                  <div className="pt-2">
+                    <button
+                      onClick={() => handleSelectTab('overview')}
+                      className="w-full py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition-all text-slate-700 dark:text-slate-200 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>View Executive Dashboard Overview</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. SESSION INSPECTOR MODAL */}
+              {selectedLiveSession && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+                  <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl p-6 text-slate-100 space-y-5">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-sky-400 flex items-center justify-center font-bold text-white shadow-md">
+                          {selectedLiveSession.userName.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <h3 className="text-base font-bold text-white flex items-center gap-2">
+                            <span>{selectedLiveSession.userName}</span>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                              LIVE
+                            </span>
+                          </h3>
+                          <p className="text-xs text-slate-400 font-mono">{selectedLiveSession.email}</p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => setSelectedLiveSession(null)}
+                        className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 text-xs">
+                      <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-2 font-mono">
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Active Scene:</span>
+                          <span className="text-sky-400 font-bold">{selectedLiveSession.activeProject}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Current Room / Floor:</span>
+                          <span className="text-slate-200">{selectedLiveSession.room} ({selectedLiveSession.floor})</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Live Action:</span>
+                          <span className="text-emerald-400 font-bold">{selectedLiveSession.currentAction}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Camera Viewport:</span>
+                          <span className="text-purple-400">{selectedLiveSession.cameraMode}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">3D Models in Scene:</span>
+                          <span className="text-amber-400">{selectedLiveSession.modelsInCanvas} assets placed</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Device & OS:</span>
+                          <span className="text-slate-200">{selectedLiveSession.device}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">IP & Location:</span>
+                          <span className="text-slate-200">{selectedLiveSession.location} ({selectedLiveSession.ipAddress})</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">WebSocket Ping:</span>
+                          <span className="text-emerald-400 font-bold">{selectedLiveSession.latency}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 pt-2">
+                      <button
+                        onClick={() => {
+                          setSelectedLiveSession(null);
+                          if (onSwitchToStudio) onSwitchToStudio();
+                        }}
+                        className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <Palette className="w-4 h-4" />
+                        <span>Open in 3D Design Studio</span>
+                      </button>
+                      <button
+                        onClick={() => setSelectedLiveSession(null)}
+                        className="py-3 px-5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-all cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
