@@ -6,24 +6,24 @@ export const dynamic = 'force-dynamic';
 
 const DEFAULT_USERS = [
   {
-    id: 'u1',
-    name: 'Admin Superuser',
+    id: 'admin_1',
+    name: 'Studio Superadmin',
     email: 'admin@sweethome3d.io',
     role: 'ADMIN',
     isOnline: true,
     assignedPlan: 'plan-sarah-suite',
-    createdAt: 'Today',
+    createdAt: 'Lifetime',
     payment_status: 'paid',
   },
   {
-    id: 'u2',
-    name: 'Sarah Jenkins',
-    email: 'sarah.jenkins@designstudio.in',
-    role: 'DESIGNER',
-    isOnline: false,
+    id: 'admin_2',
+    name: 'Lead Architect Admin',
+    email: 'admin@visualrendered.io',
+    role: 'ADMIN',
+    isOnline: true,
     assignedPlan: 'plan-sarah-suite',
-    createdAt: 'Yesterday',
-    payment_status: 'unpaid',
+    createdAt: 'Lifetime',
+    payment_status: 'paid',
   },
 ];
 
