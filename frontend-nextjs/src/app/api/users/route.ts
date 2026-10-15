@@ -3,6 +3,8 @@ import { getUserPaymentStatus } from '@/lib/paymentStore';
 import { getAllUsersFromDb } from '@/lib/supabaseDb';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 const DEFAULT_USERS = [
   {
@@ -43,7 +45,12 @@ export async function GET() {
         createdAt: u.created_at || 'Recently',
         expires_at: u.expires_at,
         trial_expires_at: u.trial_expires_at,
-      }))
+      })),
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        },
+      }
     );
   }
 
@@ -57,5 +64,9 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json(usersWithPayment);
+  return NextResponse.json(usersWithPayment, {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+    },
+  });
 }
