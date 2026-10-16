@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserPaymentStatus } from '@/lib/paymentStore';
-import { getAllUsersFromDb } from '@/lib/supabaseDb';
+import { getAllUsersFromDb, deleteUserInDb } from '@/lib/supabaseDb';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -69,4 +69,18 @@ export async function GET() {
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
     },
   });
+}
+
+export async function DELETE(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get('id');
+  if (!id) {
+    return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+  }
+
+  const ok = await deleteUserInDb(id);
+  if (!ok) {
+    return NextResponse.json({ error: 'Failed to delete user from database' }, { status: 500 });
+  }
+  return NextResponse.json({ success: true, id });
 }

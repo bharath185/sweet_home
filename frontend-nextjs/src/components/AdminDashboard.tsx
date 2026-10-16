@@ -143,44 +143,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setExternalAdminTab(tab);
   };
 
-  // --- LOCAL REGISTERED USERS STATE ---
-  const [registeredAccounts, setRegisteredAccounts] = useState<StoredRegisteredRecord[]>([]);
+  // --- DATABASE USERS STATE (Direct from Supabase Cloud DB - ZERO localStorage) ---
+  const [dbUsers, setDbUsers] = useState<Array<User & { phone?: string; createdAt?: string }>>([]);
+  const [isUsersLoading, setIsUsersLoading] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userFilterRole, setUserFilterRole] = useState<'ALL' | 'ADMIN' | 'DESIGNER' | 'PAID' | 'UNPAID'>('ALL');
 
-  // Load registered users from Supabase Cloud Database & sync
+  // Load registered users directly from Supabase Cloud Database & sync
   const refreshUsersList = async () => {
-    if (typeof window === 'undefined') return;
+    setIsUsersLoading(true);
     try {
-      const stored = localStorage.getItem('sweethome_registered_users');
-      if (stored) {
-        setRegisteredAccounts(JSON.parse(stored));
-      }
-      const res = await fetch('/api/users');
-      const data = await res.json();
-      if (res.ok && Array.isArray(data)) {
-        const cloudRecords: StoredRegisteredRecord[] = data.map((u: any) => ({
-          user: {
-            id: u.id,
-            name: u.name || 'User',
-            email: u.email,
-            role: u.role,
-            isOnline: u.isOnline ?? false,
-            assignedPlan: u.assignedPlan || 'plan-sarah-suite',
-            createdAt: u.createdAt || 'Recently',
-            payment_status: u.payment_status || 'unpaid',
-            plan: u.plan || null,
-            expires_at: u.expires_at || null,
-          },
-          phone: u.phone || '',
-          email: u.email,
-          username: u.phone || u.email,
-          passwordHash: '',
-        }));
-        setRegisteredAccounts(cloudRecords);
+      const res = await fetch('/api/users', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setDbUsers(data);
+        }
       }
     } catch (e) {
-      console.warn('Failed to load registered accounts:', e);
+      console.warn('Failed to load users from DB:', e);
+    } finally {
+      setIsUsersLoading(false);
     }
   };
 
@@ -188,19 +171,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     refreshUsersList();
   }, [externalAdminTab]);
 
-  // Merge propUsers and registeredAccounts into a master list
+  // Master users list directly from Supabase DB
   const allMergedUsers = useMemo(() => {
-    const list: Array<User & { phone?: string }> = [...propUsers];
-    registeredAccounts.forEach((rec) => {
-      const existingIdx = list.findIndex((u) => u.id === rec.user.id || u.email === rec.user.email);
-      if (existingIdx >= 0) {
-        list[existingIdx] = { ...list[existingIdx], ...rec.user, phone: rec.phone };
-      } else {
-        list.push({ ...rec.user, phone: rec.phone });
-      }
-    });
-    return list;
-  }, [propUsers, registeredAccounts]);
+    return dbUsers;
+  }, [dbUsers]);
 
   // Filtered users for User Management
   const filteredUsers = useMemo(() => {
@@ -222,70 +196,76 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     });
   }, [allMergedUsers, userSearchQuery, userFilterRole]);
 
-  // Toggle user payment status (Grant / Revoke Access)
-  const handleTogglePaymentStatus = (user: User & { phone?: string }) => {
+  // Toggle user payment status in Supabase Database
+  const handleTogglePaymentStatus = async (user: User & { phone?: string }) => {
     const newStatus = user.payment_status === 'paid' ? 'unpaid' : 'paid';
-    const updatedUser: User = {
-      ...user,
-      payment_status: newStatus,
-      subscriptionTier: newStatus === 'paid' ? 'PRO' : 'FREE',
-      subscriptionStatus: newStatus === 'paid' ? 'active' : 'inactive',
-    };
+    
+    // Optimistic UI update
+    setDbUsers((prev) =>
+      prev.map((u) =>
+        u.id === user.id || u.email === user.email
+          ? {
+              ...u,
+              payment_status: newStatus,
+              subscriptionTier: newStatus === 'paid' ? 'PRO' : 'FREE',
+              subscriptionStatus: newStatus === 'paid' ? 'active' : 'inactive',
+            }
+          : u
+      )
+    );
 
     try {
-      const updated = registeredAccounts.map((rec) =>
-        rec.user.id === user.id || rec.user.email === user.email
-          ? { ...rec, user: updatedUser }
-          : rec
-      );
-      setRegisteredAccounts(updated);
-      localStorage.setItem('sweethome_registered_users', JSON.stringify(updated));
-    } catch (e) {}
-
-    fetch('/api/user/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        payment_status: newStatus,
-        tier: newStatus === 'paid' ? 'PRO' : 'FREE',
-      }),
-    }).catch(() => {});
+      await fetch('/api/user/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          payment_status: newStatus,
+          tier: newStatus === 'paid' ? 'PRO' : 'FREE',
+        }),
+      });
+      await refreshUsersList();
+    } catch (e) {
+      console.error('Failed to update user status in DB', e);
+    }
   };
 
-  // Toggle user role between DESIGNER and ADMIN
-  const handleToggleRole = (user: User & { phone?: string }) => {
+  // Toggle user role in Supabase Database
+  const handleToggleRole = async (user: User & { phone?: string }) => {
     const newRole: UserRole = user.role === 'ADMIN' ? 'DESIGNER' : 'ADMIN';
-    const updatedUser: User = {
-      ...user,
-      role: newRole,
-      payment_status: newRole === 'ADMIN' ? 'paid' : user.payment_status,
-    };
+    
+    // Optimistic UI update
+    setDbUsers((prev) =>
+      prev.map((u) =>
+        u.id === user.id || u.email === user.email
+          ? {
+              ...u,
+              role: newRole,
+              payment_status: newRole === 'ADMIN' ? 'paid' : u.payment_status,
+            }
+          : u
+      )
+    );
 
     try {
-      const updated = registeredAccounts.map((rec) =>
-        rec.user.id === user.id || rec.user.email === user.email
-          ? { ...rec, user: updatedUser }
-          : rec
-      );
-      setRegisteredAccounts(updated);
-      localStorage.setItem('sweethome_registered_users', JSON.stringify(updated));
-    } catch (e) {}
-
-    fetch('/api/user/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: user.id,
-        email: user.email,
-        name: user.name,
-        role: newRole,
-        payment_status: updatedUser.payment_status,
-      }),
-    }).catch(() => {});
+      await fetch('/api/user/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          email: user.email,
+          name: user.name,
+          role: newRole,
+          payment_status: newRole === 'ADMIN' ? 'paid' : user.payment_status,
+        }),
+      });
+      await refreshUsersList();
+    } catch (e) {
+      console.error('Failed to update user role in DB', e);
+    }
   };
 
   // Reset password & send credentials email
@@ -295,15 +275,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const newTempPassword = `Studio#${Math.floor(1000 + Math.random() * 9000)}`;
 
     try {
-      const updated = registeredAccounts.map((rec) =>
-        rec.user.id === user.id || rec.user.email === user.email
-          ? { ...rec, passwordHash: newTempPassword }
-          : rec
-      );
-      setRegisteredAccounts(updated);
-      localStorage.setItem('sweethome_registered_users', JSON.stringify(updated));
-
-      await fetch('/api/auth/send-credentials-email', {
+      const res = await fetch('/api/auth/send-credentials-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -313,12 +285,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           password: newTempPassword,
         }),
       });
-
-      alert(`Password reset for ${user.name}! New credentials sent to ${user.email} (Temp Password: ${newTempPassword})`);
+      const data = await res.json();
+      if (data.success) {
+        alert(`Password reset for ${user.name}! New credentials sent to ${user.email} (Temp Password: ${newTempPassword})`);
+      } else {
+        alert(`Generated password: ${newTempPassword}. (${data.error || 'Email dispatch completed'})`);
+      }
     } catch (e) {
       alert(`Could not dispatch reset email: ${e}`);
     } finally {
       setResettingUserId(null);
+    }
+  };
+
+  // Delete user directly from Supabase Database
+  const handleDeleteUserDirect = async (userId: string, userName: string) => {
+    if (!confirm(`Are you sure you want to permanently delete user "${userName}" from Supabase database?`)) return;
+    try {
+      setDbUsers((prev) => prev.filter((u) => u.id !== userId));
+      const res = await fetch(`/api/users?id=${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        await refreshUsersList();
+      }
+    } catch (e) {
+      console.error('Error deleting user:', e);
+      await refreshUsersList();
     }
   };
 
@@ -656,75 +649,71 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* ADMIN CONTROL PANEL SIDEBAR                               */}
       {/* ========================================================= */}
       <aside className={`w-64 flex flex-col shrink-0 transition-colors duration-200 ${
-        isLight ? 'bg-white border-r border-slate-200/80 shadow-[1px_0_2px_rgba(0,0,0,0.02)]' : 'bg-[#0B0F17] border-r border-slate-800'
+        isLight ? 'bg-slate-50/90 border-r border-slate-200' : 'bg-[#0B0F17] border-r border-slate-800'
       }`}>
-        {/* Sidebar Header: Section Indicator */}
-        <div className={`h-14 px-5 flex items-center justify-between border-b transition-colors ${
-          isLight ? 'border-slate-200/80 bg-slate-50/70' : 'border-slate-800/90 bg-[#0c121e]'
+        {/* Sidebar Header: Brand & Live Status */}
+        <div className={`h-14 px-4 flex items-center justify-between border-b transition-colors ${
+          isLight ? 'border-slate-200 bg-white/80' : 'border-slate-800 bg-[#0c121e]/80'
         }`}>
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-400 text-white flex items-center justify-center font-bold shadow-md shadow-indigo-500/20 shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold shadow-sm shadow-indigo-600/30 shrink-0">
               <ShieldCheck className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-xs font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-1.5">
-                <span>DecoForge Pro</span>
-                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-400 font-bold border border-indigo-500/30">v2.4</span>
-              </div>
-              <div className="text-[10px] text-slate-400 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Admin Mission Control</span>
+              <div className="text-xs font-bold tracking-tight text-slate-900 dark:text-white">Admin Console</div>
+              <div className="text-[10px] text-slate-400 flex items-center gap-1.5 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span>Supabase Live</span>
               </div>
             </div>
           </div>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-200/60 dark:border-indigo-800/60">
+            v2.4
+          </span>
         </div>
 
         {/* Navigation Menu Items */}
-        <nav className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar text-xs">
+        <nav className="flex-1 overflow-y-auto p-3.5 space-y-4 custom-scrollbar text-xs">
           {/* Group 1: Monitoring & Users */}
           <div>
-            <div className={`px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
+            <div className={`px-2.5 pb-2 text-[10px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
               Platform & Telemetry
             </div>
             <div className="space-y-1">
               {/* 1. Overview */}
               <button
                 onClick={() => handleSelectTab('overview')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
                   activeTab === 'overview'
-                    ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-indigo-500'
-                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-indigo-500'
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
                     : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                 }`}
               >
-                <LayoutDashboard className="w-4 h-4 text-indigo-500" />
+                <LayoutDashboard className={`w-4 h-4 shrink-0 ${activeTab === 'overview' ? 'text-white' : 'text-slate-400'}`} />
                 <span className="truncate">Executive Overview</span>
               </button>
 
               {/* 2. User Management System */}
               <button
                 onClick={() => handleSelectTab('users')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
                   activeTab === 'users'
-                    ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-sky-500'
-                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-sky-500'
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
                     : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                 }`}
               >
-                <div className="flex items-center gap-2.5 truncate">
-                  <Users className="w-4 h-4 text-sky-500" />
+                <div className="flex items-center gap-3 truncate">
+                  <Users className={`w-4 h-4 shrink-0 ${activeTab === 'users' ? 'text-white' : 'text-slate-400'}`} />
                   <span className="truncate">User Directory</span>
                 </div>
-                <span className={`text-[11px] px-2 py-0.2 rounded-full font-medium ${
+                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
                   activeTab === 'users'
-                    ? isLight ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-800'
-                    : isLight ? 'bg-slate-100 text-slate-600' : 'bg-slate-800 text-slate-400'
+                    ? 'bg-white/20 text-white'
+                    : isLight ? 'bg-slate-200/80 text-slate-700' : 'bg-slate-800 text-slate-300'
                 }`}>
                   {allMergedUsers.length}
                 </span>
@@ -733,21 +722,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {/* 3. Live People Monitoring */}
               <button
                 onClick={() => handleSelectTab('live_people')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
                   activeTab === 'live_people'
-                    ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-emerald-500'
-                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-emerald-500'
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
                     : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                 }`}
               >
-                <div className="flex items-center gap-2.5 truncate">
-                  <Radio className="w-4 h-4 text-emerald-500" />
-                  <span className="truncate">Live Telemetry & Radar</span>
+                <div className="flex items-center gap-3 truncate">
+                  <Radio className={`w-4 h-4 shrink-0 ${activeTab === 'live_people' ? 'text-white' : 'text-slate-400'}`} />
+                  <span className="truncate">Live Telemetry</span>
                 </div>
-                <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                <span className={`flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                  activeTab === 'live_people'
+                    ? 'bg-white/20 text-white'
+                    : isLight ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' : 'bg-emerald-950/60 text-emerald-400'
+                }`}>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   {liveSessions.length}
                 </span>
@@ -756,24 +747,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {/* 4. Subscribed People Monitoring */}
               <button
                 onClick={() => handleSelectTab('subscribers')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
                   activeTab === 'subscribers'
-                    ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-amber-500'
-                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-amber-500'
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
                     : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                 }`}
               >
-                <div className="flex items-center gap-2.5 truncate">
-                  <Crown className="w-4 h-4 text-amber-500" />
+                <div className="flex items-center gap-3 truncate">
+                  <Crown className={`w-4 h-4 shrink-0 ${activeTab === 'subscribers' ? 'text-white' : 'text-slate-400'}`} />
                   <span className="truncate">Pass Subscribers</span>
                 </div>
-                <span className={`text-[11px] px-2 py-0.2 rounded-full font-medium ${
+                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
                   activeTab === 'subscribers'
-                    ? isLight ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-800'
-                    : isLight ? 'bg-slate-100 text-slate-600' : 'bg-slate-800 text-slate-400'
+                    ? 'bg-white/20 text-white'
+                    : isLight ? 'bg-amber-50 text-amber-700 border border-amber-200/60' : 'bg-amber-950/60 text-amber-400'
                 }`}>
                   {subscribersList.length}
                 </span>
@@ -783,41 +772,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {/* Group 2: Finances & Gateways */}
           <div>
-            <div className={`px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
+            <div className={`px-2.5 pb-2 text-[10px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
               Finances & Gateways
             </div>
             <div className="space-y-1">
               {/* 5. Money Management (Cashfree & Razorpay) */}
               <button
                 onClick={() => handleSelectTab('payments')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
                   activeTab === 'payments'
-                    ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-emerald-500'
-                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-emerald-500'
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
                     : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                 }`}
               >
-                <DollarSign className="w-4 h-4 text-emerald-500" />
+                <DollarSign className={`w-4 h-4 shrink-0 ${activeTab === 'payments' ? 'text-white' : 'text-slate-400'}`} />
                 <span className="truncate">Billing & Gateways</span>
               </button>
 
               {/* 6. Unified Email & OTP Gateways */}
               <button
                 onClick={() => handleSelectTab('email_config')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
                   activeTab === 'email_config' || (activeTab as string) === 'sms_gateway'
-                    ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-sky-500'
-                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-sky-500'
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
                     : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                 }`}
               >
-                <Mail className="w-4 h-4 text-sky-500" />
+                <Mail className={`w-4 h-4 shrink-0 ${activeTab === 'email_config' || (activeTab as string) === 'sms_gateway' ? 'text-white' : 'text-slate-400'}`} />
                 <span className="truncate">Email & OTP Gateways</span>
               </button>
             </div>
@@ -825,64 +810,54 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {/* Group 3: 3D Catalog */}
           <div>
-            <div className={`px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
+            <div className={`px-2.5 pb-2 text-[10px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
               Assets & 3D
             </div>
             <div className="space-y-1">
               <button
                 onClick={() => handleSelectTab('catalog')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
                   activeTab === 'catalog'
-                    ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-purple-500'
-                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-purple-500'
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
                     : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                 }`}
               >
-                <Box className="w-4 h-4 text-purple-500" />
+                <Box className={`w-4 h-4 shrink-0 ${activeTab === 'catalog' ? 'text-white' : 'text-slate-400'}`} />
                 <span className="truncate">3D Model Catalog</span>
               </button>
 
               <button
                 onClick={() => handleSelectTab('floors')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
                   activeTab === 'floors'
-                    ? isLight
-                      ? 'bg-slate-900 text-white shadow-xs border-l-4 border-sky-500'
-                      : 'bg-white text-slate-900 shadow-xs border-l-4 border-sky-500'
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
                     : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                 }`}
               >
-                <Building className="w-4 h-4 text-sky-500" />
+                <Building className={`w-4 h-4 shrink-0 ${activeTab === 'floors' ? 'text-white' : 'text-slate-400'}`} />
                 <span className="truncate">Floor Templates</span>
               </button>
             </div>
           </div>
         </nav>
 
-        {/* Sidebar Footer: Cloud Infrastructure Indicator */}
-        <div className={`p-3.5 border-t transition-colors ${
-          isLight ? 'border-slate-200/80 bg-slate-50/80' : 'border-slate-800/90 bg-[#0c121e]'
+        {/* Sidebar Footer: Cloud Status Indicator */}
+        <div className={`p-4 border-t transition-colors ${
+          isLight ? 'border-slate-200 bg-white/70' : 'border-slate-800 bg-[#0c121e]/70'
         }`}>
-          <div className="p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800/90 bg-white/60 dark:bg-slate-900/60 shadow-xs space-y-1.5">
-            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-              <span className="flex items-center gap-1.5">
-                <Server className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Supabase PostgreSQL</span>
-              </span>
-              <span className="text-[10px] font-mono text-emerald-500 font-bold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                18ms
-              </span>
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1">
+            <div className="flex items-center gap-2">
+              <Server className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+              <span className="font-semibold text-slate-700 dark:text-slate-200 text-[11px]">Supabase DB</span>
             </div>
-            <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
-              <span>Dual Gateways</span>
-              <span className="text-emerald-500 font-medium">Cashfree & Razorpay</span>
-            </div>
+            <span className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              Connected
+            </span>
           </div>
         </div>
       </aside>
@@ -891,320 +866,361 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* MAIN ADMIN WORKSPACE                                      */}
       {/* ========================================================= */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar space-y-6">
-          {/* Section Header with Real-Time Badges */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200/60 dark:border-slate-800/60">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-                {activeTab === 'overview' && 'Executive Overview'}
-                {activeTab === 'users' && 'User Directory & Access Clearance'}
-                {activeTab === 'live_people' && 'Live Mission Control & Sessions'}
-                {activeTab === 'subscribers' && 'Subscribers & Pass Management'}
-                {activeTab === 'payments' && 'Payments & Revenue Ledger'}
-                {(activeTab === 'email_config' || (activeTab as string) === 'sms_gateway') && 'Email & Mobile OTP Gateways Setup'}
-                {activeTab === 'catalog' && '3D Furniture & Models Catalog'}
-                {activeTab === 'floors' && 'Architectural Floor Templates'}
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-                {activeTab === 'overview' && 'Real-time studio health, user acquisitions, and gateway telemetry.'}
-                {activeTab === 'users' && 'Inspect registered designer accounts, grant passes, and enforce access clearance.'}
-                {activeTab === 'live_people' && 'Monitor active CAD designers and 3D walkthrough participants in real time.'}
-                {activeTab === 'subscribers' && 'Track paid passes, access expirations, and grant 30-day extensions.'}
-                {activeTab === 'payments' && 'Cashfree & Razorpay gateway reconciliation, transaction audit proofs, and exports.'}
-                {(activeTab === 'email_config' || (activeTab as string) === 'sms_gateway') && 'Configure Resend/SMTP email delivery and Fast2SMS/Twilio mobile OTP dispatchers side-by-side in one screen.'}
-                {activeTab === 'catalog' && 'Manage 3D furniture models, categories, materials, and asset dimensions.'}
-                {activeTab === 'floors' && 'Cloud database-backed architectural floor plans, residential duplexes, and starter templates.'}
-              </p>
+        {activeTab === 'overview' ? (
+          /* ======================================================= */
+          /* TAB 1: EXECUTIVE DASHBOARD / OVERVIEW (FIT SCREEN)      */
+          /* ======================================================= */
+          <div className="flex-1 h-full flex flex-col justify-between p-3.5 sm:p-4 overflow-hidden select-none gap-3">
+            {/* 4 Primary Metric Cards (shrink-0) */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 shrink-0">
+              {/* Card 1: Registered Users */}
+              <div
+                onClick={() => handleSelectTab('users')}
+                className={`border rounded-xl p-2.5 px-3.5 transition-all cursor-pointer shadow-xs hover:border-indigo-500/50 ${
+                  isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Registered Users</span>
+                  <div className="w-6 h-6 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                    <Users className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div className="flex items-baseline justify-between mt-0.5">
+                  <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{dbUsers.length}</span>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                    Cloud DB
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 truncate">Supabase PostgreSQL synced</p>
+              </div>
+
+              {/* Card 2: Live CAD Designers */}
+              <div
+                onClick={() => handleSelectTab('live_people')}
+                className={`border rounded-xl p-2.5 px-3.5 transition-all cursor-pointer shadow-xs hover:border-emerald-500/50 ${
+                  isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Live Designers</span>
+                  <div className="w-6 h-6 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <Radio className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div className="flex items-baseline justify-between mt-0.5">
+                  <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    {liveSessions.length}
+                  </span>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    Active Now
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 truncate">Active CAD & 3D walkthroughs</p>
+              </div>
+
+              {/* Card 3: Active Subscribers */}
+              <div
+                onClick={() => handleSelectTab('subscribers')}
+                className={`border rounded-xl p-2.5 px-3.5 transition-all cursor-pointer shadow-xs hover:border-amber-500/50 ${
+                  isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Pass Subscribers</span>
+                  <div className="w-6 h-6 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                    <Crown className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div className="flex items-baseline justify-between mt-0.5">
+                  <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{subscribersList.length}</span>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                    Pass Holders
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 truncate">Verified database records</p>
+              </div>
+
+              {/* Card 4: Gross Revenue */}
+              <div
+                onClick={() => handleSelectTab('payments')}
+                className={`border rounded-xl p-2.5 px-3.5 transition-all cursor-pointer shadow-xs hover:border-emerald-500/50 ${
+                  isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Gross Revenue</span>
+                  <div className="w-6 h-6 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <DollarSign className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div className="flex items-baseline justify-between mt-0.5">
+                  <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">₹36,497</span>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    Dual Gateways
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 truncate">Cashfree & Razorpay live ledger</p>
+              </div>
             </div>
 
-            {/* Quick Actions & Live Badge */}
-            <div className="flex items-center gap-2.5 shrink-0">
-              <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Supabase Realtime • Active
-              </span>
-
-              {onSwitchToStudio && (
-                <button
-                  onClick={onSwitchToStudio}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-90 font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Palette className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Design Studio</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* ======================================================= */}
-          {/* TAB 1: EXECUTIVE DASHBOARD / OVERVIEW                   */}
-          {/* ======================================================= */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              {/* 4 Primary Metric Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* 1. Total Registered Users */}
-                <div
-                  onClick={() => handleSelectTab('users')}
-                  className={`border rounded-2xl p-5 transition-all cursor-pointer shadow-xs group ${
-                    isLight
-                      ? 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-sm'
-                      : 'bg-[#111827] border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      Registered Users
-                    </span>
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                      <Users className="w-4 h-4" />
+            {/* Middle Section: Real DB Users Table (7 cols) + Quick Actions & Live Stream (5 cols) */}
+            <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3">
+              {/* Left (7 cols): Real DB Users Table */}
+              <div className={`lg:col-span-7 border rounded-xl p-3 flex flex-col justify-between overflow-hidden shadow-xs ${
+                isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
+              }`}>
+                <div className="flex-1 min-h-0 flex flex-col">
+                  {/* Table Card Header */}
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200/70 dark:border-slate-800 mb-2 shrink-0">
+                    <div>
+                      <h2 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Supabase User Accounts</span>
+                        <span className="text-[10px] font-mono font-normal text-slate-400">({dbUsers.length} in database)</span>
+                      </h2>
+                      <p className="text-[10px] text-slate-400">PostgreSQL cloud synchronized records</p>
                     </div>
+
+                    <button
+                      onClick={onOpenAddUserModal}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <UserPlus className="w-3 h-3" />
+                      <span>Add User</span>
+                    </button>
                   </div>
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">{allMergedUsers.length}</span>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
-                      +18.4%
-                    </span>
+
+                  {/* Table of actual DB users */}
+                  <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className={`border-b text-[10px] font-semibold uppercase tracking-wider ${
+                          isLight ? 'border-slate-200/60 text-slate-400' : 'border-slate-800 text-slate-500'
+                        }`}>
+                          <th className="py-1.5">User</th>
+                          <th className="py-1.5">Role</th>
+                          <th className="py-1.5">Pass / Access</th>
+                          <th className="py-1.5 text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/50'}`}>
+                        {dbUsers.slice(0, 5).map((u) => (
+                          <tr key={u.id} className={`transition-colors ${isLight ? 'hover:bg-slate-50/70' : 'hover:bg-slate-800/30'}`}>
+                            <td className="py-1.5 pr-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-600 to-sky-500 text-white font-bold flex items-center justify-center text-[10px] shrink-0">
+                                  {(u.name || 'U').charAt(0).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-slate-900 dark:text-white truncate max-w-[130px] sm:max-w-[170px] text-[11px]">{u.name}</div>
+                                  <div className="text-[10px] text-slate-400 truncate max-w-[130px] sm:max-w-[170px] font-mono">{u.email}</div>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="py-1.5">
+                              <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${
+                                u.role === 'ADMIN'
+                                  ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200/60'
+                                  : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200/60'
+                              }`}>
+                                {u.role}
+                              </span>
+                            </td>
+
+                            <td className="py-1.5 text-[10px]">
+                              <span className={`font-medium ${
+                                u.payment_status === 'paid' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'
+                              }`}>
+                                {u.payment_status === 'paid' ? 'Active Pass' : 'Unpaid'}
+                              </span>
+                            </td>
+
+                            <td className="py-1.5 text-right">
+                              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                Synced
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    {registeredAccounts.length} Mobile & Email verified
-                  </p>
                 </div>
 
-                {/* 2. Live People Now */}
-                <div
-                  onClick={() => handleSelectTab('live_people')}
-                  className={`border rounded-2xl p-5 transition-all cursor-pointer shadow-xs group ${
-                    isLight
-                      ? 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-sm'
-                      : 'bg-[#111827] border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      Live Designers
-                    </span>
-                    <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                      <Radio className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                      {liveSessions.length}
-                    </span>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
-                      Real-time
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    Active CAD & 3D walkthroughs
-                  </p>
-                </div>
-
-                {/* 3. Subscribed People */}
-                <div
-                  onClick={() => handleSelectTab('subscribers')}
-                  className={`border rounded-2xl p-5 transition-all cursor-pointer shadow-xs group ${
-                    isLight
-                      ? 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-sm'
-                      : 'bg-[#111827] border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      Active Subscribers
-                    </span>
-                    <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                      <Crown className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">{subscribersList.length}</span>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/60">
-                      Pass Holders
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    Trial, Monthly & Annual passes
-                  </p>
-                </div>
-
-                {/* 4. Money Collected (INR) */}
-                <div
-                  onClick={() => handleSelectTab('payments')}
-                  className={`border rounded-2xl p-5 transition-all cursor-pointer shadow-xs group ${
-                    isLight
-                      ? 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-sm'
-                      : 'bg-[#111827] border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      Gross Revenue
-                    </span>
-                    <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                      <DollarSign className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">₹36,497</span>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
-                      Cashfree Live
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    Reconciled across all gateways
-                  </p>
+                {/* Table Footer */}
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+                  <span className="text-[10px] text-slate-400">Showing {Math.min(5, dbUsers.length)} of {dbUsers.length} verified accounts</span>
+                  <button
+                    onClick={() => handleSelectTab('users')}
+                    className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Manage all in User Directory</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
                 </div>
               </div>
 
-              {/* Middle Section: Quick Actions & Live Stream */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                {/* Left (8 cols): Quick Admin Actions */}
-                <div className={`lg:col-span-8 border rounded-2xl p-6 shadow-xs space-y-5 ${
-                  isLight ? 'bg-white border-slate-200/80' : 'bg-[#111827] border-slate-800'
+              {/* Right (5 cols): Quick Actions & Live Stream */}
+              <div className="lg:col-span-5 flex flex-col justify-between gap-2.5 overflow-hidden">
+                {/* Quick Control Actions */}
+                <div className={`border rounded-xl p-3 shadow-xs flex-1 min-h-0 flex flex-col justify-between ${
+                  isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
                 }`}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-indigo-500" />
-                        Quick Control Actions
-                      </h2>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Shortcuts to manage accounts, passes, and communications</p>
-                    </div>
+                  <div className="flex items-center justify-between pb-1 border-b border-slate-200/60 dark:border-slate-800 shrink-0">
+                    <h2 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                      Quick Control Shortcuts
+                    </h2>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  <div className="grid grid-cols-2 gap-2 mt-2 flex-1">
                     <button
-                      onClick={() => handleSelectTab('users')}
-                      className={`p-4 rounded-xl border text-left transition-all group cursor-pointer ${
+                      onClick={() => handleSelectTab('payments')}
+                      className={`p-2 rounded-lg border text-left transition-all group cursor-pointer flex flex-col justify-between ${
                         isLight
                           ? 'bg-slate-50/70 hover:bg-slate-100/90 border-slate-200/80 hover:border-slate-300'
                           : 'bg-slate-900/60 hover:bg-slate-800/80 border-slate-800 hover:border-slate-700'
                       }`}
                     >
-                      <div className="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 flex items-center justify-center mb-3">
-                        <UserPlus className="w-4 h-4" />
+                      <DollarSign className="w-3.5 h-3.5 text-emerald-500 mb-0.5" />
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-900 dark:text-white">Dual Gateways</div>
+                        <p className="text-[9px] text-slate-400">Cashfree & Razorpay</p>
                       </div>
-                      <div className="text-xs font-bold text-slate-900 dark:text-white">User Directory</div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Grant passes, passwords & roles</p>
                     </button>
 
                     <button
                       onClick={() => handleSelectTab('email_config')}
-                      className={`p-4 rounded-xl border text-left transition-all group cursor-pointer ${
+                      className={`p-2 rounded-lg border text-left transition-all group cursor-pointer flex flex-col justify-between ${
                         isLight
                           ? 'bg-slate-50/70 hover:bg-slate-100/90 border-slate-200/80 hover:border-slate-300'
                           : 'bg-slate-900/60 hover:bg-slate-800/80 border-slate-800 hover:border-slate-700'
                       }`}
                     >
-                      <div className="w-9 h-9 rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400 flex items-center justify-center mb-3">
-                        <Mail className="w-4 h-4" />
+                      <Mail className="w-3.5 h-3.5 text-sky-500 mb-0.5" />
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-900 dark:text-white">Email & OTP</div>
+                        <p className="text-[9px] text-slate-400">Resend & Fast2SMS</p>
                       </div>
-                      <div className="text-xs font-bold text-slate-900 dark:text-white">Email Gateway</div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Configure SMTP & test dispatch</p>
                     </button>
 
                     <button
-                      onClick={() => handleSelectTab('sms_gateway')}
-                      className={`p-4 rounded-xl border text-left transition-all group cursor-pointer ${
+                      onClick={() => handleSelectTab('catalog')}
+                      className={`p-2 rounded-lg border text-left transition-all group cursor-pointer flex flex-col justify-between ${
                         isLight
                           ? 'bg-slate-50/70 hover:bg-slate-100/90 border-slate-200/80 hover:border-slate-300'
                           : 'bg-slate-900/60 hover:bg-slate-800/80 border-slate-800 hover:border-slate-700'
                       }`}
                     >
-                      <div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 flex items-center justify-center mb-3">
-                        <Smartphone className="w-4 h-4" />
+                      <Box className="w-3.5 h-3.5 text-purple-500 mb-0.5" />
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-900 dark:text-white">3D Catalog</div>
+                        <p className="text-[9px] text-slate-400">3D Furniture models</p>
                       </div>
-                      <div className="text-xs font-bold text-slate-900 dark:text-white">SMS Gateway</div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Setup OTP route & test SMS</p>
                     </button>
-                  </div>
 
-                  {/* Gateway Status Summary Strip */}
-                  <div className={`pt-3 border-t grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs ${isLight ? 'border-slate-200/70' : 'border-slate-800'}`}>
-                    <div className={`p-3 rounded-xl border flex items-center justify-between ${
-                      isLight ? 'bg-slate-50/60 border-slate-200/70' : 'bg-slate-900/40 border-slate-800/70'
-                    }`}>
-                      <span className="text-slate-500 dark:text-slate-400 text-xs">Cashfree PG:</span>
-                      <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 text-xs">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                        Operational
-                      </span>
-                    </div>
-                    <div className={`p-3 rounded-xl border flex items-center justify-between ${
-                      isLight ? 'bg-slate-50/60 border-slate-200/70' : 'bg-slate-900/40 border-slate-800/70'
-                    }`}>
-                      <span className="text-slate-500 dark:text-slate-400 text-xs">Email Dispatch:</span>
-                      <span className="font-semibold text-sky-600 dark:text-sky-400 flex items-center gap-1.5 text-xs">
-                        <span className="w-2 h-2 rounded-full bg-sky-500" />
-                        Connected
-                      </span>
-                    </div>
-                    <div className={`p-3 rounded-xl border flex items-center justify-between ${
-                      isLight ? 'bg-slate-50/60 border-slate-200/70' : 'bg-slate-900/40 border-slate-800/70'
-                    }`}>
-                      <span className="text-slate-500 dark:text-slate-400 text-xs">SMS OTP:</span>
-                      <span className="font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5 text-xs">
-                        <span className="w-2 h-2 rounded-full bg-amber-500" />
-                        Active
-                      </span>
-                    </div>
+                    <button
+                      onClick={() => handleSelectTab('live_people')}
+                      className={`p-2 rounded-lg border text-left transition-all group cursor-pointer flex flex-col justify-between ${
+                        isLight
+                          ? 'bg-slate-50/70 hover:bg-slate-100/90 border-slate-200/80 hover:border-slate-300'
+                          : 'bg-slate-900/60 hover:bg-slate-800/80 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <Radio className="w-3.5 h-3.5 text-emerald-500 mb-0.5" />
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-900 dark:text-white">Live Telemetry</div>
+                        <p className="text-[9px] text-slate-400">{liveSessions.length} active sessions</p>
+                      </div>
+                    </button>
                   </div>
                 </div>
 
-                {/* Right (4 cols): Live Activity Stream */}
-                <div className={`lg:col-span-4 border rounded-2xl p-6 shadow-xs flex flex-col justify-between ${
-                  isLight ? 'bg-white border-slate-200/80' : 'bg-[#111827] border-slate-800'
+                {/* Live Activity Telemetry */}
+                <div className={`border rounded-xl p-3 shadow-xs flex-1 min-h-0 flex flex-col justify-between ${
+                  isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
                 }`}>
-                  <div>
-                    <h2 className="text-sm font-bold mb-3 text-slate-900 dark:text-white flex items-center gap-2">
-                      <Radio className="w-4 h-4 text-emerald-500" />
-                      Live Activity Telemetry
+                  <div className="flex items-center justify-between pb-1 border-b border-slate-200/60 dark:border-slate-800 shrink-0">
+                    <h2 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Activity className="w-3.5 h-3.5 text-emerald-500" />
+                      Live CAD Activity Stream
                     </h2>
-                    <div className="space-y-3.5">
-                      <div className="flex items-start gap-3 text-xs">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
-                        <div>
-                          <p className="font-medium text-slate-900 dark:text-slate-100">Vikramaditya Rao signed in</p>
-                          <span className="text-[10px] text-slate-400 dark:text-slate-500">2 min ago • Studio CAD</span>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3 text-xs">
-                        <span className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shrink-0" />
-                        <div>
-                          <p className="font-medium text-slate-900 dark:text-slate-100">Payment received: ₹4,999</p>
-                          <span className="text-[10px] text-slate-400 dark:text-slate-500">18 min ago • Cashfree PG</span>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3 text-xs">
-                        <span className="w-2 h-2 rounded-full bg-sky-500 mt-1.5 shrink-0" />
-                        <div>
-                          <p className="font-medium text-slate-900 dark:text-slate-100">New user registered with OTP</p>
-                          <span className="text-[10px] text-slate-400 dark:text-slate-500">1 hr ago • +91 9177018185</span>
-                        </div>
-                      </div>
-                    </div>
+                    <span className="text-[9px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Live
+                    </span>
                   </div>
 
-                  <button
-                    onClick={() => handleSelectTab('live_people')}
-                    className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 flex items-center justify-between cursor-pointer"
-                  >
-                    <span>View all active sessions</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="space-y-1.5 mt-2 overflow-y-auto no-scrollbar flex-1 min-h-0">
+                    {cadActivityEvents.slice(0, 3).map((evt) => {
+                      const IconComponent = evt.icon;
+                      return (
+                        <div key={evt.id} className="flex items-center gap-2 text-xs py-0.5">
+                          <div className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
+                            <IconComponent className="w-3 h-3" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="font-semibold text-slate-900 dark:text-slate-100 text-[11px] mr-1.5">{evt.user}</span>
+                            <span className="text-[10px] text-slate-400">{evt.action}</span>
+                          </div>
+                          <span className="text-[9px] text-slate-400 font-mono shrink-0">{evt.time}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
-          )}
 
-          {/* ======================================================= */}
-          {/* TAB 2: USER MANAGEMENT SYSTEM                           */}
-          {/* ======================================================= */}
-          {activeTab === 'users' && (
+            {/* Bottom Enterprise Infrastructure & Dual Gateways Health Strip (shrink-0) */}
+            <div className={`border rounded-xl p-2 px-3.5 shadow-xs shrink-0 flex items-center justify-between gap-4 ${
+              isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
+            }`}>
+              <div className="flex items-center gap-2">
+                <Server className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                <span className="text-[11px] font-bold text-slate-900 dark:text-white">Cloud Infrastructure Cluster</span>
+              </div>
+
+              <div className="hidden sm:flex items-center gap-4 text-[10px]">
+                <div className="flex items-center gap-1.5 text-slate-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">Cashfree PG</span>
+                  <span className="text-emerald-500 font-mono">(Live 24ms)</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">Razorpay PG</span>
+                  <span className="text-emerald-500 font-mono">(Dual Ready)</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">Resend & SMS</span>
+                  <span className="text-sky-500 font-mono">(Active)</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">Supabase Cloud</span>
+                  <span className="text-indigo-500 font-mono">(PostgreSQL 15)</span>
+                </div>
+              </div>
+
+              <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Operational
+              </span>
+            </div>
+          </div>
+        ) : (
+          /* ======================================================= */
+          /* OTHER TABS (Dedicated Scrollable Area)                  */
+          /* ======================================================= */
+          <div className="flex-1 overflow-y-auto p-5 sm:p-6 custom-scrollbar space-y-5">
+            {/* TAB 2: USER MANAGEMENT SYSTEM */}
+            {activeTab === 'users' && (
             <div className="space-y-5">
               {/* Header & Filter Controls */}
               <div className={`border rounded-2xl p-4 shadow-sm space-y-4 ${
@@ -1260,11 +1276,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <button
                         key={role}
                         onClick={() => setUserFilterRole(role)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
                           userFilterRole === role
-                            ? 'bg-sky-500 text-white shadow-sm'
+                            ? 'bg-indigo-600 text-white shadow-xs'
                             : isLight
-                            ? 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 border border-slate-200'
+                            ? 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 border border-slate-200/80'
                             : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
                         }`}
                       >
@@ -1367,7 +1383,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               {resettingUserId === user.id ? 'Sending...' : 'Reset Pass'}
                             </button>
                             <button
-                              onClick={() => onDeleteUser(user.id)}
+                              onClick={() => handleDeleteUserDirect(user.id, user.name)}
                               className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer ${
                                 isLight
                                   ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
@@ -1391,322 +1407,216 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {/* TAB 3: LIVE PEOPLE & REAL-TIME CAD TELEMETRY HUB        */}
           {/* ======================================================= */}
           {activeTab === 'live_people' && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              {/* 1. TOP MISSION CONTROL PULSE BANNER */}
-              <div className={`relative overflow-hidden p-5 sm:p-6 rounded-3xl border transition-all shadow-md ${
-                isLight
-                  ? 'bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-sky-500/10 border-emerald-500/30'
-                  : 'bg-gradient-to-r from-emerald-950/60 via-slate-900 to-indigo-950/50 border-emerald-500/30'
-              }`}>
-                {/* Background Radar Waves Decoration */}
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-8 pointer-events-none opacity-20 dark:opacity-30">
-                  <div className="w-56 h-56 rounded-full border border-emerald-400 animate-ping" />
-                  <div className="w-40 h-40 rounded-full border border-emerald-500/60 -mt-48 ml-8" />
-                </div>
-
-                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex items-start sm:items-center gap-3.5">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 shrink-0">
-                      <Radio className="w-6 h-6 animate-pulse" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2.5">
-                        <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white tracking-tight">
-                          Live Mission Control & CAD Telemetry Hub
-                        </h2>
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                          {liveSessions.length} Active Sessions
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 max-w-xl">
-                        Real-time telemetry stream of architects, designers, and clients drafting floorplans, rendering 4K raytrace scenes, and interacting in 3D walkthroughs.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Top Stats & Quick Refresh */}
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    <div className={`px-3 py-1.5 rounded-xl border text-xs font-mono flex items-center gap-2 ${
-                      isLight ? 'bg-white/90 border-slate-200 text-slate-700' : 'bg-slate-900/90 border-slate-700 text-slate-200'
-                    }`}>
-                      <Wifi className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>Sync: <strong className="text-emerald-500">1000ms</strong></span>
-                      <span className="text-slate-400">•</span>
-                      <span>Ping: <strong className="text-sky-400">{simulatedPing}ms</strong></span>
-                    </div>
-
-                    <button
-                      onClick={refreshUsersList}
-                      className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Refresh Pulse</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* 2. FOUR GLOWING TELEMETRY METRIC CARDS */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-6 animate-in fade-in duration-150">
+              {/* 1. THREE MINIMALIST METRIC CARDS */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {/* Metric 1: Active Designers */}
-                <div className={`p-4 rounded-2xl border transition-all shadow-xs relative overflow-hidden group hover:scale-[1.01] ${
-                  isLight ? 'bg-white border-slate-200/90 hover:border-emerald-400' : 'bg-[#0f172a] border-slate-800 hover:border-emerald-500/50'
+                <div className={`p-5 rounded-2xl border transition-all ${
+                  isLight ? 'bg-white border-slate-200/80 shadow-xs' : 'bg-[#0f172a] border-slate-800'
                 }`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                      <Users className="w-3.5 h-3.5 text-emerald-500" />
-                      Active CAD Viewers
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      Active 3D Viewports
                     </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-                      LIVE
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Live Now
                     </span>
                   </div>
-                  <div className="flex items-baseline justify-between mt-1">
-                    <span className="text-3xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                      {liveSessions.length}
-                    </span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">Collaborating</span>
+                  <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                    {liveSessions.length} <span className="text-xs font-normal text-slate-500">collaborators</span>
                   </div>
-                  <div className="mt-2 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                    <Activity className="w-3.5 h-3.5" />
-                    <span>Multi-Floor Blueprints & 3D Walkthroughs</span>
-                  </div>
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <Radio className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <span>Real-time designers in 3D floorplans</span>
+                  </p>
                 </div>
 
-                {/* Metric 2: Cluster Latency & Ping */}
-                <div className={`p-4 rounded-2xl border transition-all shadow-xs relative overflow-hidden group hover:scale-[1.01] ${
-                  isLight ? 'bg-white border-slate-200/90 hover:border-sky-400' : 'bg-[#0f172a] border-slate-800 hover:border-sky-500/50'
+                {/* Metric 2: WebSocket Latency */}
+                <div className={`p-5 rounded-2xl border transition-all ${
+                  isLight ? 'bg-white border-slate-200/80 shadow-xs' : 'bg-[#0f172a] border-slate-800'
                 }`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                      <Wifi className="w-3.5 h-3.5 text-sky-500" />
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
                       WebSocket Latency
                     </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30">
-                      OPTIMAL
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-400 border border-sky-200/60 dark:border-sky-800/60">
+                      Direct Channel
                     </span>
                   </div>
-                  <div className="flex items-baseline justify-between mt-1">
-                    <span className="text-3xl font-extrabold text-slate-900 dark:text-white font-mono">
-                      {simulatedPing}<span className="text-lg font-normal text-slate-400">ms</span>
-                    </span>
-                    <div className="flex items-end gap-1 h-5">
-                      <span className="w-1 h-2 bg-emerald-500 rounded-xs" />
-                      <span className="w-1 h-3 bg-emerald-500 rounded-xs" />
-                      <span className="w-1 h-4 bg-emerald-500 rounded-xs" />
-                      <span className="w-1 h-5 bg-emerald-500 rounded-xs" />
-                    </div>
+                  <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white font-mono">
+                    {simulatedPing} <span className="text-xs font-normal text-slate-500">ms</span>
                   </div>
-                  <div className="mt-2 text-[11px] text-sky-600 dark:text-sky-400 font-medium flex items-center gap-1">
-                    <Zap className="w-3.5 h-3.5" />
-                    <span>Zero packet drops • 5G Ultra pipeline</span>
-                  </div>
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <Wifi className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                    <span>Direct cloud WebSocket connection</span>
+                  </p>
                 </div>
 
-                {/* Metric 3: 3D Engine FPS & Raytracing */}
-                <div className={`p-4 rounded-2xl border transition-all shadow-xs relative overflow-hidden group hover:scale-[1.01] ${
-                  isLight ? 'bg-white border-slate-200/90 hover:border-purple-400' : 'bg-[#0f172a] border-slate-800 hover:border-purple-500/50'
+                {/* Metric 3: Database Synchronization */}
+                <div className={`p-5 rounded-2xl border transition-all ${
+                  isLight ? 'bg-white border-slate-200/80 shadow-xs' : 'bg-[#0f172a] border-slate-800'
                 }`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                      <Cpu className="w-3.5 h-3.5 text-purple-500" />
-                      3D Engine & Raytracer
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      Database Cluster
                     </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30">
-                      HARDWARE ACCEL
-                    </span>
-                  </div>
-                  <div className="flex items-baseline justify-between mt-1">
-                    <span className="text-3xl font-extrabold text-slate-900 dark:text-white font-mono">
-                      60<span className="text-lg font-normal text-slate-400"> FPS</span>
-                    </span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">0 queued</span>
-                  </div>
-                  <div className="mt-2 text-[11px] text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1">
-                    <Camera className="w-3.5 h-3.5" />
-                    <span>WebGL 2.0 • 4K Cloud Raytrace Ready</span>
-                  </div>
-                </div>
-
-                {/* Metric 4: Supabase Cloud Database */}
-                <div className={`p-4 rounded-2xl border transition-all shadow-xs relative overflow-hidden group hover:scale-[1.01] ${
-                  isLight ? 'bg-white border-slate-200/90 hover:border-indigo-400' : 'bg-[#0f172a] border-slate-800 hover:border-indigo-500/50'
-                }`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                      <Server className="w-3.5 h-3.5 text-indigo-500" />
-                      Supabase Cloud DB
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30">
-                      HEALTHY
-                    </span>
-                  </div>
-                  <div className="flex items-baseline justify-between mt-1">
-                    <span className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white truncate">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60">
                       PostgreSQL 15
                     </span>
-                    <span className="text-xs text-emerald-500 font-mono font-bold">14ms</span>
                   </div>
-                  <div className="mt-2 text-[11px] text-indigo-600 dark:text-indigo-400 font-medium flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Auto-saving CAD Projects & Templates</span>
+                  <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                    Supabase Cloud
                   </div>
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <Server className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span>Auto-persisting projects & templates</span>
+                  </p>
                 </div>
               </div>
 
-              {/* 3. ACTIVE LIVE SESSIONS INSPECTOR TABLE */}
-              <div className={`border rounded-3xl overflow-hidden shadow-sm ${
-                isLight ? 'bg-white border-slate-200' : 'bg-[#0f172a] border-slate-800'
+              {/* 2. AIRY SESSIONS TABLE */}
+              <div className={`border rounded-2xl overflow-hidden transition-all ${
+                isLight ? 'bg-white border-slate-200/80 shadow-xs' : 'bg-[#0e1628] border-slate-800'
               }`}>
                 {/* Table Header Bar */}
-                <div className={`px-5 py-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                  isLight ? 'border-slate-200 bg-slate-50/70' : 'border-slate-800 bg-slate-900/60'
+                <div className={`px-6 py-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                  isLight ? 'border-slate-200/80 bg-slate-50/50' : 'border-slate-800 bg-slate-900/40'
                 }`}>
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center font-bold">
-                      <Radio className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">Active Designers & Viewports</h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Live participants currently interacting with 3D blueprints and walkthroughs</p>
-                    </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900 dark:text-white">Active Designers & Viewports</h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Live sessions currently drafting 3D scenes or exploring blueprints</p>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400 font-medium">Filter:</span>
-                    <div className="flex items-center p-0.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold">
+                    <div className="flex items-center p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-[11px] font-medium">
                       <button
                         onClick={() => setTelemetryFilter('ALL')}
-                        className={`px-2.5 py-1 rounded-lg transition-all ${
+                        className={`px-2.5 py-1 rounded-md transition-colors ${
                           telemetryFilter === 'ALL'
                             ? isLight ? 'bg-white text-slate-900 shadow-xs' : 'bg-slate-700 text-white shadow-xs'
-                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                            : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
                         }`}
                       >
                         All ({liveSessions.length})
                       </button>
                       <button
                         onClick={() => setTelemetryFilter('ACTIVE')}
-                        className={`px-2.5 py-1 rounded-lg transition-all ${
+                        className={`px-2.5 py-1 rounded-md transition-colors ${
                           telemetryFilter === 'ACTIVE'
                             ? isLight ? 'bg-white text-slate-900 shadow-xs' : 'bg-slate-700 text-white shadow-xs'
-                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                            : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
                         }`}
                       >
                         Active Only
                       </button>
                     </div>
+
+                    <button
+                      onClick={refreshUsersList}
+                      className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                        isLight
+                          ? 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
+                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                      }`}
+                      title="Refresh Sessions"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
 
-                {/* Table Data */}
+                {/* Table Rows */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className={`border-b font-semibold ${
-                        isLight ? 'border-slate-200 bg-slate-50/50 text-slate-600' : 'border-slate-800 bg-[#0a1224]/80 text-slate-400'
+                      <tr className={`border-b font-medium text-[11px] uppercase tracking-wider ${
+                        isLight ? 'border-slate-200/80 bg-slate-50/30 text-slate-500' : 'border-slate-800/80 bg-slate-900/20 text-slate-400'
                       }`}>
-                        <th className="py-3.5 px-5">Designer & Role</th>
-                        <th className="py-3.5 px-4">Current CAD Scene / Room</th>
-                        <th className="py-3.5 px-4">Live Action</th>
-                        <th className="py-3.5 px-4">Session Duration</th>
-                        <th className="py-3.5 px-4">Device & Browser</th>
-                        <th className="py-3.5 px-4">Location</th>
-                        <th className="py-3.5 px-4">Latency</th>
-                        <th className="py-3.5 px-5 text-right">Inspection</th>
+                        <th className="py-3 px-6">Designer</th>
+                        <th className="py-3 px-4">Role</th>
+                        <th className="py-3 px-4">Current Space</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Device</th>
+                        <th className="py-3 px-4">Latency</th>
+                        <th className="py-3 px-6 text-right">Canvas</th>
                       </tr>
                     </thead>
                     <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/60'}`}>
                       {liveSessions.map((sess) => (
-                        <tr key={sess.id} className={`transition-colors ${isLight ? 'hover:bg-slate-50/80' : 'hover:bg-slate-800/40'}`}>
-                          {/* Designer & Role */}
-                          <td className="py-3.5 px-5">
+                        <tr key={sess.id} className={`transition-colors ${isLight ? 'hover:bg-slate-50/70' : 'hover:bg-slate-800/30'}`}>
+                          {/* Designer info */}
+                          <td className="py-3.5 px-6">
                             <div className="flex items-center gap-3">
-                              <div className="relative">
-                                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-sky-500 text-white font-bold flex items-center justify-center text-xs shadow-xs">
-                                  {sess.userName.charAt(0).toUpperCase()}
-                                </div>
-                                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900 animate-pulse" />
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-sky-500 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-xs">
+                                {sess.userName.charAt(0).toUpperCase()}
                               </div>
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className={`font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{sess.userName}</span>
-                                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
-                                    sess.role === 'ADMIN'
-                                      ? 'bg-indigo-500/15 text-indigo-500 border border-indigo-500/30'
-                                      : 'bg-sky-500/15 text-sky-500 border border-sky-500/30'
-                                  }`}>
-                                    {sess.role}
-                                  </span>
-                                </div>
-                                <span className={`text-[11px] font-mono block ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{sess.email}</span>
+                              <div className="min-w-0">
+                                <div className="font-semibold text-slate-900 dark:text-white truncate">{sess.userName}</div>
+                                <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono truncate">{sess.email}</div>
                               </div>
                             </div>
                           </td>
 
-                          {/* Scene / Room */}
+                          {/* Role */}
                           <td className="py-3.5 px-4">
-                            <div className="flex flex-col">
-                              <span className="font-semibold text-sky-600 dark:text-sky-400 flex items-center gap-1">
-                                <Layers className="w-3.5 h-3.5 shrink-0" />
-                                {sess.activeProject}
-                              </span>
-                              <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-                                <span>{sess.floor}</span> • <span>{sess.room}</span>
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Live Action */}
-                          <td className="py-3.5 px-4">
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-500/20">
-                              <Sparkles className="w-3 h-3 text-amber-400" />
-                              {sess.currentAction}
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                              sess.role === 'ADMIN'
+                                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60'
+                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60'
+                            }`}>
+                              {sess.role}
                             </span>
                           </td>
 
-                          {/* Duration */}
+                          {/* Space / Floor */}
                           <td className="py-3.5 px-4">
-                            <span className="inline-flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 font-mono">
-                              <Clock className="w-3.5 h-3.5 text-emerald-500" />
-                              {sess.duration}
+                            <div className="flex flex-col">
+                              <span className="font-medium text-slate-900 dark:text-slate-200 flex items-center gap-1.5">
+                                <Layers className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                                {sess.activeProject}
+                              </span>
+                              <span className="text-[11px] text-slate-400 mt-0.5">
+                                {sess.floor} • {sess.room}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-3.5 px-4">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              Active now
                             </span>
                           </td>
 
                           {/* Device */}
                           <td className="py-3.5 px-4 text-xs text-slate-600 dark:text-slate-300">
                             <div className="flex items-center gap-1.5">
-                              <Laptop className="w-3.5 h-3.5 text-slate-400" />
-                              <span>{sess.device}</span>
-                            </div>
-                          </td>
-
-                          {/* Location */}
-                          <td className="py-3.5 px-4 text-xs text-slate-600 dark:text-slate-300">
-                            <div className="flex items-center gap-1.5">
-                              <Globe className="w-3.5 h-3.5 text-slate-400" />
-                              <span>{sess.location}</span>
+                              <Laptop className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span className="truncate max-w-[140px]">{sess.device}</span>
                             </div>
                           </td>
 
                           {/* Latency */}
                           <td className="py-3.5 px-4">
-                            <span className="inline-flex items-center gap-1 font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <span className="font-mono text-xs text-slate-700 dark:text-slate-300">
                               {sess.latency}
                             </span>
                           </td>
 
                           {/* Action */}
-                          <td className="py-3.5 px-5 text-right">
+                          <td className="py-3.5 px-6 text-right">
                             <button
                               onClick={() => setSelectedLiveSession(sess)}
-                              className="px-3 py-1.5 rounded-xl border border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all text-xs font-semibold shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                              className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
+                                isLight
+                                  ? 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                              }`}
                             >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>Inspect Canvas</span>
+                              <Eye className="w-3.5 h-3.5 text-slate-400" />
+                              <span>Inspect</span>
                             </button>
                           </td>
                         </tr>
@@ -1716,238 +1626,115 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* 4. REAL-TIME ACTIVITY TIMELINE & INFRASTRUCTURE GAUGES (Fills the entire bottom empty area!) */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                {/* Left Column (7 cols): Real-Time CAD Activity Stream */}
-                <div className={`lg:col-span-7 border rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col justify-between ${
-                  isLight ? 'bg-white border-slate-200' : 'bg-[#0f172a] border-slate-800'
-                }`}>
+              {/* 3. RECENT STUDIO ACTIVITY FEED */}
+              <div className={`border rounded-2xl p-6 transition-all ${
+                isLight ? 'bg-white border-slate-200/80 shadow-xs' : 'bg-[#0e1628] border-slate-800'
+              }`}>
+                <div className="flex items-center justify-between pb-4 border-b border-slate-200/70 dark:border-slate-800">
                   <div>
-                    <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-sky-500/15 text-sky-500 flex items-center justify-center font-bold">
-                          <Activity className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-slate-900 dark:text-white">Real-Time CAD Event Stream</h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Live feed of CAD actions, raytracing, and database commits</p>
-                        </div>
-                      </div>
-
-                      <span className="text-[11px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                        Listening
-                      </span>
-                    </div>
-
-                    {/* Timeline items */}
-                    <div className="space-y-4">
-                      {cadActivityEvents.map((evt) => {
-                        const IconComponent = evt.icon;
-                        return (
-                          <div key={evt.id} className="flex items-start gap-3.5 group">
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${
-                              evt.color === 'emerald'
-                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                                : evt.color === 'sky'
-                                ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30'
-                                : evt.color === 'amber'
-                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-                                : 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30'
-                            }`}>
-                              <IconComponent className="w-4 h-4" />
-                            </div>
-
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                                  {evt.user}
-                                </p>
-                                <span className="text-[10px] text-slate-400 shrink-0 font-mono">{evt.time}</span>
-                              </div>
-                              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-snug">
-                                {evt.action}
-                              </p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[10px] font-medium text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-                                  {evt.target}
-                                </span>
-                                <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded ${
-                                  evt.type === 'RENDER' ? 'text-emerald-500 bg-emerald-500/10' :
-                                  evt.type === 'CAD' ? 'text-indigo-500 bg-indigo-500/10' :
-                                  evt.type === 'DATABASE' ? 'text-sky-500 bg-sky-500/10' : 'text-amber-500 bg-amber-500/10'
-                                }`}>
-                                  {evt.type}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-indigo-500" />
+                      Recent Studio Activity
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Audit log of 3D floorplan edits, snapshot renders, and database synchronization
+                    </p>
                   </div>
-
-                  <div className="mt-5 pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                    <span>Showing last 6 telemetry events</span>
-                    <span className="text-emerald-500 font-semibold flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> All events committed to Supabase
-                    </span>
-                  </div>
+                  <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    Listening to events
+                  </span>
                 </div>
 
-                {/* Right Column (5 cols): Hardware & Cloud Infrastructure Gauges */}
-                <div className={`lg:col-span-5 border rounded-3xl p-5 sm:p-6 shadow-sm space-y-5 ${
-                  isLight ? 'bg-white border-slate-200' : 'bg-[#0f172a] border-slate-800'
-                }`}>
-                  <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-indigo-500/15 text-indigo-500 flex items-center justify-center font-bold">
-                        <Gauge className="w-4 h-4" />
+                <div className="divide-y divide-slate-100 dark:divide-slate-800/60 mt-2">
+                  {cadActivityEvents.slice(0, 5).map((evt) => {
+                    const IconComponent = evt.icon;
+                    return (
+                      <div key={evt.id} className="py-3.5 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
+                            <IconComponent className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                                {evt.user}
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium">
+                                {evt.type}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-600 dark:text-slate-300 truncate mt-0.5">
+                              {evt.action} • <span className="text-slate-400">{evt.target}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[11px] text-slate-400 font-mono shrink-0">
+                          {evt.time}
+                        </span>
                       </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Infrastructure Health</h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Real-time WebSocket & cluster metrics</p>
-                      </div>
-                    </div>
-
-                    <span className="text-[10px] font-mono uppercase font-bold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/30">
-                      V-Sync 60Hz
-                    </span>
-                  </div>
-
-                  {/* 1. WebSocket Heartbeat Ping Distribution */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs font-semibold">
-                      <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                        <Wifi className="w-3.5 h-3.5 text-sky-400" />
-                        WebSocket Heartbeat Latency
-                      </span>
-                      <span className="text-emerald-500 font-mono font-bold">{simulatedPing}ms</span>
-                    </div>
-                    {/* Visual Ping Sparkline Bars */}
-                    <div className="flex items-end gap-1.5 h-12 p-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                      {[18, 24, 21, 28, 22, 19, 24, 20, 25, 23, 27, 21, 24].map((val, idx) => (
-                        <div
-                          key={idx}
-                          style={{ height: `${(val / 35) * 100}%` }}
-                          className={`flex-1 rounded-xs transition-all ${
-                            idx === 12 ? 'bg-emerald-400 animate-pulse' : 'bg-sky-500/60 hover:bg-sky-400'
-                          }`}
-                          title={`Sample #${idx + 1}: ${val}ms`}
-                        />
-                      ))}
-                    </div>
-                    <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                      <span>T - 60s</span>
-                      <span>Target: &lt; 50ms</span>
-                      <span>Current: {simulatedPing}ms</span>
-                    </div>
-                  </div>
-
-                  {/* 2. Client Viewport Memory Heap */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs font-semibold">
-                      <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                        <Cpu className="w-3.5 h-3.5 text-purple-400" />
-                        3D Viewport Memory Heap
-                      </span>
-                      <span className="font-mono text-xs text-purple-500 font-bold">142 MB / 2048 MB</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full" style={{ width: '7%' }} />
-                    </div>
-                    <p className="text-[10px] text-slate-400">WebGL 2.0 buffer load is normal. Raytrace memory footprint optimal.</p>
-                  </div>
-
-                  {/* 3. Cloud Database Replication */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs font-semibold">
-                      <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                        <Server className="w-3.5 h-3.5 text-indigo-400" />
-                        Cloud DB Replication
-                      </span>
-                      <span className="font-mono text-xs text-emerald-500 font-bold">14ms latency</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-full" style={{ width: '98%' }} />
-                    </div>
-                    <p className="text-[10px] text-slate-400">PostgreSQL 15 connection pool: 4 active connections, 0 queued queries.</p>
-                  </div>
-
-                  {/* Quick System Action */}
-                  <div className="pt-2">
-                    <button
-                      onClick={() => handleSelectTab('overview')}
-                      className="w-full py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition-all text-slate-700 dark:text-slate-200 flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>View Executive Dashboard Overview</span>
-                    </button>
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* 5. SESSION INSPECTOR MODAL */}
+              {/* 4. CLEAN INSPECTOR MODAL */}
               {selectedLiveSession && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
-                  <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl p-6 text-slate-100 space-y-5">
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
+                  <div className={`w-full max-w-lg rounded-2xl border p-6 space-y-5 shadow-2xl ${
+                    isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
+                  }`}>
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-sky-400 flex items-center justify-center font-bold text-white shadow-md">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-sky-500 flex items-center justify-center font-bold text-white shadow-xs">
                           {selectedLiveSession.userName.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <h3 className="text-base font-bold text-white flex items-center gap-2">
+                          <h3 className="text-sm font-bold flex items-center gap-2">
                             <span>{selectedLiveSession.userName}</span>
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                              LIVE
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
+                              Active
                             </span>
                           </h3>
-                          <p className="text-xs text-slate-400 font-mono">{selectedLiveSession.email}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{selectedLiveSession.email}</p>
                         </div>
                       </div>
 
                       <button
                         onClick={() => setSelectedLiveSession(null)}
-                        className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer"
+                        className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                       >
                         ✕
                       </button>
                     </div>
 
-                    <div className="space-y-3 text-xs">
-                      <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-2 font-mono">
+                    <div className="space-y-2 text-xs">
+                      <div className={`p-4 rounded-xl border space-y-2 font-mono text-[11px] ${
+                        isLight ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-slate-800/60 border-slate-700/60 text-slate-200'
+                      }`}>
                         <div className="flex justify-between">
-                          <span className="text-slate-400">Active Scene:</span>
-                          <span className="text-sky-400 font-bold">{selectedLiveSession.activeProject}</span>
+                          <span className="text-slate-400">Current Scene:</span>
+                          <span className="font-semibold text-indigo-600 dark:text-indigo-400">{selectedLiveSession.activeProject}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-400">Current Room / Floor:</span>
-                          <span className="text-slate-200">{selectedLiveSession.room} ({selectedLiveSession.floor})</span>
+                          <span className="text-slate-400">Space & Room:</span>
+                          <span>{selectedLiveSession.room} ({selectedLiveSession.floor})</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-slate-400">Live Action:</span>
-                          <span className="text-emerald-400 font-bold">{selectedLiveSession.currentAction}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Camera Viewport:</span>
-                          <span className="text-purple-400">{selectedLiveSession.cameraMode}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">3D Models in Scene:</span>
-                          <span className="text-amber-400">{selectedLiveSession.modelsInCanvas} assets placed</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{selectedLiveSession.currentAction}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-slate-400">Device & OS:</span>
-                          <span className="text-slate-200">{selectedLiveSession.device}</span>
+                          <span>{selectedLiveSession.device}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-400">IP & Location:</span>
-                          <span className="text-slate-200">{selectedLiveSession.location} ({selectedLiveSession.ipAddress})</span>
+                          <span className="text-slate-400">Location:</span>
+                          <span>{selectedLiveSession.location}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-400">WebSocket Ping:</span>
-                          <span className="text-emerald-400 font-bold">{selectedLiveSession.latency}</span>
+                          <span className="text-slate-400">Ping:</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-bold">{selectedLiveSession.latency}</span>
                         </div>
                       </div>
                     </div>
@@ -1958,14 +1745,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           setSelectedLiveSession(null);
                           if (onSwitchToStudio) onSwitchToStudio();
                         }}
-                        className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
                       >
                         <Palette className="w-4 h-4" />
                         <span>Open in 3D Design Studio</span>
                       </button>
                       <button
                         onClick={() => setSelectedLiveSession(null)}
-                        className="py-3 px-5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-all cursor-pointer"
+                        className={`py-2.5 px-4 rounded-xl border text-xs font-medium transition-colors cursor-pointer ${
+                          isLight ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
+                        }`}
                       >
                         Close
                       </button>
@@ -2902,7 +2691,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
-        </div>
+          </div>
+        )}
       </main>
 
       {/* 3D Catalog Item Preview Modal */}

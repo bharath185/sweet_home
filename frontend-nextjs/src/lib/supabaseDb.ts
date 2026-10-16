@@ -144,6 +144,26 @@ export async function getAllUsersFromDb(): Promise<DbUserRecord[]> {
 }
 
 /**
+ * 3.1 Delete user from Supabase
+ */
+export async function deleteUserInDb(userId: string): Promise<boolean> {
+  const admin = getSupabaseAdmin();
+  if (!admin || !userId) return false;
+
+  try {
+    const { error } = await admin.from('users').delete().eq('id', userId);
+    if (error) {
+      console.warn('[SupabaseDb] deleteUserInDb error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err: any) {
+    console.warn('[SupabaseDb] deleteUserInDb exception:', err.message);
+    return false;
+  }
+}
+
+/**
  * 4. Save project to Supabase
  */
 export async function saveProjectInDb(project: DbProjectRecord): Promise<DbProjectRecord | null> {

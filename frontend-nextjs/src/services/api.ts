@@ -1,7 +1,7 @@
 import { CatalogItem, HomePlan, User, FloorTemplate } from '../types/plan';
 import LZString from 'lz-string';
 
-const API_BASE = typeof window !== 'undefined' ? (window.location.port === '3000' ? 'http://localhost:8090/api' : '/api') : 'http://localhost:8090/api';
+const API_BASE = '/api';
 
 // 1. Sarah Jenkins: Modern 2-Bedroom Suite (Distinct Ground Floor & 1st Floor)
 export const sarahPlan: HomePlan = {
@@ -783,18 +783,13 @@ export async function fetchUsers(): Promise<User[]> {
   try {
     const res = await fetch(`${API_BASE}/users`, { cache: 'no-store' });
     if (res.ok) {
-      return await res.json();
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
     }
   } catch (err) {
-    console.warn('Backend users API offline, using mock users.', err);
+    console.warn('Backend users API error:', err);
   }
-  return [
-    { id: 'u1', name: 'Admin Superuser', email: 'admin@sweethome3d.io', role: 'ADMIN', isOnline: true, assignedPlan: 'plan-sarah-suite', createdAt: 'Today' },
-    { id: 'u2', name: 'Interior Architect', email: 'designer@sweethome3d.io', role: 'DESIGNER', isOnline: true, assignedPlan: 'plan-david-villa', createdAt: 'Today' },
-    { id: 'u3', name: 'Sarah Jenkins (Client)', email: 'client.sarah@gmail.com', role: 'CLIENT', isOnline: true, assignedPlan: 'plan-sarah-suite', createdAt: 'Today' },
-    { id: 'u4', name: 'David Miller (Client)', email: 'david.m@yahoo.com', role: 'CLIENT', isOnline: false, assignedPlan: 'plan-david-villa', createdAt: 'Yesterday' },
-    { id: 'u5', name: 'Emma Watson (Client)', email: 'emma.w@design.io', role: 'CLIENT', isOnline: true, assignedPlan: 'plan-emma-studio', createdAt: 'Today' },
-  ];
+  return [];
 }
 
 export function createFreshPlanForClient(
