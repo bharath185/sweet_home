@@ -15,7 +15,11 @@ import {
   Sparkles,
   Box,
   Layers,
-  X
+  X,
+  Tv,
+  Briefcase,
+  Trees,
+  Baby,
 } from 'lucide-react';
 import { CatalogItem } from '../types/plan';
 
@@ -29,16 +33,21 @@ interface CatalogSidebarProps {
 
 const CATEGORIES = [
   { id: 'All', name: 'All Furniture', icon: Building2 },
+  { id: 'Arched Detailing', name: '✨ Arched & Bespoke Details', icon: Sparkles },
   { id: 'Living', name: 'Living Room', icon: Armchair },
   { id: 'Bedroom', name: 'Bedroom', icon: Bed },
-  { id: 'Kitchen', name: 'Kitchen', icon: UtensilsCrossed },
-  { id: 'Bathroom', name: 'Bathroom', icon: Bath },
+  { id: 'Kitchen', name: 'Kitchen & Dining', icon: UtensilsCrossed },
+  { id: 'Bathroom', name: 'Bathroom & Laundry', icon: Bath },
+  { id: 'Appliances', name: 'Appliances', icon: Tv },
+  { id: 'Office', name: 'Office & Study', icon: Briefcase },
+  { id: 'Storage', name: 'Storage & Shelves', icon: Box },
+  { id: 'Outdoor', name: 'Balcony & Garden', icon: Trees },
+  { id: 'Kids', name: 'Kids & Nursery', icon: Baby },
   { id: 'Lighting', name: 'Lighting', icon: Lightbulb },
+  { id: 'Decor & Plants', name: 'Decor & Rugs', icon: Sparkles },
   { id: 'Doors & Windows', name: 'Doors & Windows', icon: DoorOpen },
-  { id: 'Wall Designs', name: 'Wall Designs', icon: Sparkles },
-  { id: 'Shelves & Storage', name: 'Shelves & Storage', icon: Box },
-  { id: 'Decor & Plants', name: 'Decor & Plants', icon: Sparkles },
-  { id: 'Stairs & Structural', name: 'Structural & Stairs', icon: Layers },
+  { id: 'Wall Designs', name: 'Wall Finishes', icon: Sparkles },
+  { id: 'Stairs & Structural', name: 'Stairs & Structural', icon: Layers },
 ];
 
 export const CatalogSidebar: React.FC<CatalogSidebarProps> = ({
@@ -53,11 +62,44 @@ export const CatalogSidebar: React.FC<CatalogSidebarProps> = ({
   const isDark = theme === 'dark';
 
   const filteredItems = catalog.filter((item) => {
-    const matchesCat =
-      selectedCategory === 'All' || item.category.toLowerCase() === selectedCategory.toLowerCase();
+    const itemCat = (item.category || '').toLowerCase();
+    const selCat = selectedCategory.toLowerCase();
+    let matchesCat = selCat === 'all';
+    if (!matchesCat) {
+      if (selCat === 'arched detailing') {
+        const desc = (item.description || '').toLowerCase();
+        const nm = item.name.toLowerCase();
+        const mod = (item.model || '').toLowerCase();
+        matchesCat =
+          itemCat.includes('arched') ||
+          nm.includes('arched') ||
+          nm.includes('fluted') ||
+          nm.includes('bespoke') ||
+          nm.includes('parisian') ||
+          desc.includes('arched') ||
+          desc.includes('fluted') ||
+          mod.includes('arched');
+      }
+      else if (selCat === 'living') matchesCat = itemCat.includes('living');
+      else if (selCat === 'bedroom') matchesCat = itemCat.includes('bed');
+      else if (selCat === 'kitchen') matchesCat = itemCat.includes('kitchen') || itemCat.includes('dining');
+      else if (selCat === 'bathroom') matchesCat = itemCat.includes('bath') || itemCat.includes('laundry');
+      else if (selCat === 'appliances') matchesCat = itemCat.includes('appliance') || ['refrigerator', 'fridge', 'cooker', 'stove', 'washer', 'dryer', 'microwave', 'tv', 'air conditioner', 'ac', 'heater', 'purifier', 'vacuum'].some(k => item.name.toLowerCase().includes(k));
+      else if (selCat === 'office') matchesCat = itemCat.includes('office') || itemCat.includes('study') || item.name.toLowerCase().includes('desk');
+      else if (selCat === 'storage') matchesCat = itemCat.includes('storage') || itemCat.includes('shel') || itemCat.includes('wardrobe') || itemCat.includes('cabinet') || itemCat.includes('dresser') || itemCat.includes('chest') || itemCat.includes('shoe');
+      else if (selCat === 'outdoor') matchesCat = itemCat.includes('outdoor') || itemCat.includes('garden') || itemCat.includes('balcony');
+      else if (selCat === 'kids') matchesCat = itemCat.includes('kid') || itemCat.includes('nursery') || itemCat.includes('baby') || item.name.toLowerCase().includes('crib') || item.name.toLowerCase().includes('bunk');
+      else if (selCat === 'lighting') matchesCat = itemCat.includes('light') || itemCat.includes('lamp') || itemCat.includes('fan') || itemCat.includes('chandelier');
+      else if (selCat === 'decor & plants') matchesCat = itemCat.includes('decor') || itemCat.includes('plant') || itemCat.includes('rug') || itemCat.includes('mirror') || itemCat.includes('art') || itemCat.includes('vase');
+      else if (selCat === 'doors & windows') matchesCat = itemCat.includes('door') || itemCat.includes('window');
+      else if (selCat === 'wall designs') matchesCat = itemCat.includes('wall');
+      else if (selCat === 'stairs & structural') matchesCat = itemCat.includes('stair') || itemCat.includes('structur');
+      else matchesCat = itemCat.includes(selCat);
+    }
     const matchesSearch =
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.category.toLowerCase().includes(searchQuery.toLowerCase());
+      item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCat && matchesSearch;
   });
 

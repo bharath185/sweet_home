@@ -115,7 +115,7 @@ export function App() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Home color="#3b82f6" size={20} />
-          <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Sweet Home 3D</span>
+          <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>DecoFrog 3D</span>
           <span style={{
             background: status === 'running' ? '#059669' : '#a855f7',
             color: 'white',

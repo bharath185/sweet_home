@@ -207,7 +207,7 @@ export function hasActiveSubscription(user: User | null): boolean {
   // 5. Check localStorage verified token
   if (typeof window !== 'undefined') {
     try {
-      const token = localStorage.getItem('sweethome_sub_token');
+      const token = localStorage.getItem('decofrog_sub_token') || localStorage.getItem('sweethome_sub_token');
       if (token) {
         const parts = token.split('.');
         if (parts.length === 2) {
@@ -283,7 +283,7 @@ export function getSubscriptionRemainingText(user: User | null): string {
     expiresAt = new Date(user.subscriptionExpiresAt || user.expires_at!).getTime();
   } else if (typeof window !== 'undefined') {
     try {
-      const token = localStorage.getItem('sweethome_sub_token');
+      const token = localStorage.getItem('decofrog_sub_token') || localStorage.getItem('sweethome_sub_token');
       if (token) {
         const payload = JSON.parse(atob(token.split('.')[0]));
         if (payload.expiresAt) expiresAt = payload.expiresAt;
@@ -337,7 +337,7 @@ export function start48HourFreeTrialLocally(user: User): User {
       subscriptionStatus: 'inactive',
     };
     if (typeof window !== 'undefined') {
-      localStorage.setItem('sweethome_current_user', JSON.stringify(expiredUser));
+      localStorage.setItem('decofrog_current_user', JSON.stringify(expiredUser));
     }
     return expiredUser;
   }
@@ -363,7 +363,7 @@ export function start48HourFreeTrialLocally(user: User): User {
   };
 
   if (typeof window !== 'undefined') {
-    localStorage.setItem('sweethome_current_user', JSON.stringify(trialUser));
+    localStorage.setItem('decofrog_current_user', JSON.stringify(trialUser));
   }
 
   // Also sync asynchronously to server
@@ -422,9 +422,9 @@ export function saveSubscriptionLocally(
 
   if (typeof window !== 'undefined') {
     try {
-      localStorage.setItem('sweethome_current_user', JSON.stringify(updated));
-      localStorage.setItem('sweethome_sub_token', token);
-      localStorage.setItem('sweethome_payment_id', paymentId);
+      localStorage.setItem('decofrog_current_user', JSON.stringify(updated));
+      localStorage.setItem('decofrog_sub_token', token);
+      localStorage.setItem('decofrog_payment_id', paymentId);
     } catch (e) {
       console.warn('Could not save subscription to localStorage', e);
     }

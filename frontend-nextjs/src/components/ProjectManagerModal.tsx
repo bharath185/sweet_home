@@ -97,7 +97,7 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
           onClose();
         }, 1000);
       } catch (err: any) {
-        setImportError(err.message || 'Failed to read project JSON. Ensure it is a valid .sweethome.json file.');
+        setImportError(err.message || 'Failed to read project JSON. Ensure it is a valid CAD project .json file.');
       }
     };
     reader.onerror = () => {
@@ -133,7 +133,7 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
               <FolderOpen className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold tracking-tight">DecoForge Project Center</h2>
+              <h2 className="text-base font-bold tracking-tight">DecoFrog 3D Project Center</h2>
               <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 {currentUser?.name ? `Signed in as ${currentUser.name}` : 'Saved Architectural Projects'}
               </p>
@@ -149,7 +149,7 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
                   ? 'bg-slate-800 hover:bg-slate-700 text-sky-300 border-sky-500/30'
                   : 'bg-white hover:bg-slate-50 text-sky-700 border-sky-300 shadow-2xs'
               }`}
-              title="Download current project as .sweethome.json file"
+              title="Download current project as CAD .json file"
             >
               <Download className="w-3.5 h-3.5 text-sky-500" />
               <span>Download Active (.json)</span>
@@ -251,7 +251,7 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".json,.sweethome"
+                    accept=".json,.cad,.project"
                     onChange={handleFileChange}
                     className="hidden"
                   />
@@ -326,7 +326,7 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
                                   ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
                                   : 'border-slate-200 hover:bg-slate-100 text-slate-700'
                               }`}
-                              title="Download project as .sweethome.json"
+                              title="Download project CAD file (.json)"
                             >
                               <Download className="w-3.5 h-3.5" />
                             </button>
@@ -500,13 +500,13 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: IMPORT PROJECT (.JSON / .SWEETHOME) */}
+          {/* TAB 3: IMPORT PROJECT (.JSON / CAD) */}
           {activeTab === 'import' && (
             <div className="space-y-6">
               <div>
                 <h3 className="text-sm font-bold">Import Existing Architectural Project File</h3>
                 <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Upload your saved <code className="font-mono text-indigo-400">.sweethome.json</code> or standard project JSON file to continue designing seamlessly from where you left off.
+                  Upload your saved <code className="font-mono text-indigo-400">.json</code> CAD project file to continue designing seamlessly from where you left off.
                 </p>
               </div>
 
@@ -524,12 +524,12 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
                 </div>
                 <h4 className="text-sm font-bold">Click to Browse or Drop Project JSON Here</h4>
                 <p className={`text-xs mt-1 max-w-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Supports all DecoForge exported projects, floor levels, walls, doors, windows, and custom furniture.
+                  Supports all DecoFrog 3D exported projects, floor levels, walls, doors, windows, and custom furniture.
                 </p>
 
                 <div className="mt-4 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-xs inline-flex items-center gap-2">
                   <Upload className="w-3.5 h-3.5" />
-                  <span>Select .sweethome.json File</span>
+                  <span>Select Project CAD File</span>
                 </div>
               </div>
 

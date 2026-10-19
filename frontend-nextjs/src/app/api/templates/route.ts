@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllTemplatesFromDb, saveTemplateInDb, deleteTemplateInDb, DbTemplateRecord } from '@/lib/supabaseDb';
-import { SWEET_HOME_DEMOS } from '@/services/demoPlans';
+import { DECOFROG_DEMOS } from '@/services/demoPlans';
 import { sarahPlan, davidPlan, emmaPlan } from '@/services/api';
 
 export const dynamic = 'force-dynamic';
@@ -8,11 +8,11 @@ export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
 const SEED_TEMPLATES = [
-  ...SWEET_HOME_DEMOS.map(demo => ({
+  ...DECOFROG_DEMOS.map(demo => ({
     id: demo.id,
     name: demo.name,
     category: demo.category || 'Apartment',
-    description: `Sweet Home 3D Architectural Starter: ${demo.name}`,
+    description: `DecoFrog 3D Architectural Starter: ${demo.name}`,
     floors: demo.plan.floors?.length || 1,
     area: `${demo.plan.rooms?.reduce((acc, r) => acc + (r.areaSquareMeters || 0), 0).toFixed(0) || '45'} m²`,
     badge: demo.badge || (demo.category === 'Blank' ? 'Blank Canvas' : demo.category),

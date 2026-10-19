@@ -46,7 +46,7 @@ Access:        Interactive first-person virtual walking tour with collision
 DATABASE & BACKEND CONFIGURATION (For Reference)
 --------------------------------------------------------------------------------
 Database Type: PostgreSQL 17
-Database Name: sweethome_db
+Database Name: decofrog_db
 DB Username:   postgres
 DB Password:   postgres
 DB Port:       5432

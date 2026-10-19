@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, memo } from 'react';
 import * as THREE from 'three';
+import { createSafeWebGLRenderer, safelyDisposeRenderer } from '../services/webglHelper';
 import {
   buildProceduralMeshGroup,
   buildTableMeshGroup,
@@ -195,12 +196,13 @@ const CatalogThumbnail3DInner: React.FC<CatalogThumbnail3DProps> = ({
     let renderer: THREE.WebGLRenderer | null = null;
 
     try {
-      renderer = new THREE.WebGLRenderer({
+      renderer = createSafeWebGLRenderer({
         canvas,
-        antialias: true,
+        antialias: false,
         alpha: true,
         powerPreference: 'low-power',
       });
+      if (!renderer) return;
       renderer.setSize(size, size);
       renderer.setPixelRatio(Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2));
       renderer.setClearColor(0x000000, 0);
@@ -308,9 +310,7 @@ const CatalogThumbnail3DInner: React.FC<CatalogThumbnail3DProps> = ({
 
     return () => {
       isDisposed = true;
-      if (renderer) {
-        renderer.dispose();
-      }
+      safelyDisposeRenderer(renderer);
     };
   }, [model, category, name, wCm, dCm, hCm, color, size]);
 

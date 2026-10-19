@@ -22,12 +22,16 @@ export function getRealThumbnailUrl(icon?: string, name?: string, category?: str
   const lowerName = (name || '').toLowerCase();
   const lowerCat = (category || '').toLowerCase();
 
+  if (lowerName.includes('washer') || lowerName.includes('washing machine') || lowerName.includes('dryer') || lowerName.includes('laundry')) return '/models/clothesWasher.png';
+  if (lowerName.includes('dishwasher')) return '/models/dishwasher.png';
+  if (lowerName.includes('corner sofa') || lowerName.includes('sectional')) return '/models/cornerSofa.png';
   if (lowerName.includes('armchair')) return '/models/armchair.png';
   if (lowerName.includes('sofa') || lowerName.includes('couch') || lowerName.includes('lounge')) return '/models/sofa.png';
   if (lowerName.includes('round table') || lowerName.includes('coffee table')) return '/models/roundTable.png';
   if (lowerName.includes('table') || lowerName.includes('desk')) return '/models/squareTable.png';
   if (lowerName.includes('chair') || lowerName.includes('seat')) return '/models/chair.png';
   if (lowerName.includes('stool')) return '/models/stool.png';
+  if (lowerName.includes('loft bed')) return '/models/loftBed140x190.png';
   if (lowerName.includes('bunk')) return '/models/bunkBed90x190.png';
   if (lowerName.includes('single bed')) return '/models/bed90x190.png';
   if (lowerName.includes('bed')) return '/models/bed140x190.png';
@@ -38,14 +42,21 @@ export function getRealThumbnailUrl(icon?: string, name?: string, category?: str
   if (lowerName.includes('cabinet') || lowerName.includes('kitchen')) return '/models/kitchenCabinet.png';
   if (lowerName.includes('cooker') || lowerName.includes('stove')) return '/models/cooker.png';
   if (lowerName.includes('fridge') || lowerName.includes('refrigerator')) return '/models/fridge.png';
+  if (lowerName.includes('shower')) return '/models/shower.png';
+  if (lowerName.includes('sink') || lowerName.includes('washbasin')) return '/models/washbasinWithCabinet.png';
   if (lowerName.includes('bath') || lowerName.includes('tub')) return '/models/bath.png';
   if (lowerName.includes('toilet') || lowerName.includes('wc')) return '/models/toiletUnit.png';
+  if (lowerName.includes('radiator') || lowerName.includes('heater')) return '/models/electricRadiator.png';
   if (lowerName.includes('tv') || lowerName.includes('console') || lowerName.includes('media')) return '/models/tvUnit.png';
   if (lowerName.includes('piano')) return '/models/piano.png';
-  if (lowerName.includes('lamp') || lowerName.includes('light') || lowerName.includes('chandelier')) return '/models/pendantLamp.png';
+  if (lowerName.includes('work lamp') || lowerName.includes('desk lamp')) return '/models/workLamp.png';
+  if (lowerName.includes('spotlight') || lowerName.includes('downlight')) return '/models/spotlight.png';
+  if (lowerName.includes('uplight') || lowerName.includes('sconce')) return '/models/wallUplight.png';
+  if (lowerName.includes('lamp') || lowerName.includes('light') || lowerName.includes('chandelier') || lowerName.includes('fan')) return '/models/pendantLamp.png';
+  if (lowerName.includes('sliding door')) return '/models/slidingDoors.png';
   if (lowerName.includes('door')) return '/models/door.png';
   if (lowerName.includes('window')) return '/models/window85x123.png';
-  if (lowerName.includes('plant') || lowerName.includes('flower')) return '/models/plant.png';
+  if (lowerName.includes('plant') || lowerName.includes('flower') || lowerName.includes('tree')) return '/models/plant.png';
   if (lowerName.includes('stair') || lowerName.includes('steps')) return '/models/staircase.png';
 
   if (lowerCat === 'living') return '/models/sofa.png';

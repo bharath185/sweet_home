@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'DESIGNER' | 'CLIENT';
+export type UserRole = 'ADMIN' | 'CUSTOMER' | 'DESIGNER' | 'CLIENT';
 export type UnitSystem = 'cm' | 'm' | 'mm' | 'ft_in';
 
 export type PaymentStatus = 'unpaid' | 'pending' | 'paid' | 'failed' | 'expired';

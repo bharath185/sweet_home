@@ -140,6 +140,63 @@ export function getFurnitureSubParts(item: FurnitureItem): FurnitureSubPart[] {
     ];
   }
 
+  // Botanical Plants, Trees, Hedges, Shrubs & Garden Fixtures
+  if (
+    model.includes(':plant') ||
+    model.includes(':tree') ||
+    model.includes(':garden') ||
+    model.includes('plant') ||
+    cat.includes('outdoor') ||
+    cat.includes('garden') ||
+    cat.includes('decor & plants') ||
+    name.includes('plant') ||
+    name.includes('tree') ||
+    name.includes('palm') ||
+    name.includes('hedge') ||
+    name.includes('shrub') ||
+    name.includes('bush') ||
+    name.includes('topiary') ||
+    name.includes('cypress') ||
+    name.includes('pine') ||
+    name.includes('maple') ||
+    name.includes('fig') ||
+    name.includes('flower')
+  ) {
+    return [
+      { id: 'foliage', name: 'Canopy Leaves & Foliage', icon: '🍃' },
+      { id: 'trunk', name: 'Tree Trunk / Bark / Stem', icon: '🪵' },
+      { id: 'pot', name: 'Planter Pot / Soil Bed', icon: '🪴' },
+      { id: 'blossoms', name: 'Flower Blossoms & Petals', icon: '🌸' },
+    ];
+  }
+
+  // Vehicles, Automobiles, Scooters & Bicycles
+  if (
+    model.includes(':vehicle') ||
+    model.includes(':car') ||
+    cat.includes('vehicle') ||
+    cat.includes('garage') ||
+    cat.includes('car') ||
+    name.includes('car') ||
+    name.includes('sedan') ||
+    name.includes('suv') ||
+    name.includes('coupe') ||
+    name.includes('truck') ||
+    name.includes('pickup') ||
+    name.includes('vehicle') ||
+    name.includes('vespa') ||
+    name.includes('scooter') ||
+    name.includes('bicycle') ||
+    name.includes('bike')
+  ) {
+    return [
+      { id: 'body', name: 'Car Body & Paintwork', icon: '🚗' },
+      { id: 'rims', name: 'Alloy Wheels & Rims', icon: '🔘' },
+      { id: 'glass', name: 'Tinted Windshield & Glass', icon: '🪟' },
+      { id: 'trim', name: 'Grille, Bumpers & Trim', icon: '✨' },
+    ];
+  }
+
   // Fallback generic 2-tone configuration for all other items
   return [
     { id: 'primary', name: 'Primary Body', icon: '🎨' },
@@ -230,6 +287,16 @@ export function mapObjGroupToPartId(
   // 7. Lighting
   if (g.includes('abat') || g.includes('shade') || g.includes('diffus') || g.includes('globe') || g.includes('sphere')) return 'shade';
   if (g.includes('tube') || g.includes('cable') || g.includes('tige') || g.includes('stem')) return 'stem';
+
+  // 8. Plants, Trees & Garden
+  if (g.includes('leaf') || g.includes('feuille') || g.includes('foliage') || g.includes('canopy') || g.includes('frond') || g.includes('bush') || g.includes('hedge')) return 'foliage';
+  if (g.includes('trunk') || g.includes('tronc') || g.includes('bark') || g.includes('stem') || g.includes('rib') || g.includes('branch')) return 'trunk';
+  if (g.includes('pot') || g.includes('vase') || g.includes('planter') || g.includes('terre') || g.includes('soil') || g.includes('urn') || g.includes('stand')) return 'pot';
+  // 9. Vehicles & Automotive
+  if (g.includes('carrosserie') || g.includes('body') || g.includes('chassis') || g.includes('hood') || g.includes('capot') || g.includes('door') || g.includes('porte') || g.includes('fender') || g.includes('frame') || g.includes('cadre')) return 'body';
+  if (g.includes('jante') || g.includes('rim') || g.includes('wheel') || g.includes('roue') || g.includes('tire') || g.includes('pneu') || g.includes('spoke')) return 'rims';
+  if (g.includes('vitre') || g.includes('glass') || g.includes('windshield') || g.includes('fenetre') || g.includes('parebrise')) return 'glass';
+  if (g.includes('bumper') || g.includes('grille') || g.includes('trim') || g.includes('chrome') || g.includes('phare') || g.includes('light') || g.includes('seat') || g.includes('selle') || g.includes('guidon') || g.includes('handlebar')) return 'trim';
 
   return 'primary';
 }

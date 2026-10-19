@@ -26,10 +26,10 @@ export interface AuthGuardResult {
  *  - Authorization header (Bearer <token>)
  *  - x-user-id / x-user-email headers
  *  - x-user-role header (ADMIN)
- *  - sweethome_sub_token / sweethome_user cookie
+ *  - decofrog_sub_token / decofrog_user cookie
  */
 export function checkUserAccess(req: NextRequest): AuthGuardResult {
-  const secretKey = process.env.CASHFREE_SECRET_KEY || 'sweethome-prod-sub-crypto-secret-key-2026';
+  const secretKey = process.env.CASHFREE_SECRET_KEY || 'decofrog-prod-sub-crypto-secret-key-2026';
   const subSecret = process.env.SUBSCRIPTION_JWT_SECRET || secretKey;
 
   // 1. Check Admin Role Headers
@@ -56,7 +56,7 @@ export function checkUserAccess(req: NextRequest): AuthGuardResult {
   }
 
   // 3. Check Cookie Token
-  const cookieToken = req.cookies.get('sweethome_sub_token')?.value;
+  const cookieToken = req.cookies.get('decofrog_sub_token')?.value || req.cookies.get('sweethome_sub_token')?.value;
   if (cookieToken) {
     const payload = verifySubscriptionToken(cookieToken, subSecret);
     if (payload && (!payload.expiresAt || Date.now() < payload.expiresAt)) {
@@ -89,11 +89,11 @@ export function checkUserAccess(req: NextRequest): AuthGuardResult {
         user: userRecord,
         status: 402, // HTTP 402 Payment Required
         reason: isExpired
-          ? 'Subscription expired. Please renew your pass to continue using SweetHome 3D Studio.'
+          ? 'Subscription expired. Please renew your pass to continue using VisualRendered 3D Studio.'
           : 'Payment required. An active trial or pro pass is required to access this feature.',
         errorResponse: {
           error: isExpired
-            ? 'Your SweetHome pass has expired. Please renew your subscription to access studio features.'
+            ? 'Your VisualRendered Studio pass has expired. Please renew your subscription to access studio features.'
             : 'Payment required: An active pass is required to access this feature.',
           code: isExpired ? 'SUBSCRIPTION_EXPIRED' : 'PAYMENT_REQUIRED',
           payment_status: statusName,

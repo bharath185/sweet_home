@@ -3,10 +3,10 @@ version: '3.8'
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: sweethome-postgres
+    container_name: decofrog-postgres
     restart: always
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-sweethome_db}
+      POSTGRES_DB: ${POSTGRES_DB:-decofrog_db}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
@@ -14,7 +14,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sweethome_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-decofrog_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -23,13 +23,13 @@ services:
     build:
       context: ./sweethome3d-springboot
       dockerfile: Dockerfile
-    container_name: sweethome-backend
+    container_name: decofrog-backend
     restart: always
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-sweethome_db}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-decofrog_db}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
@@ -40,7 +40,7 @@ services:
     build:
       context: ./frontend-nextjs
       dockerfile: Dockerfile
-    container_name: sweethome-frontend
+    container_name: decofrog-frontend
     restart: always
     depends_on:
       - backend

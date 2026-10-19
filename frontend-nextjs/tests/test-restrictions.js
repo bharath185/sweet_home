@@ -87,7 +87,7 @@ function checkUserAccess({ headers = {} }) {
 const TEST_SECRET = process.env.CASHFREE_SECRET_KEY || 'mock_local_secret_key_for_testing_only';
 
 console.log('====================================================');
-console.log('   SWEETHOME CASHFREE ACCESS RESTRICTIONS TEST SUITE');
+console.log('   DECOFROG CASHFREE ACCESS RESTRICTIONS TEST SUITE');
 console.log('====================================================\n');
 
 let passedTests = 0;

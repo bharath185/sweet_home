@@ -26,6 +26,7 @@ import {
 import { CatalogItem } from '../types/plan';
 import { buildProceduralMeshGroup } from '../services/proceduralFurniture';
 import { loadObjGeometry } from '../services/objParser';
+import { createSafeWebGLRenderer, safelyDisposeRenderer } from '../services/webglHelper';
 
 interface Catalog3DPreviewModalProps {
   item: CatalogItem | null;
@@ -278,7 +279,11 @@ export const Catalog3DPreviewModal: React.FC<Catalog3DPreviewModalProps> = ({
     cameraRef.current = camera;
 
     // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    const renderer = createSafeWebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    if (!renderer) {
+      console.warn('Could not initialize WebGL context in Catalog3DPreviewModal.');
+      return;
+    }
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2));
     renderer.shadowMap.enabled = true;
@@ -468,8 +473,7 @@ export const Catalog3DPreviewModal: React.FC<Catalog3DPreviewModalProps> = ({
       dom.removeEventListener('touchstart', handleTouchStart);
       dom.removeEventListener('touchmove', handleTouchMove);
       dom.removeEventListener('touchend', handleTouchEnd);
-      renderer.dispose();
-      if (container) container.innerHTML = '';
+      safelyDisposeRenderer(renderer, container);
     };
   }, [isOpen]);
 

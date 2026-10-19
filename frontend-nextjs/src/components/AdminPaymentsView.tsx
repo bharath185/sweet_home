@@ -206,7 +206,7 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
 
   // Purge all non-admin test users
   const handlePurgeTestUsers = async () => {
-    if (!confirm('Are you sure you want to purge all non-admin client accounts? Admin accounts (admin@sweethome3d.io / admin@visualrendered.io) will retain lifetime access. All regular visitors will be required to make real payments.')) {
+    if (!confirm('Are you sure you want to purge all non-admin client accounts? Superadmin account (admin@visualrendered.io) will retain lifetime access. All regular visitors will be required to make real payments.')) {
       return;
     }
     setIsPurging(true);
@@ -240,7 +240,7 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `SweetHome_Payments_Ledger_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `VisualRendered_Payments_Ledger_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -836,7 +836,7 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
                   <span>Purge Non-Admin Test Accounts & Start Fresh</span>
                 </h3>
                 <p className="text-xs text-rose-600/80 dark:text-rose-400/80 mt-1">
-                  Removes all non-admin client test accounts from memory. Admin Superusers (<code>admin@sweethome3d.io</code> and <code>admin@visualrendered.io</code>) retain permanent free access. All regular visitors will be required to make real payments.
+                  Removes all non-admin client test accounts from memory. Superadmin (<code>admin@visualrendered.io</code>) retains permanent free access. All regular visitors will be required to make real payments.
                 </p>
               </div>
               <button

@@ -133,7 +133,7 @@ export function SweetHome3DJarRunner() {
         {status === 'ready' && (
           <div style={{ textAlign: 'center', maxWidth: '500px', padding: '24px', background: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }}>
             <Cpu size={48} color="#a855f7" style={{ marginBottom: '12px' }} />
-            <h2 style={{ fontSize: '1.2rem', marginBottom: '8px', color: '#fafafa' }}>Run Native SweetHome3D.jar in React</h2>
+            <h2 style={{ fontSize: '1.2rem', marginBottom: '8px', color: '#fafafa' }}>Run Native DecoFrog 3D Engine in React</h2>
             <p style={{ fontSize: '0.85rem', color: '#a1a1aa', lineHeight: 1.5, marginBottom: '18px' }}>
               This executes the exact compiled Java bytecode (`SweetHome3D.jar`, `sunflow.jar`, `j3dcore.jar`) directly in your browser using the CheerpJ WebAssembly virtual machine.
             </p>

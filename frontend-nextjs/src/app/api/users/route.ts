@@ -8,50 +8,63 @@ export const fetchCache = 'force-no-store';
 
 const DEFAULT_USERS = [
   {
-    id: 'admin_1',
-    name: 'Studio Superadmin',
-    email: 'admin@sweethome3d.io',
-    role: 'ADMIN',
-    isOnline: true,
-    assignedPlan: 'plan-sarah-suite',
-    createdAt: 'Lifetime',
-    payment_status: 'paid',
-  },
-  {
-    id: 'admin_2',
-    name: 'Lead Architect Admin',
+    id: 'admin_visual',
+    name: 'Superadmin',
     email: 'admin@visualrendered.io',
+    phone: '',
     role: 'ADMIN',
     isOnline: true,
     assignedPlan: 'plan-sarah-suite',
+    plan: 'yearly',
     createdAt: 'Lifetime',
-    payment_status: 'paid',
+    expires_at: '2099-12-31T23:59:59.999Z',
+    trial_expires_at: '',
+    payment_status: 'paid' as const,
   },
 ];
 
 export async function GET() {
   const dbUsers = await getAllUsersFromDb();
   if (dbUsers && dbUsers.length > 0) {
-    return NextResponse.json(
-      dbUsers.map((u) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        phone: u.phone,
-        role: u.role,
-        isOnline: false,
-        payment_status: u.payment_status,
-        plan: u.plan,
-        createdAt: u.created_at || 'Recently',
-        expires_at: u.expires_at,
-        trial_expires_at: u.trial_expires_at,
-      })),
-      {
-        headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
-        },
+    // Filter out old legacy admin accounts (e.g. admin@sweethome3d.io, admin@decoforge3d.io)
+    const filteredDbUsers = dbUsers.filter(
+      (u) => {
+        const em = (u.email || '').toLowerCase();
+        return em !== 'admin@sweethome3d.io' && em !== 'admin@decoforge3d.io';
       }
     );
+
+    // Normalize roles: only admin@visualrendered.io is ADMIN, all other users are CUSTOMER
+    const normalizedUsers = filteredDbUsers.map((u) => {
+      const isSuper = (u.email || '').toLowerCase() === 'admin@visualrendered.io';
+      return {
+        id: u.id,
+        name: isSuper ? 'Superadmin' : u.name,
+        email: u.email,
+        phone: u.phone,
+        role: isSuper ? 'ADMIN' : 'CUSTOMER',
+        isOnline: isSuper,
+        payment_status: isSuper ? 'paid' : (u.payment_status || 'unpaid'),
+        plan: isSuper ? 'yearly' : u.plan,
+        createdAt: u.created_at || 'Recently',
+        expires_at: isSuper ? '2099-12-31T23:59:59.999Z' : u.expires_at,
+        trial_expires_at: u.trial_expires_at,
+      };
+    });
+
+    // Ensure the single superadmin is always present
+    const hasSuperAdmin = normalizedUsers.some(
+      (u) => (u.email || '').toLowerCase() === 'admin@visualrendered.io'
+    );
+    if (!hasSuperAdmin) {
+      normalizedUsers.unshift(DEFAULT_USERS[0]);
+    }
+
+    return NextResponse.json(normalizedUsers, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+      },
+    });
   }
 
   const usersWithPayment = DEFAULT_USERS.map((u) => {

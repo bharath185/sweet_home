@@ -54,12 +54,12 @@ const usersMap = new Map<string, UserPaymentRecord>();
 const pendingOrdersMap = new Map<string, PendingOrder>();
 const processedWebhookEventIds = new Set<string>();
 
-// Pre-seed Admin Users who always have Lifetime Paid/Bypass access
+// Pre-seed Superadmin User who always has Lifetime Paid/Bypass access
 const ADMIN_USERS: UserPaymentRecord[] = [
   {
-    id: 'u1',
-    email: 'admin@sweethome3d.io',
-    name: 'Admin Superuser',
+    id: 'admin_visual',
+    email: 'admin@visualrendered.io',
+    name: 'Superadmin',
     role: 'ADMIN',
     payment_status: 'paid',
     plan: 'yearly',
@@ -67,18 +67,6 @@ const ADMIN_USERS: UserPaymentRecord[] = [
     expires_at: '2099-12-31T23:59:59.999Z',
     cashfree_order_id: 'cf_admin_bypass',
     cashfree_payment_id: 'cf_pay_admin_bypass',
-  },
-  {
-    id: 'admin_visual',
-    email: 'admin@visualrendered.io',
-    name: 'Admin Superuser',
-    role: 'ADMIN',
-    payment_status: 'paid',
-    plan: 'yearly',
-    paid_at: '2026-01-01T00:00:00.000Z',
-    expires_at: '2099-12-31T23:59:59.999Z',
-    cashfree_order_id: 'cf_admin_bypass_2',
-    cashfree_payment_id: 'cf_pay_admin_bypass_2',
   },
 ];
 

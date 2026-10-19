@@ -26,7 +26,7 @@ export function registerCustomObjGeometry(id: string, textOrGeom: string | THREE
     // Persist in localStorage so custom 3D models survive page refreshes and sessions!
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(`sweethome_geom_${key}`, textOrGeom);
+        localStorage.setItem(`decofrog_geom_${key}`, textOrGeom);
       } catch (e) {
         console.warn('Could not cache OBJ in localStorage (quota may be full):', e);
       }
@@ -48,7 +48,10 @@ export async function loadObjModel(url: string): Promise<ParsedObjModel> {
 
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem(`sweethome_geom_${url}`) || localStorage.getItem(url);
+        const stored =
+          localStorage.getItem(`decofrog_geom_${url}`) ||
+          localStorage.getItem(`sweethome_geom_${url}`) ||
+          localStorage.getItem(url);
         if (stored) {
           const parsed = parseObjMultiPart(stored);
           modelCache.set(url, parsed);
@@ -229,9 +232,16 @@ export function parseObjMultiPart(text: string): ParsedObjModel {
       gData.positions[p + 2] -= centerZ;
     }
 
-    allPositions.push(...gData.positions);
-    allNormals.push(...gData.normals);
-    allUvs.push(...gData.uvs);
+    // Append to combined lists using a loop to prevent RangeError (Maximum call stack size exceeded) on large models
+    for (let i = 0; i < gData.positions.length; i++) {
+      allPositions.push(gData.positions[i]);
+    }
+    for (let i = 0; i < gData.normals.length; i++) {
+      allNormals.push(gData.normals[i]);
+    }
+    for (let i = 0; i < gData.uvs.length; i++) {
+      allUvs.push(gData.uvs[i]);
+    }
 
     const partGeom = new THREE.BufferGeometry();
     partGeom.setAttribute('position', new THREE.Float32BufferAttribute(gData.positions, 3));

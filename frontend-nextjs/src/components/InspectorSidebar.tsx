@@ -40,15 +40,34 @@ import {
   ChevronLeft,
   Minimize2,
   Maximize2,
-  Plus
+  Plus,
+  Tv,
+  Briefcase,
+  Trees,
+  Baby,
+  Magnet,
+  FlipHorizontal2,
+  Car,
+  Wand2,
+  FolderOpen,
+  Image as ImageIcon,
+  DollarSign,
+  Download,
+  Upload,
 } from 'lucide-react';
 import { HomePlan, FurnitureItem, Wall, Room, CatalogItem } from '../types/plan';
+import { Tooltip as AntdTooltip } from 'antd';
 import { ROYALE_PLAY_WALL_PRESETS, BRICK_WALL_PRESETS } from '../services/pbrTextures';
 import { isTabletopItem, findSupportingHost, findNearestSupportingSurface } from '../services/tabletopAttachment';
 import { fallbackCatalog } from '../services/api';
 import { Catalog3DPreviewModal } from './Catalog3DPreviewModal';
 import { CatalogThumbnail } from './CatalogThumbnail';
 import { getFurnitureSubParts } from '../services/partMaterials';
+import {
+  snapFurnitureToNearestWall,
+  centerFurnitureInRoom,
+  rotateFurnitureByAngle,
+} from '../services/smartAlignment';
 
 interface InspectorSidebarProps {
   plan: HomePlan;
@@ -64,6 +83,19 @@ interface InspectorSidebarProps {
   onToggleOpen?: () => void;
   isWalkMode?: boolean;
   onOpenAddItemModal?: () => void;
+  externalCategory?: string;
+
+  // Right Side Tools Section Callbacks
+  onOpenAiStyler?: () => void;
+  onOpenGuidedBuilder?: () => void;
+  onOpenProjects?: () => void;
+  onOpenBlueprintModal?: () => void;
+  onOpenCostEstimator?: () => void;
+  onOpenPreferences?: () => void;
+  onExportJson?: () => void;
+  onImportJson?: () => void;
+  onToggleFurnitureList?: () => void;
+  isFurnitureListOpen?: boolean;
 }
 
 interface MaterialSwatch {
@@ -80,6 +112,9 @@ const MATERIAL_LIBRARIES: { [cat: string]: { label: string; icon: any; swatches:
     icon: Box,
     swatches: [
       { name: 'Natural Oak', color: '#d4a373', roughness: 0.7, metalness: 0.05 },
+      { name: 'Fluted White Oak', color: '#c29f79', roughness: 0.65, metalness: 0.02 },
+      { name: 'Stonybrook Sage', color: '#4d6059', roughness: 0.5, metalness: 0.05 },
+      { name: 'French Greige', color: '#d6cfc7', roughness: 0.6, metalness: 0.02 },
       { name: 'American Walnut', color: '#5c3d2e', roughness: 0.45, metalness: 0.05 },
       { name: 'Rich Teak', color: '#8c5a3c', roughness: 0.5, metalness: 0.05 },
       { name: 'Smoked Ash', color: '#3e3835', roughness: 0.6, metalness: 0.08 },
@@ -115,6 +150,7 @@ const MATERIAL_LIBRARIES: { [cat: string]: { label: string; icon: any; swatches:
     label: 'Metals & Finishes',
     icon: Sliders,
     swatches: [
+      { name: 'Unlacquered Brass', color: '#d4af37', roughness: 0.28, metalness: 0.88 },
       { name: 'Brushed Brass', color: '#eab308', roughness: 0.25, metalness: 0.85 },
       { name: 'Polished Chrome', color: '#cbd5e1', roughness: 0.08, metalness: 0.95 },
       { name: 'Matte Obsidian', color: '#1e293b', roughness: 0.6, metalness: 0.7 },
@@ -127,6 +163,7 @@ const MATERIAL_LIBRARIES: { [cat: string]: { label: string; icon: any; swatches:
     label: 'Stone & Marble',
     icon: Droplets,
     swatches: [
+      { name: 'Calacatta Gold', color: '#faf8f5', roughness: 0.16, metalness: 0.04 },
       { name: 'Carrara White', color: '#f1f5f9', roughness: 0.15, metalness: 0.05 },
       { name: 'Nero Marquina', color: '#0f172a', roughness: 0.2, metalness: 0.05 },
       { name: 'Travertine Beige', color: '#e2d9cc', roughness: 0.5, metalness: 0.02 },
@@ -139,6 +176,7 @@ const MATERIAL_LIBRARIES: { [cat: string]: { label: string; icon: any; swatches:
     label: 'Glass & Acrylic',
     icon: Sparkles,
     swatches: [
+      { name: 'Reeded Fluted Glass', color: '#f0fdfa', roughness: 0.12, metalness: 0.08, opacity: 0.45 },
       { name: 'Clear Crystal', color: '#e0f2fe', roughness: 0.05, metalness: 0.1, opacity: 0.35 },
       { name: 'Smoked Obsidian', color: '#1e293b', roughness: 0.1, metalness: 0.15, opacity: 0.5 },
       { name: 'Frosted White', color: '#f8fafc', roughness: 0.4, metalness: 0.05, opacity: 0.65 },
@@ -157,16 +195,21 @@ const PRESET_COLORS = [
 
 const CATALOG_CATEGORIES = [
   { id: 'All', name: 'All Models', icon: Building2 },
-  { id: 'Living', name: 'Living', icon: Armchair },
+  { id: 'Living', name: 'Living Room', icon: Armchair },
   { id: 'Bedroom', name: 'Bedroom', icon: Bed },
-  { id: 'Kitchen', name: 'Kitchen', icon: UtensilsCrossed },
-  { id: 'Bathroom', name: 'Bath', icon: Bath },
+  { id: 'Kitchen', name: 'Kitchen & Dining', icon: UtensilsCrossed },
+  { id: 'Bathroom', name: 'Bathroom & Laundry', icon: Bath },
+  { id: 'Appliances', name: 'Appliances', icon: Tv },
+  { id: 'Office', name: 'Home Office', icon: Briefcase },
+  { id: 'Storage', name: 'Storage & Shelves', icon: Box },
+  { id: 'Outdoor', name: 'Balcony & Garden', icon: Trees },
+  { id: 'Vehicles', name: 'Garage & Cars', icon: Car },
+  { id: 'Kids', name: 'Kids & Nursery', icon: Baby },
   { id: 'Lighting', name: 'Lighting', icon: Lightbulb },
-  { id: 'Doors & Windows', name: 'Doors', icon: DoorOpen },
-  { id: 'Wall Designs', name: 'Walls', icon: Sparkles },
-  { id: 'Shelves & Storage', name: 'Storage', icon: Box },
-  { id: 'Decor & Plants', name: 'Decor', icon: Sparkles },
-  { id: 'Stairs & Structural', name: 'Structural', icon: Layers },
+  { id: 'Decor & Plants', name: 'Decor & Rugs', icon: Sparkles },
+  { id: 'Doors & Windows', name: 'Doors & Windows', icon: DoorOpen },
+  { id: 'Wall Designs', name: 'Wall Finishes', icon: Sparkles },
+  { id: 'Stairs & Structural', name: 'Stairs & Structural', icon: Layers },
 ];
 
 export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
@@ -183,6 +226,17 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
   onToggleOpen,
   isWalkMode = false,
   onOpenAddItemModal,
+  externalCategory,
+  onOpenAiStyler,
+  onOpenGuidedBuilder,
+  onOpenProjects,
+  onOpenBlueprintModal,
+  onOpenCostEstimator,
+  onOpenPreferences,
+  onExportJson,
+  onImportJson,
+  onToggleFurnitureList,
+  isFurnitureListOpen = false,
 }) => {
   const selectedFurniture = plan.furniture.find((f) => f.id === selectedId);
   const selectedWall = plan.walls.find((w) => w.id === selectedId);
@@ -206,6 +260,14 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
     }
   }, [isWalkMode]);
 
+  // When externalCategory is requested from InteriorScopeBar, open catalog tab and set category
+  useEffect(() => {
+    if (externalCategory) {
+      setSelectedCatalogCategory(externalCategory);
+      setActiveTab('catalog');
+    }
+  }, [externalCategory]);
+
   // Automatically open Properties panel when any item, wall, or room is selected (in Orbit / 2D mode)
   useEffect(() => {
     if (selectedFurniture || selectedWall || selectedRoom) {
@@ -217,14 +279,89 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
     }
   }, [selectedId, selectedFurniture, selectedWall, selectedRoom, isWalkMode]);
 
+  const isBotanicalItem = useMemo(() => {
+    if (!selectedFurniture) return false;
+    const cat = (selectedFurniture.category || '').toLowerCase();
+    const name = (selectedFurniture.name || '').toLowerCase();
+    const model = (selectedFurniture.model || '').toLowerCase();
+    return (
+      cat.includes('garden') ||
+      cat.includes('outdoor') ||
+      cat.includes('plant') ||
+      name.includes('plant') ||
+      name.includes('tree') ||
+      name.includes('palm') ||
+      name.includes('hedge') ||
+      name.includes('topiary') ||
+      name.includes('bush') ||
+      name.includes('fountain') ||
+      name.includes('cypress') ||
+      name.includes('flower') ||
+      name.includes('willow') ||
+      name.includes('bamboo') ||
+      name.includes('bonsai') ||
+      name.includes('cactus') ||
+      name.includes('pergola') ||
+      name.includes('fire pit') ||
+      model.includes('tree') ||
+      model.includes('plant') ||
+      model.includes('garden')
+    );
+  }, [selectedFurniture]);
+
+  const isVehicleItem = useMemo(() => {
+    if (!selectedFurniture) return false;
+    const cat = (selectedFurniture.category || '').toLowerCase();
+    const name = (selectedFurniture.name || '').toLowerCase();
+    const model = (selectedFurniture.model || '').toLowerCase();
+    return (
+      cat.includes('vehicle') ||
+      cat.includes('garage') ||
+      cat.includes('car') ||
+      name.includes('car') ||
+      name.includes('sedan') ||
+      name.includes('suv') ||
+      name.includes('coupe') ||
+      name.includes('truck') ||
+      name.includes('pickup') ||
+      name.includes('vehicle') ||
+      name.includes('vespa') ||
+      name.includes('scooter') ||
+      name.includes('bicycle') ||
+      name.includes('bike') ||
+      model.includes('vehicle') ||
+      model.includes('car')
+    );
+  }, [selectedFurniture]);
+
   const isDark = theme === 'dark';
 
   const filteredCatalogItems = catalog.filter((item) => {
-    const matchCat =
-      selectedCatalogCategory === 'All' || item.category.toLowerCase() === selectedCatalogCategory.toLowerCase();
+    const itemCat = (item.category || '').toLowerCase();
+    const selCat = selectedCatalogCategory.toLowerCase();
+    let matchCat = selCat === 'all';
+    if (!matchCat) {
+      if (selCat === 'living') matchCat = itemCat.includes('living');
+      else if (selCat === 'bedroom') matchCat = itemCat.includes('bed');
+      else if (selCat === 'kitchen') matchCat = itemCat.includes('kitchen') || itemCat.includes('dining');
+      else if (selCat === 'bathroom') matchCat = itemCat.includes('bath') || itemCat.includes('laundry');
+      else if (selCat === 'appliances') matchCat = itemCat.includes('appliance') || ['refrigerator', 'fridge', 'cooker', 'stove', 'washer', 'dryer', 'microwave', 'tv', 'air conditioner', 'ac', 'heater', 'purifier', 'vacuum'].some(k => item.name.toLowerCase().includes(k));
+      else if (selCat === 'office') matchCat = itemCat.includes('office') || itemCat.includes('study') || item.name.toLowerCase().includes('desk');
+      else if (selCat === 'storage') matchCat = itemCat.includes('storage') || itemCat.includes('shel') || itemCat.includes('wardrobe') || itemCat.includes('cabinet') || itemCat.includes('dresser') || itemCat.includes('chest') || itemCat.includes('shoe');
+      else if (selCat === 'outdoor') matchCat = itemCat.includes('outdoor') || itemCat.includes('garden') || itemCat.includes('balcony');
+      else if (selCat === 'vehicles') matchCat = itemCat.includes('vehicle') || itemCat.includes('garage') || itemCat.includes('car') || ['car', 'sedan', 'suv', 'truck', 'pickup', 'vespa', 'scooter', 'bike', 'bicycle'].some(k => item.name.toLowerCase().includes(k));
+      else if (selCat === 'kids') matchCat = itemCat.includes('kid') || itemCat.includes('nursery') || itemCat.includes('baby') || item.name.toLowerCase().includes('crib') || item.name.toLowerCase().includes('bunk');
+      else if (selCat === 'lighting') matchCat = itemCat.includes('light') || itemCat.includes('lamp') || itemCat.includes('fan') || itemCat.includes('chandelier');
+      else if (selCat === 'decor & plants') matchCat = itemCat.includes('decor') || itemCat.includes('plant') || itemCat.includes('rug') || itemCat.includes('mirror') || itemCat.includes('art') || itemCat.includes('vase');
+      else if (selCat === 'doors & windows') matchCat = itemCat.includes('door') || itemCat.includes('window');
+      else if (selCat === 'wall designs') matchCat = itemCat.includes('wall');
+      else if (selCat === 'stairs & structural') matchCat = itemCat.includes('stair') || itemCat.includes('structur');
+      else matchCat = itemCat.includes(selCat);
+    }
     const matchSearch =
       item.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-      item.category.toLowerCase().includes(catalogSearch.toLowerCase());
+      item.category.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+      (item.description && item.description.toLowerCase().includes(catalogSearch.toLowerCase()));
     return matchCat && matchSearch;
   });
 
@@ -380,7 +517,7 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
           ========================================================================= */}
       {activeTab !== null && (
         <aside
-          className={`absolute right-10 top-0 bottom-0 w-80 border-l border-r-0 shadow-2xl flex flex-col h-full z-40 transition-all animate-in slide-in-from-right-3 duration-150 ${
+          className={`absolute right-12 top-0 bottom-0 w-80 border-l border-r-0 shadow-2xl flex flex-col h-full z-40 transition-all animate-in slide-in-from-right-3 duration-150 ${
             isDark
               ? 'bg-[#0a1120]/95 backdrop-blur-xl border-slate-800 text-slate-200'
               : 'bg-white/95 backdrop-blur-xl border-slate-200 text-slate-800'
@@ -786,6 +923,283 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                 </div>
               ) : (
                 <>
+                  {/* Botanical & Garden Foliage Quick-Customizer */}
+                  {isBotanicalItem && selectedFurniture && (
+                    <div className={`p-3 rounded-2xl border space-y-3 ${
+                      isDark
+                        ? 'bg-gradient-to-br from-emerald-950/40 via-slate-900/60 to-emerald-950/20 border-emerald-500/30'
+                        : 'bg-gradient-to-br from-emerald-50 via-slate-50 to-emerald-50/50 border-emerald-200'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                          <span>🌿</span>
+                          <span>Botanical & Foliage Customizer</span>
+                        </span>
+                        <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-300 bg-emerald-500/15 px-2 py-0.5 rounded-full">
+                          Garden Live
+                        </span>
+                      </div>
+
+                      {/* Foliage Leaf Tones */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Canopy Foliage Tone
+                        </label>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {[
+                            { name: 'Lush Green', color: '#15803d', icon: '🌿' },
+                            { name: 'Autumn Red', color: '#991b1b', icon: '🍁' },
+                            { name: 'Sakura Pink', color: '#f472b6', icon: '🌸' },
+                            { name: 'Golden Birch', color: '#eab308', icon: '🍂' },
+                            { name: 'Tuscan Olive', color: '#4d6059', icon: '🫒' },
+                            { name: 'Emerald Pine', color: '#064e3b', icon: '🌲' },
+                          ].map((fTone) => (
+                            <button
+                              key={fTone.color}
+                              onClick={() => {
+                                const currentParts = selectedFurniture.partColors || {};
+                                updateFurniture({
+                                  color: fTone.color,
+                                  partColors: {
+                                    ...currentParts,
+                                    foliage: fTone.color,
+                                  },
+                                });
+                              }}
+                              className={`py-1.5 px-2 rounded-xl border text-left flex items-center gap-1.5 transition cursor-pointer text-[10px] ${
+                                (selectedFurniture.partColors?.foliage || selectedFurniture.color) === fTone.color
+                                  ? 'border-emerald-500 ring-1 ring-emerald-500 bg-emerald-950/30 font-bold text-emerald-300'
+                                  : isDark
+                                  ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
+                                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                              }`}
+                            >
+                              <span>{fTone.icon}</span>
+                              <span className="truncate">{fTone.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Planter Pot & Stand Style */}
+                      <div className="space-y-1.5 pt-2 border-t border-inherit">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Planter Pot & Urn Finish
+                        </label>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {[
+                            { name: 'Terracotta', color: '#c26d24' },
+                            { name: 'White Ceramic', color: '#faf8f5' },
+                            { name: 'Charcoal Concrete', color: '#1e293b' },
+                            { name: 'Brushed Brass', color: '#d4af37' },
+                            { name: 'Woven Rattan', color: '#d4a373' },
+                            { name: 'Slate Gray', color: '#475569' },
+                          ].map((pFinish) => (
+                            <button
+                              key={pFinish.color}
+                              onClick={() => {
+                                const currentParts = selectedFurniture.partColors || {};
+                                updateFurniture({
+                                  partColors: {
+                                    ...currentParts,
+                                    pot: pFinish.color,
+                                  },
+                                });
+                              }}
+                              className={`py-1.5 px-2 rounded-xl border text-left flex items-center gap-1.5 transition cursor-pointer text-[10px] ${
+                                selectedFurniture.partColors?.pot === pFinish.color
+                                  ? 'border-emerald-500 ring-1 ring-emerald-500 bg-emerald-950/30 font-bold text-emerald-300'
+                                  : isDark
+                                  ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
+                                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                              }`}
+                            >
+                              <span
+                                className="w-3 h-3 rounded-full border border-white/30 shrink-0"
+                                style={{ backgroundColor: pFinish.color }}
+                              />
+                              <span className="truncate">{pFinish.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Flower Blossom Accents (For Flowering shrubs / hedges) */}
+                      <div className="space-y-1.5 pt-2 border-t border-inherit">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Blossom & Floral Accents
+                        </label>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[
+                            { name: 'Rose Red', color: '#e11d48' },
+                            { name: 'Lavender', color: '#8b5cf6' },
+                            { name: 'Gardenia', color: '#ffffff' },
+                            { name: 'Marigold', color: '#f97316' },
+                          ].map((bl) => (
+                            <button
+                              key={bl.color}
+                              onClick={() => {
+                                const currentParts = selectedFurniture.partColors || {};
+                                updateFurniture({
+                                  partColors: {
+                                    ...currentParts,
+                                    blossoms: bl.color,
+                                  },
+                                });
+                              }}
+                              className={`py-1 px-1.5 rounded-lg border text-center flex items-center justify-center gap-1 transition cursor-pointer text-[10px] ${
+                                selectedFurniture.partColors?.blossoms === bl.color
+                                  ? 'border-emerald-500 ring-1 ring-emerald-500 bg-emerald-950/30 font-bold text-emerald-300'
+                                  : isDark
+                                  ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
+                                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                              }`}
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: bl.color }} />
+                              <span className="truncate text-[9px]">{bl.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Automotive Paint & Finish Customizer */}
+                  {isVehicleItem && (
+                    <div className="p-3 rounded-2xl bg-sky-950/20 border border-sky-500/30 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400 flex items-center gap-1.5">
+                          <Car className="w-3.5 h-3.5" />
+                          <span>Automotive Paint & Wheels</span>
+                        </span>
+                        <span className="text-[9px] font-semibold text-sky-600 dark:text-sky-300 bg-sky-500/15 px-2 py-0.5 rounded-full">
+                          Garage Live
+                        </span>
+                      </div>
+
+                      {/* Exterior Body Paint */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Exterior Paint Finish
+                        </label>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[
+                            { name: 'Onyx Black', color: '#09090b' },
+                            { name: 'Alpine White', color: '#f8fafc' },
+                            { name: 'Guards Red', color: '#dc2626' },
+                            { name: 'Nardo Grey', color: '#64748b' },
+                            { name: 'Deep Navy', color: '#1e3a8a' },
+                            { name: 'Racing Green', color: '#065f46' },
+                            { name: 'Sunset Bronze', color: '#92400e' },
+                            { name: 'Cyber Silver', color: '#94a3b8' },
+                          ].map((paint) => (
+                            <button
+                              key={paint.color}
+                              onClick={() => {
+                                const currentParts = selectedFurniture.partColors || {};
+                                updateFurniture({
+                                  color: paint.color,
+                                  partColors: {
+                                    ...currentParts,
+                                    body: paint.color,
+                                  },
+                                });
+                              }}
+                              className={`py-1.5 px-1 rounded-xl border text-center flex flex-col items-center gap-1 transition cursor-pointer text-[9px] ${
+                                (selectedFurniture.partColors?.body || selectedFurniture.color) === paint.color
+                                  ? 'border-sky-500 ring-1 ring-sky-500 bg-sky-950/30 font-bold text-sky-300'
+                                  : isDark
+                                  ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
+                                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                              }`}
+                            >
+                              <span
+                                className="w-4 h-4 rounded-full border border-white/20 shrink-0 shadow-2xs"
+                                style={{ backgroundColor: paint.color }}
+                              />
+                              <span className="truncate w-full">{paint.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Alloy Wheel Rims */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Alloy Rims Finish
+                        </label>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[
+                            { name: 'Polished Silver', color: '#e2e8f0' },
+                            { name: 'Satin Gunmetal', color: '#334155' },
+                            { name: 'Gloss Black', color: '#09090b' },
+                            { name: 'Champagne Gold', color: '#d4af37' },
+                          ].map((rim) => (
+                            <button
+                              key={rim.color}
+                              onClick={() => {
+                                const currentParts = selectedFurniture.partColors || {};
+                                updateFurniture({
+                                  partColors: {
+                                    ...currentParts,
+                                    rims: rim.color,
+                                  },
+                                });
+                              }}
+                              className={`py-1 px-1 rounded-lg border text-center flex items-center justify-center gap-1 transition cursor-pointer text-[9px] ${
+                                selectedFurniture.partColors?.rims === rim.color
+                                  ? 'border-sky-500 ring-1 ring-sky-500 bg-sky-950/30 font-bold text-sky-300'
+                                  : isDark
+                                  ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
+                                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                              }`}
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: rim.color }} />
+                              <span className="truncate">{rim.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Glass Windshield Tint */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Windshield & Glass Tint
+                        </label>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {[
+                            { name: 'Factory Clear', color: '#64748b' },
+                            { name: 'Privacy Smoke', color: '#1e293b' },
+                            { name: 'Limo Tint', color: '#09090b' },
+                          ].map((tint) => (
+                            <button
+                              key={tint.color}
+                              onClick={() => {
+                                const currentParts = selectedFurniture.partColors || {};
+                                updateFurniture({
+                                  partColors: {
+                                    ...currentParts,
+                                    glass: tint.color,
+                                  },
+                                });
+                              }}
+                              className={`py-1 px-1.5 rounded-lg border text-center flex items-center justify-center gap-1 transition cursor-pointer text-[9px] ${
+                                selectedFurniture.partColors?.glass === tint.color
+                                  ? 'border-sky-500 ring-1 ring-sky-500 bg-sky-950/30 font-bold text-sky-300'
+                                  : isDark
+                                  ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
+                                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                              }`}
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tint.color }} />
+                              <span className="truncate">{tint.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Multi-Part 3D Component Selector */}
                   <div className="p-3 rounded-2xl bg-indigo-950/20 border border-indigo-500/30 space-y-2.5">
                     <div className="flex items-center justify-between">
@@ -1059,6 +1473,87 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                 </div>
               ) : selectedFurniture ? (
                 <>
+                  {/* SMART ONE-CLICK ALIGNMENT ASSISTANT */}
+                  <div className={`p-2.5 rounded-xl border space-y-2 ${
+                    isDark
+                      ? 'bg-gradient-to-br from-indigo-950/40 via-emerald-950/20 to-slate-900/60 border-indigo-500/30'
+                      : 'bg-gradient-to-br from-indigo-50 via-emerald-50 to-slate-50 border-indigo-200'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 dark:text-indigo-400 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        Smart Alignment Assists
+                      </span>
+                      <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-500/20 px-1.5 py-0.5 rounded-full">
+                        1-Click
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        onClick={() => {
+                          const updated = snapFurnitureToNearestWall(selectedFurniture, plan.walls, plan.rooms);
+                          updateFurniture(updated);
+                        }}
+                        className="py-1.5 px-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] flex items-center justify-center gap-1 shadow-xs transition active:scale-95 cursor-pointer"
+                        title="Align back flush against closest wall and face into the room"
+                      >
+                        <Magnet className="w-3.5 h-3.5" />
+                        <span>Snap to Wall</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const updated = centerFurnitureInRoom(selectedFurniture, plan.rooms);
+                          updateFurniture(updated);
+                        }}
+                        className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1 shadow-xs transition active:scale-95 cursor-pointer ${
+                          isDark
+                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-100'
+                            : 'bg-white hover:bg-slate-100 text-slate-800 border border-slate-200'
+                        }`}
+                        title="Center this item in the room"
+                      >
+                        <Maximize2 className="w-3.5 h-3.5 text-sky-500" />
+                        <span>Center in Room</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        onClick={() => {
+                          const updated = rotateFurnitureByAngle(selectedFurniture, Math.PI / 2);
+                          updateFurniture(updated);
+                        }}
+                        className={`py-1 px-2 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 transition cursor-pointer ${
+                          isDark
+                            ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-200'
+                            : 'bg-white/80 hover:bg-slate-100 text-slate-700 border border-slate-200/80'
+                        }`}
+                        title="Rotate 90° clockwise"
+                      >
+                        <RotateCw className="w-3 h-3" />
+                        <span>Turn 90°</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const updated = rotateFurnitureByAngle(selectedFurniture, Math.PI);
+                          updateFurniture(updated);
+                        }}
+                        className={`py-1 px-2 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 transition cursor-pointer ${
+                          isDark
+                            ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-200'
+                            : 'bg-white/80 hover:bg-slate-100 text-slate-700 border border-slate-200/80'
+                        }`}
+                        title="Flip 180° facing direction"
+                      >
+                        <FlipHorizontal2 className="w-3 h-3" />
+                        <span>Flip Inward</span>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Object Name & Actions Header */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -1440,72 +1935,239 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
       )}
 
       {/* =========================================================================
-          2. SLIM PERMANENT DOCK BAR (Far Right Edge)
+          2. RIGHT SIDE TOOLS SECTION (Permanent Right Dock Bar)
+          Houses all secondary, creative & utility tools to keep the top bar clean & focused
           ========================================================================= */}
       <aside
-        className={`w-10 border-l flex flex-col items-center py-2 shrink-0 select-none transition-all font-sans ${
+        className={`w-12 border-l flex flex-col items-center py-2 shrink-0 select-none transition-all font-sans overflow-y-auto no-scrollbar z-30 ${
           isDark
             ? 'bg-[#0a1120] border-slate-800 text-slate-300'
             : 'bg-white border-slate-200 text-slate-700 shadow-2xs'
         }`}
       >
-        {/* Icon 1: 3D Catalog */}
-        <button
-          onClick={() => setActiveTab(activeTab === 'catalog' ? null : 'catalog')}
-          className={`w-7 h-7 rounded-sm flex items-center justify-center transition cursor-pointer mb-2 relative ${
-            activeTab === 'catalog'
-              ? 'bg-indigo-600 text-white shadow-2xs'
-              : isDark
-              ? 'hover:bg-slate-800 text-slate-400 hover:text-white'
-              : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
-          }`}
-          title="3D Catalog (Browse & Add Models)"
-        >
-          <Box className="w-4 h-4" />
-        </button>
+        {/* SECTION 1: CORE 3D INSPECTOR & MODELING */}
+        <div className="flex flex-col items-center gap-1.5 w-full px-1">
+          {/* Tool 1: 3D Catalog */}
+          <AntdTooltip placement="left" title="3D Models Catalog (Browse furniture, decor, garden, cars)">
+            <button
+              onClick={() => setActiveTab(activeTab === 'catalog' ? null : 'catalog')}
+              className={`w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer relative group ${
+                activeTab === 'catalog'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : isDark
+                  ? 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                  : 'hover:bg-slate-100 text-slate-700 hover:text-slate-900'
+              }`}
+            >
+              <Box className="w-4 h-4 text-indigo-400" />
+              <span className="sr-only">Catalog</span>
+            </button>
+          </AntdTooltip>
 
-        {/* Icon 2: 3D Finish / Materials */}
-        <button
-          onClick={() => setActiveTab(activeTab === 'design' ? null : 'design')}
-          className={`w-7 h-7 rounded-sm flex items-center justify-center transition cursor-pointer mb-2 relative ${
-            activeTab === 'design'
-              ? 'bg-indigo-600 text-white shadow-2xs'
-              : isDark
-              ? 'hover:bg-slate-800 text-slate-400 hover:text-white'
-              : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
-          }`}
-          title={selectedFurniture ? `3D Finish: ${selectedFurniture.name}` : '3D Finish & Materials'}
-        >
-          <Palette className="w-4 h-4" />
-          {selectedFurniture && (
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 absolute top-0.5 right-0.5 ring-1 ring-slate-900" />
+          {/* Tool 2: 3D Finish / Materials */}
+          <AntdTooltip placement="left" title={selectedFurniture ? `3D Finish: ${selectedFurniture.name}` : '3D Finish & Materials (PBR, Wood, Marble, Paint)'}>
+            <button
+              onClick={() => setActiveTab(activeTab === 'design' ? null : 'design')}
+              className={`w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer relative group ${
+                activeTab === 'design'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : isDark
+                  ? 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                  : 'hover:bg-slate-100 text-slate-700 hover:text-slate-900'
+              }`}
+            >
+              <Palette className="w-4 h-4 text-fuchsia-400" />
+              {selectedFurniture && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 absolute top-1 right-1 ring-2 ring-slate-900" />
+              )}
+            </button>
+          </AntdTooltip>
+
+          {/* Tool 3: Properties & Transform */}
+          <AntdTooltip placement="left" title={selectedFurniture || selectedWall || selectedRoom ? 'Properties & Transform' : 'Object Properties'}>
+            <button
+              onClick={() => setActiveTab(activeTab === 'transform' ? null : 'transform')}
+              className={`w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer relative group ${
+                activeTab === 'transform'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : isDark
+                  ? 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                  : 'hover:bg-slate-100 text-slate-700 hover:text-slate-900'
+              }`}
+            >
+              <Maximize className="w-4 h-4 text-emerald-400" />
+              {(selectedFurniture || selectedWall || selectedRoom) && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 absolute top-1 right-1 ring-2 ring-slate-900" />
+              )}
+            </button>
+          </AntdTooltip>
+
+          {/* Tool 4: Item Layers / Hierarchy */}
+          {onToggleFurnitureList && (
+            <AntdTooltip placement="left" title="Furniture & Room Items List (Hierarchy & Visibility)">
+              <button
+                onClick={onToggleFurnitureList}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer relative group ${
+                  isFurnitureListOpen
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : isDark
+                    ? 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                    : 'hover:bg-slate-100 text-slate-700 hover:text-slate-900'
+                }`}
+              >
+                <Layers className="w-4 h-4 text-cyan-400" />
+              </button>
+            </AntdTooltip>
           )}
-        </button>
+        </div>
 
-        {/* Icon 3: Properties & Transform */}
-        <button
-          onClick={() => setActiveTab(activeTab === 'transform' ? null : 'transform')}
-          className={`w-7 h-7 rounded-sm flex items-center justify-center transition cursor-pointer mb-2 relative ${
-            activeTab === 'transform'
-              ? 'bg-indigo-600 text-white shadow-2xs'
-              : isDark
-              ? 'hover:bg-slate-800 text-slate-400 hover:text-white'
-              : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
-          }`}
-          title={selectedFurniture || selectedWall ? 'Properties & Transform' : 'Object Properties'}
-        >
-          <Maximize className="w-4 h-4" />
-          {(selectedFurniture || selectedWall) && (
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 absolute top-0.5 right-0.5 ring-1 ring-slate-900" />
+        {/* Divider */}
+        <div className={`w-6 h-[1px] my-2 shrink-0 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+
+        {/* SECTION 2: SMART AI & GENERATORS */}
+        <div className="flex flex-col items-center gap-1.5 w-full px-1">
+          {/* Tool 5: AI Room Styler */}
+          {onOpenAiStyler && (
+            <AntdTooltip placement="left" title="AI Room Styler (1-Click Theme & Palette Generator)">
+              <button
+                onClick={onOpenAiStyler}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer relative group ${
+                  isDark
+                    ? 'hover:bg-slate-800 text-fuchsia-400 hover:text-fuchsia-300'
+                    : 'hover:bg-fuchsia-50 text-fuchsia-600 hover:text-fuchsia-700'
+                }`}
+              >
+                <Wand2 className="w-4 h-4" />
+              </button>
+            </AntdTooltip>
           )}
-        </button>
 
-        <div className={`w-5 h-[1px] my-1 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+          {/* Tool 6: Plan My Home / Guided Builder */}
+          {onOpenGuidedBuilder && (
+            <AntdTooltip placement="left" title="Plan My Home (Custom Room & Floor Wizard)">
+              <button
+                onClick={onOpenGuidedBuilder}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer relative group ${
+                  isDark
+                    ? 'hover:bg-slate-800 text-emerald-400 hover:text-emerald-300'
+                    : 'hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700'
+                }`}
+              >
+                <Sparkles className="w-4 h-4" />
+              </button>
+            </AntdTooltip>
+          )}
 
-        {/* Vertical text label */}
-        <div className="flex-1 flex items-center justify-center py-2">
-          <span className="text-[9px] font-bold tracking-widest uppercase [writing-mode:vertical-rl] rotate-180 text-slate-500 hover:text-indigo-400 transition">
-            Tools
+          {/* Tool 7: Blueprint Scan Overlay */}
+          {onOpenBlueprintModal && (
+            <AntdTooltip placement="left" title="Import Blueprint Scan (Overlay 2D CAD plan)">
+              <button
+                onClick={onOpenBlueprintModal}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer relative group ${
+                  isDark
+                    ? 'hover:bg-slate-800 text-blue-400 hover:text-blue-300'
+                    : 'hover:bg-blue-50 text-blue-600 hover:text-blue-700'
+                }`}
+              >
+                <ImageIcon className="w-4 h-4" />
+              </button>
+            </AntdTooltip>
+          )}
+
+          {/* Tool 8: Bill of Materials & Cost Estimator */}
+          {onOpenCostEstimator && (
+            <AntdTooltip placement="left" title="Cost Estimator & Bill of Materials (BOM)">
+              <button
+                onClick={onOpenCostEstimator}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer relative group ${
+                  isDark
+                    ? 'hover:bg-slate-800 text-amber-400 hover:text-amber-300'
+                    : 'hover:bg-amber-50 text-amber-600 hover:text-amber-700'
+                }`}
+              >
+                <DollarSign className="w-4 h-4" />
+              </button>
+            </AntdTooltip>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div className={`w-6 h-[1px] my-2 shrink-0 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+
+        {/* SECTION 3: PROJECTS, IMPORT/EXPORT & PREFERENCES */}
+        <div className="flex flex-col items-center gap-1.5 w-full px-1">
+          {/* Tool 9: Projects Manager */}
+          {onOpenProjects && (
+            <AntdTooltip placement="left" title="Saved Projects & Showcase Templates">
+              <button
+                onClick={onOpenProjects}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer relative group ${
+                  isDark
+                    ? 'hover:bg-slate-800 text-indigo-400 hover:text-indigo-300'
+                    : 'hover:bg-indigo-50 text-indigo-600 hover:text-indigo-700'
+                }`}
+              >
+                <FolderOpen className="w-4 h-4" />
+              </button>
+            </AntdTooltip>
+          )}
+
+          {/* Tool 10: Export Project JSON */}
+          {onExportJson && (
+            <AntdTooltip placement="left" title="Export Project CAD (.json)">
+              <button
+                onClick={onExportJson}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer relative group ${
+                  isDark
+                    ? 'hover:bg-slate-800 text-sky-400 hover:text-sky-300'
+                    : 'hover:bg-sky-50 text-sky-600 hover:text-sky-700'
+                }`}
+              >
+                <Download className="w-4 h-4" />
+              </button>
+            </AntdTooltip>
+          )}
+
+          {/* Tool 11: Import Project JSON */}
+          {onImportJson && (
+            <AntdTooltip placement="left" title="Import Project CAD (.json)">
+              <button
+                onClick={onImportJson}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer relative group ${
+                  isDark
+                    ? 'hover:bg-slate-800 text-amber-400 hover:text-amber-300'
+                    : 'hover:bg-amber-50 text-amber-600 hover:text-amber-700'
+                }`}
+              >
+                <Upload className="w-4 h-4" />
+              </button>
+            </AntdTooltip>
+          )}
+
+          {/* Tool 12: Grid & Unit Preferences */}
+          {onOpenPreferences && (
+            <AntdTooltip placement="left" title="Grid & Unit Preferences">
+              <button
+                onClick={onOpenPreferences}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer relative group ${
+                  isDark
+                    ? 'hover:bg-slate-800 text-slate-400 hover:text-slate-200'
+                    : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Sliders className="w-4 h-4" />
+              </button>
+            </AntdTooltip>
+          )}
+        </div>
+
+        {/* Bottom vertical spacer */}
+        <div className="flex-1" />
+
+        {/* Subtle Vertical 'TOOLS' label */}
+        <div className="py-2">
+          <span className="text-[8px] font-extrabold tracking-widest uppercase [writing-mode:vertical-rl] rotate-180 text-slate-500">
+            TOOLS
           </span>
         </div>
       </aside>

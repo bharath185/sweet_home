@@ -88,8 +88,8 @@ export async function createCashfreeOrder(
 
   if (typeof window !== 'undefined') {
     try {
-      localStorage.setItem('sweethome_last_checkout_plan', planId);
-      localStorage.setItem('sweethome_last_checkout_order', orderData.orderId);
+      localStorage.setItem('decofrog_last_checkout_plan', planId);
+      localStorage.setItem('decofrog_last_checkout_order', orderData.orderId);
     } catch {}
   }
 

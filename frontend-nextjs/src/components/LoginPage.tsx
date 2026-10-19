@@ -34,9 +34,9 @@ interface LoginPageProps {
 export const DEMO_ACCOUNTS = [
   {
     role: 'ADMIN' as UserRole,
-    title: 'Administrator',
-    name: 'Admin Superuser',
-    email: 'admin@sweethome3d.io',
+    title: 'Superadmin',
+    name: 'Superadmin',
+    email: 'admin@visualrendered.io',
     username: 'admin',
     password: 'admin',
     assignedPlan: 'plan-sarah-suite',
@@ -122,7 +122,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
   const getStoredRegisteredUsers = (): RegisteredAccountRecord[] => {
     if (typeof window === 'undefined') return [];
     try {
-      const stored = localStorage.getItem('sweethome_registered_users');
+      const stored = localStorage.getItem('decofrog_registered_users') || localStorage.getItem('sweethome_registered_users');
       return stored ? JSON.parse(stored) : [];
     } catch {
       return [];
@@ -131,7 +131,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
 
   // Helper to generate a strong, memorable password
   const handleGeneratePassword = () => {
-    const prefixes = ['Studio', 'Design', 'Sweet', 'Arch', 'Villa', 'Deco', 'Craft', 'Plan'];
+    const prefixes = ['Studio', 'Design', 'DecoFrog', 'Arch', 'Villa', 'Deco', 'Craft', 'Plan'];
     const symbols = ['@', '#', '$', '!'];
     const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
     const symbol = symbols[Math.floor(Math.random() * symbols.length)];
@@ -295,7 +295,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
         const adminUser: UserType = {
           id: 'u1',
           name: 'Admin Superuser',
-          email: 'admin@decoforge3d.io',
+          email: 'admin@decofrog3d.io',
           role: 'ADMIN',
           isOnline: true,
           assignedPlan: 'plan-sarah-suite',
@@ -477,7 +477,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
             passwordHash: cleanPassword,
           },
         ];
-        localStorage.setItem('sweethome_registered_users', JSON.stringify(updated));
+        localStorage.setItem('decofrog_registered_users', JSON.stringify(updated));
       } catch (e) {
         console.warn('LocalStorage save error:', e);
       }

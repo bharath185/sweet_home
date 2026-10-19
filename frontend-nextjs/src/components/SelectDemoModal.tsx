@@ -3,7 +3,7 @@
 import React from 'react';
 import { X, Sparkles, FolderOpen, ArrowRight } from 'lucide-react';
 import { HomePlan, User } from '../types/plan';
-import { SWEET_HOME_DEMOS, SweetHomeDemoItem } from '../services/demoPlans';
+import { DECOFROG_DEMOS, DecoFrogDemoItem } from '../services/demoPlans';
 
 interface SelectDemoModalProps {
   isOpen: boolean;
@@ -26,7 +26,7 @@ export const SelectDemoModal: React.FC<SelectDemoModalProps> = ({
 
   const isDark = theme === 'dark';
 
-  const handleCardClick = (demo: SweetHomeDemoItem) => {
+  const handleCardClick = (demo: DecoFrogDemoItem) => {
     // Clone plan deeply and give fresh ID
     const clonedPlan: HomePlan = JSON.parse(JSON.stringify(demo.plan));
     clonedPlan.id = `plan_${currentUser?.id || 'demo'}_${Date.now()}`;
@@ -76,7 +76,7 @@ export const SelectDemoModal: React.FC<SelectDemoModalProps> = ({
           }`}
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5">
-            {SWEET_HOME_DEMOS.map((demo) => (
+            {DECOFROG_DEMOS.map((demo) => (
               <div
                 key={demo.id}
                 onClick={() => handleCardClick(demo)}

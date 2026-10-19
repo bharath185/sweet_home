@@ -27,7 +27,7 @@ export function Navbar({
       {/* Brand */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, fontSize: '1.05rem', color: '#fafafa' }}>
         <Home color="#3b82f6" size={22} />
-        <span>Sweet Home 3D</span>
+        <span>DecoFrog 3D</span>
         <span style={{
           background: '#3b82f6',
           color: 'white',

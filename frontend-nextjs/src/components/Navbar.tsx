@@ -23,6 +23,8 @@ interface NavbarProps {
   plan: HomePlan;
   activeView: 'split' | '2d' | '3d' | 'customer' | 'dashboard';
   setActiveView: (v: 'split' | '2d' | '3d' | 'customer' | 'dashboard') => void;
+  studioLayout?: 'sweethome' | 'split' | '2d' | '3d' | 'tour';
+  setStudioLayout?: (layout: 'sweethome' | 'split' | '2d' | '3d' | 'tour') => void;
   adminTab?: string;
   setAdminTab?: (t: any) => void;
   userRole: UserRole;
@@ -34,12 +36,15 @@ interface NavbarProps {
   onOpenUpgradeModal?: () => void;
   theme?: 'dark' | 'light';
   onToggleTheme?: () => void;
+  onOpenWelcomeGuide?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   plan,
   activeView,
   setActiveView,
+  studioLayout = 'split',
+  setStudioLayout,
   adminTab = 'dashboard',
   setAdminTab,
   userRole,
@@ -50,6 +55,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenUpgradeModal,
   theme = 'light',
   onToggleTheme,
+  onOpenWelcomeGuide,
 }) => {
   const isDark = theme === 'dark';
 
@@ -68,8 +74,9 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-white">
-            DecoForge
+          <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-white flex items-center gap-1">
+            <span>DecoFrog</span>
+            <span className="text-emerald-500 font-extrabold text-xs">3D</span>
           </span>
           <span className={`text-[10px] uppercase font-semibold px-2 py-0.5 rounded-md border tracking-wider ${
             isAdmin
@@ -81,7 +88,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* 2. Center: Segmented Navigation Switcher */}
+      {/* 2. Center: Navigation or Studio Title */}
       {isAdmin ? (
         <nav className={`flex items-center p-1 rounded-xl border text-xs transition-colors ${
           isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200/70'
@@ -108,6 +115,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             onClick={() => {
               setActiveView('split');
+              if (setStudioLayout) setStudioLayout('split');
             }}
             className={`px-3.5 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
               activeView !== 'dashboard'
@@ -124,56 +132,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </nav>
       ) : (
-        /* Regular Designers & Clients: Clean View Switcher */
-        <nav className={`flex items-center p-1 rounded-xl border text-xs transition-colors ${
-          isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200/70'
+        /* Regular Designers & Clients: Elegant Studio Project Breadcrumb */
+        <div className={`hidden md:flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs transition-colors ${
+          isDark ? 'bg-slate-900/80 border-slate-800/90' : 'bg-slate-100/80 border-slate-200/70'
         }`}>
-          <button
-            onClick={() => setActiveView('split')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeView === 'split'
-                ? isDark
-                  ? 'bg-slate-800 text-white shadow-xs'
-                  : 'bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
-                : isDark
-                ? 'text-slate-400 hover:text-white'
-                : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5 text-indigo-500" />
-            <span>Split 2D / 3D</span>
-          </button>
-
-          <button
-            onClick={() => setActiveView('2d')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeView === '2d'
-                ? isDark
-                  ? 'bg-slate-800 text-white shadow-xs'
-                  : 'bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
-                : isDark
-                ? 'text-slate-400 hover:text-white'
-                : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <span>2D CAD Blueprint</span>
-          </button>
-
-          <button
-            onClick={() => setActiveView('3d')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeView === '3d'
-                ? isDark
-                  ? 'bg-slate-800 text-white shadow-xs'
-                  : 'bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
-                : isDark
-                ? 'text-slate-400 hover:text-white'
-                : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <span>3D Walkthrough</span>
-          </button>
-        </nav>
+          <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+            <span>DecoFrog 3D Design Studio</span>
+          </span>
+          <span className="text-slate-300 dark:text-slate-700">|</span>
+          <span className="text-slate-500 dark:text-slate-400 font-medium truncate max-w-[220px]">
+            {plan.name || 'Custom Home Plan'}
+          </span>
+        </div>
       )}
 
       {/* 3. Right: Telemetry Dot, Theme Toggle & Profile */}
@@ -202,6 +173,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             {cloudSyncStatus === 'saving' ? 'Saving' : cloudSyncStatus === 'offline' ? 'Offline' : 'Live'}
           </span>
         </div>
+
+        {/* Beginner & Customer Quick Guide */}
+        {onOpenWelcomeGuide && (
+          <button
+            onClick={onOpenWelcomeGuide}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
+              isDark
+                ? 'bg-indigo-950/40 hover:bg-indigo-900/60 border-indigo-700/60 text-indigo-300'
+                : 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-700'
+            }`}
+            title="Open Beginner & Customer Design Guide"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            <span className="hidden sm:inline">💡 How to Design</span>
+            <span className="sm:hidden">💡 Help</span>
+          </button>
+        )}
 
         {/* Regular User Studio Pass & Free Trial Upgrade Button */}
         {!isAdmin && onOpenUpgradeModal && (

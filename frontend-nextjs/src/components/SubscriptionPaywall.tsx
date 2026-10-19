@@ -43,7 +43,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
   const [pricingPlans, setPricingPlans] = useState<Record<string, PlanDetail>>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const cached = localStorage.getItem('sweethome_cached_plans');
+        const cached = localStorage.getItem('decofrog_cached_plans') || localStorage.getItem('sweethome_cached_plans');
         if (cached) return JSON.parse(cached);
       } catch {}
     }
@@ -59,7 +59,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
       if (live) {
         setPricingPlans({ ...live });
         try {
-          localStorage.setItem('sweethome_cached_plans', JSON.stringify(live));
+          localStorage.setItem('decofrog_cached_plans', JSON.stringify(live));
         } catch {}
       }
     });
@@ -70,7 +70,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
         if (data.plans) {
           setPricingPlans({ ...data.plans });
           try {
-            localStorage.setItem('sweethome_cached_plans', JSON.stringify(data.plans));
+            localStorage.setItem('decofrog_cached_plans', JSON.stringify(data.plans));
           } catch {}
         }
         if (data.activeGateway) {
@@ -176,7 +176,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white tracking-tight">SweetHome 3D Studio</h2>
+              <h2 className="text-lg font-bold text-white tracking-tight">DecoFrog 3D Studio</h2>
               <p className="text-xs text-slate-400">
                 Logged in as <span className="text-indigo-400 font-medium">{currentUser.name}</span> ({currentUser.email})
               </p>
@@ -287,7 +287,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
               Subscription Required
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Unlock Full Access to SweetHome 3D Studio
+              Unlock Full Access to VisualRendered 3D Studio
             </h1>
             <p className="text-sm text-slate-400 mt-2">
               Choose an access pass to start creating multi-floor blueprints, 4K raytrace renders, and custom architectural layouts.
@@ -529,7 +529,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
               <div>
                 <h3 className="text-base font-bold text-white mb-2">Terms & Conditions</h3>
                 <p className="text-xs text-slate-300 leading-relaxed mb-2">
-                  Welcome to SweetHome 3D Studio (prigenix.com). By purchasing an access pass (Trial, Monthly, or Annual), you receive a personal, non-exclusive license to utilize our cloud-based 3D architectural blueprinting, interior layout planner, and high-resolution rendering tools during your subscription period.
+                  Welcome to VisualRendered 3D Studio (prigenix.com). By purchasing an access pass (Trial, Monthly, or Annual), you receive a personal, non-exclusive license to utilize our cloud-based 3D architectural blueprinting, interior layout planner, and high-resolution rendering tools during your subscription period.
                 </p>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   All floor plans and exports generated are owned by you. Subscriptions do not renew automatically; your pass simply expires at the end of the selected duration unless manually renewed.
@@ -541,7 +541,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
               <div>
                 <h3 className="text-base font-bold text-white mb-2">Privacy Policy</h3>
                 <p className="text-xs text-slate-300 leading-relaxed mb-2">
-                  We respect your data privacy. SweetHome 3D Studio collects only your name and email address for account authentication and licensing pass verification.
+                  We respect your data privacy. VisualRendered 3D Studio collects only your name and email address for account authentication and licensing pass verification.
                 </p>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   Payment processing is securely handled end-to-end by Cashfree Payments. We do not store your credit/debit card numbers or UPI MPINs on our servers.
@@ -553,7 +553,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
               <div>
                 <h3 className="text-base font-bold text-white mb-2">Refund & Cancellation Policy</h3>
                 <p className="text-xs text-slate-300 leading-relaxed mb-2">
-                  We want you to be completely satisfied with SweetHome 3D Studio. If you experience technical errors or the software does not work as advertised within 48 hours of purchase, you may request a full refund.
+                  We want you to be completely satisfied with VisualRendered 3D Studio. If you experience technical errors or the software does not work as advertised within 48 hours of purchase, you may request a full refund.
                 </p>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   To request a refund, please email our support team with your Cashfree Order ID. Refunds will be processed back to the original payment source within 5-7 business days.
@@ -568,7 +568,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                   Have questions about your pass, billing, or technical features? Reach out directly:
                 </p>
                 <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700 text-xs text-slate-300 space-y-1">
-                  <p><strong>Service:</strong> SweetHome 3D Studio Architecture & Design</p>
+                  <p><strong>Service:</strong> VisualRendered 3D Studio Architecture & Design</p>
                   <p><strong>Website:</strong> https://3dstudio.prigenix.com</p>
                   <p><strong>Support Email:</strong> support@prigenix.com / bharath@prigenix.com</p>
                   <p><strong>Response Time:</strong> Within 24 Hours</p>

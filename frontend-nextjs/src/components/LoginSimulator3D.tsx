@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
+import { createSafeWebGLRenderer, safelyDisposeRenderer } from '../services/webglHelper';
 import { loadObjGeometry } from '../services/objParser';
 
 export const LoginSimulator3D: React.FC = () => {
@@ -32,7 +33,9 @@ export const LoginSimulator3D: React.FC = () => {
     camera.position.set(8.5, 6.2, 8.5);
     camera.lookAt(0, 0.45, 0);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    const renderer = createSafeWebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    if (!renderer) return;
+
     renderer.setClearColor(0x000000, 0);
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -786,10 +789,7 @@ export const LoginSimulator3D: React.FC = () => {
       dom.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('resize', handleResize);
-      if (mount.contains(renderer.domElement)) {
-        mount.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
+      safelyDisposeRenderer(renderer, mount);
     };
   }, []);
 

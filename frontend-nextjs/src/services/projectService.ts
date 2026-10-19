@@ -116,12 +116,12 @@ export const STARTER_TEMPLATES: StarterTemplateOption[] = [
   },
 ];
 
-const getStorageKey = (userId: string) => `sweethome_user_projects_${userId}`;
+const getStorageKey = (userId: string) => `decofrog_user_projects_${userId}`;
 
 export function getUserProjects(userId: string): UserProjectSummary[] {
   if (typeof window === 'undefined' || !userId) return [];
   try {
-    const raw = localStorage.getItem(getStorageKey(userId));
+    const raw = localStorage.getItem(getStorageKey(userId)) || localStorage.getItem(`sweethome_user_projects_${userId}`);
     if (!raw) return [];
     const list = JSON.parse(raw);
     return Array.isArray(list) ? list : [];
@@ -197,7 +197,7 @@ export function saveUserProject(userId: string, plan: HomePlan, userEmail?: stri
 
     localStorage.setItem(getStorageKey(userId), JSON.stringify(updatedList));
     // Also save individual plan cache
-    localStorage.setItem(`sweethome_plan_${plan.id}`, JSON.stringify(summary.plan));
+    localStorage.setItem(`decofrog_plan_${plan.id}`, JSON.stringify(summary.plan));
 
     // Asynchronously synchronize to Supabase Cloud Database
     fetch('/api/projects', {
@@ -225,6 +225,7 @@ export function deleteUserProject(userId: string, projectId: string): UserProjec
     const current = getUserProjects(userId);
     const updated = current.filter((p) => p.id !== projectId);
     localStorage.setItem(getStorageKey(userId), JSON.stringify(updated));
+    localStorage.removeItem(`decofrog_plan_${projectId}`);
     localStorage.removeItem(`sweethome_plan_${projectId}`);
 
     // Asynchronously delete from Supabase Cloud Database
@@ -260,9 +261,9 @@ export function createNewProjectFromTemplate(
 
 export function exportPlanAsJson(plan: HomePlan, user?: User | null) {
   const exportPayload = {
-    format: 'sweethome-project',
-    app: 'DecoForge 3D Studio',
-    version: '2.0.0',
+    format: 'decofrog-cad-project',
+    app: 'DecoFrog 3D Studio',
+    version: '2.4.0',
     exportedAt: new Date().toISOString(),
     author: user ? { id: user.id, name: user.name, email: user.email } : undefined,
     plan,
@@ -271,10 +272,10 @@ export function exportPlanAsJson(plan: HomePlan, user?: User | null) {
   const jsonString = JSON.stringify(exportPayload, null, 2);
   const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const safeFilename = (plan.name || 'sweethome_project')
+  const safeFilename = (plan.name || 'cad_project')
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, '_')
-    .concat('.sweethome.json');
+    .concat('.cad.json');
 
   const downloadAnchor = document.createElement('a');
   downloadAnchor.href = url;

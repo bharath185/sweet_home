@@ -45,10 +45,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Cashfree Production strictly enforces HTTPS for return_url
-    let returnUrl = (req.headers.get('origin') || 'https://sweethome3d.io') + '?cf_order_id={order_id}';
+    let returnUrl = (req.headers.get('origin') || 'https://visualrendered.io') + '?cf_order_id={order_id}';
     if (environment === 'PRODUCTION' && returnUrl.startsWith('http://')) {
       // Localhost or insecure HTTP origin in production mode must use HTTPS fallback
-      returnUrl = `https://sweethome3d.io?cf_order_id={order_id}`;
+      returnUrl = `https://visualrendered.io?cf_order_id={order_id}`;
     }
 
     try {

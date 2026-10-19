@@ -2,66 +2,78 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  LayoutDashboard,
-  Users,
-  Box,
-  Building,
-  Plus,
-  Trash2,
-  Sparkles,
-  Search,
-  ArrowRight,
-  UserPlus,
-  FolderKanban,
-  BarChart3,
-  CreditCard,
-  Mail,
-  MessageSquare,
+  ConfigProvider,
+  theme as antdTheme,
+  Layout,
+  Menu,
+  Card,
+  Row,
+  Col,
+  Statistic,
+  Table,
+  Tag,
+  Badge,
+  Button,
+  Input,
+  Select,
+  Switch,
+  Popconfirm,
+  Modal,
+  Form,
+  Tabs,
+  Alert,
+  List,
+  Avatar,
+  Space,
+  Tooltip,
+  Typography,
+  message,
   Radio,
-  Crown,
-  KeyRound,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  RefreshCw,
-  Send,
-  Eye,
-  EyeOff,
-  Palette,
-  ShieldCheck,
-  Server,
-  Wifi,
-  Smartphone,
-  Check,
-  RotateCcw,
-  Sliders,
-  DollarSign,
-  ChevronRight,
-  TrendingUp,
-  Download,
-  Sun,
-  Moon,
-  Activity,
-  Cpu,
-  Layers,
-  Globe,
-  Laptop,
-  Monitor,
-  Shield,
-  Terminal,
-  Zap,
-  Workflow,
-  ExternalLink,
-  Gauge,
-  Camera,
-  FileSpreadsheet,
-} from 'lucide-react';
+  Progress,
+  Divider,
+} from 'antd';
+import {
+  DashboardOutlined,
+  TeamOutlined,
+  RadarChartOutlined,
+  CrownOutlined,
+  DollarOutlined,
+  MailOutlined,
+  AppstoreOutlined,
+  BuildOutlined,
+  UserAddOutlined,
+  DeleteOutlined,
+  KeyOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+  PlusOutlined,
+  ThunderboltOutlined,
+  EyeOutlined,
+  EditOutlined,
+  SafetyCertificateOutlined,
+  LaptopOutlined,
+  DatabaseOutlined,
+  RightOutlined,
+  MobileOutlined,
+  SendOutlined,
+  CheckCircleOutlined,
+  CheckCircleFilled,
+  ArrowRightOutlined,
+  CompassOutlined,
+  RiseOutlined,
+  ShopOutlined,
+  RotateLeftOutlined,
+} from '@ant-design/icons';
 import { User, CatalogItem, FloorTemplate, HomePlan, UserRole } from '../types/plan';
-import { ALL_CLIENT_PLANS } from '../services/api';
 import { CatalogThumbnail } from './CatalogThumbnail';
 import { Catalog3DPreviewModal } from './Catalog3DPreviewModal';
 import { EditCatalogItemModal } from './EditCatalogItemModal';
+import { TemplateThumbnail } from './TemplateThumbnail';
+import { Template3DPreviewModal } from './Template3DPreviewModal';
 import { AdminPaymentsView } from './AdminPaymentsView';
+
+const { Sider, Content } = Layout;
+const { Text, Title } = Typography;
 
 export type AdminSectionTab =
   | 'overview'
@@ -101,14 +113,6 @@ interface AdminDashboardProps {
   onToggleTheme?: () => void;
 }
 
-interface StoredRegisteredRecord {
-  user: User;
-  phone?: string;
-  email?: string;
-  username?: string;
-  passwordHash: string;
-}
-
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   users: propUsers,
   catalog,
@@ -134,11 +138,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   theme = 'light',
   onToggleTheme,
 }) => {
-  // Theme check: Default to Light mode
   const isLight = theme !== 'dark';
-
-  // Navigation tab state
   const activeTab: AdminSectionTab = (externalAdminTab as AdminSectionTab) || 'overview';
+
   const handleSelectTab = (tab: AdminSectionTab) => {
     setExternalAdminTab(tab);
   };
@@ -147,9 +149,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [dbUsers, setDbUsers] = useState<Array<User & { phone?: string; createdAt?: string }>>([]);
   const [isUsersLoading, setIsUsersLoading] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [userFilterRole, setUserFilterRole] = useState<'ALL' | 'ADMIN' | 'DESIGNER' | 'PAID' | 'UNPAID'>('ALL');
+  const [userFilterRole, setUserFilterRole] = useState<'ALL' | 'ADMIN' | 'CUSTOMER' | 'PAID' | 'UNPAID'>('ALL');
 
-  // Load registered users directly from Supabase Cloud Database & sync
   const refreshUsersList = async () => {
     setIsUsersLoading(true);
     try {
@@ -171,12 +172,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     refreshUsersList();
   }, [externalAdminTab]);
 
-  // Master users list directly from Supabase DB
-  const allMergedUsers = useMemo(() => {
-    return dbUsers;
-  }, [dbUsers]);
+  const allMergedUsers = useMemo(() => dbUsers, [dbUsers]);
 
-  // Filtered users for User Management
   const filteredUsers = useMemo(() => {
     return allMergedUsers.filter((u) => {
       const q = userSearchQuery.toLowerCase();
@@ -188,7 +185,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       let matchRole = true;
       if (userFilterRole === 'ADMIN') matchRole = u.role === 'ADMIN';
-      else if (userFilterRole === 'DESIGNER') matchRole = u.role === 'DESIGNER';
+      else if (userFilterRole === 'CUSTOMER') matchRole = u.role !== 'ADMIN';
       else if (userFilterRole === 'PAID') matchRole = u.payment_status === 'paid';
       else if (userFilterRole === 'UNPAID') matchRole = u.payment_status === 'unpaid';
 
@@ -199,8 +196,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Toggle user payment status in Supabase Database
   const handleTogglePaymentStatus = async (user: User & { phone?: string }) => {
     const newStatus = user.payment_status === 'paid' ? 'unpaid' : 'paid';
-    
-    // Optimistic UI update
     setDbUsers((prev) =>
       prev.map((u) =>
         u.id === user.id || u.email === user.email
@@ -227,17 +222,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           tier: newStatus === 'paid' ? 'PRO' : 'FREE',
         }),
       });
+      message.success(`User pass status updated to ${newStatus.toUpperCase()}`);
       await refreshUsersList();
     } catch (e) {
-      console.error('Failed to update user status in DB', e);
+      message.error('Failed to update user status in DB');
     }
   };
 
-  // Toggle user role in Supabase Database
+  // Toggle user role in Supabase Database (Only ADMIN and CUSTOMER)
   const handleToggleRole = async (user: User & { phone?: string }) => {
-    const newRole: UserRole = user.role === 'ADMIN' ? 'DESIGNER' : 'ADMIN';
-    
-    // Optimistic UI update
+    const newRole: UserRole = user.role === 'ADMIN' ? 'CUSTOMER' : 'ADMIN';
     setDbUsers((prev) =>
       prev.map((u) =>
         u.id === user.id || u.email === user.email
@@ -260,11 +254,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           name: user.name,
           role: newRole,
           payment_status: newRole === 'ADMIN' ? 'paid' : user.payment_status,
+          tier: newRole === 'ADMIN' ? 'PRO' : user.subscriptionTier,
         }),
       });
+      message.success(`User role updated to ${newRole}`);
       await refreshUsersList();
     } catch (e) {
-      console.error('Failed to update user role in DB', e);
+      message.error('Failed to update role in DB');
     }
   };
 
@@ -287,12 +283,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       });
       const data = await res.json();
       if (data.success) {
-        alert(`Password reset for ${user.name}! New credentials sent to ${user.email} (Temp Password: ${newTempPassword})`);
+        message.success(`New credentials dispatched to ${user.email} (Temp Pass: ${newTempPassword})`);
       } else {
-        alert(`Generated password: ${newTempPassword}. (${data.error || 'Email dispatch completed'})`);
+        message.info(`Generated password: ${newTempPassword}. (${data.error || 'Dispatched'})`);
       }
-    } catch (e) {
-      alert(`Could not dispatch reset email: ${e}`);
+    } catch (e: any) {
+      message.error(`Could not dispatch email: ${e.message}`);
     } finally {
       setResettingUserId(null);
     }
@@ -300,27 +296,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Delete user directly from Supabase Database
   const handleDeleteUserDirect = async (userId: string, userName: string) => {
-    if (!confirm(`Are you sure you want to permanently delete user "${userName}" from Supabase database?`)) return;
     try {
       setDbUsers((prev) => prev.filter((u) => u.id !== userId));
       const res = await fetch(`/api/users?id=${encodeURIComponent(userId)}`, {
         method: 'DELETE',
       });
-      if (!res.ok) {
+      if (res.ok) {
+        message.success(`User "${userName}" deleted from database`);
+      } else {
         await refreshUsersList();
       }
     } catch (e) {
-      console.error('Error deleting user:', e);
+      message.error('Error deleting user');
       await refreshUsersList();
     }
   };
 
-  // --- LIVE PEOPLE & CAD TELEMETRY STATE (Real-time from Database) ---
-  const [selectedLiveSession, setSelectedLiveSession] = useState<any | null>(null);
-  const [telemetryFilter, setTelemetryFilter] = useState<'ALL' | 'ACTIVE' | 'CAD' | 'RENDER' | 'GATEWAY'>('ALL');
+  // --- LIVE TELEMETRY STATE ---
   const [simulatedPing, setSimulatedPing] = useState(24);
-
-  // Dynamic live ping simulation (20ms - 28ms)
   useEffect(() => {
     const timer = setInterval(() => {
       setSimulatedPing(Math.floor(20 + Math.random() * 8));
@@ -332,12 +325,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return allMergedUsers
       .filter((u) => u.isOnline || u.role === 'ADMIN')
       .map((u, i) => {
-        const isSuperAdmin = u.email === 'admin@sweethome3d.io' || u.id === 'u1';
-        const project = isSuperAdmin
-          ? '3D Architecture Studio • Master Suite'
-          : i % 2 === 0
-          ? 'Residential Villa Duplex • Living Room'
-          : 'Modern Penthouse • 3D Walkthrough';
+        const isSuperAdmin = (u.email || '').toLowerCase() === 'admin@visualrendered.io' || u.id === 'admin_visual';
         return {
           id: `sess_${u.id || i}`,
           userId: u.id,
@@ -345,87 +333,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           email: u.email,
           phone: u.phone || '+91 9177018185',
           role: u.role,
-          activeProject: project,
-          room: isSuperAdmin ? 'Master Suite (Level 1)' : i % 2 === 0 ? 'Living Room (Level 1)' : 'Kitchen & Dining',
-          floor: isSuperAdmin ? 'Ground Floor' : 'Upper Floor',
-          duration: isSuperAdmin ? '18m 42s' : '4m 12s',
-          device: isSuperAdmin ? 'Desktop Chrome • Windows 11' : 'MacBook Pro • Safari 17',
-          location: isSuperAdmin ? 'Hyderabad, India' : 'Bengaluru, India',
-          ipAddress: isSuperAdmin ? '103.21.244.18' : '157.48.112.90',
-          latency: isSuperAdmin ? `${simulatedPing}ms` : `${simulatedPing + 3}ms`,
-          fps: 60,
-          currentAction: isSuperAdmin ? 'Rendering 4K Raytrace Snapshot' : 'Editing Wall Partition (200mm)',
-          cameraMode: isSuperAdmin ? '3D Aerial View (Orbit)' : 'First-Person Walkthrough (Eye Level)',
-          modelsInCanvas: isSuperAdmin ? 34 : 18,
-          memoryMb: isSuperAdmin ? 142 : 118,
+          activeProject: isSuperAdmin ? '3D Architecture Studio • Master Suite' : 'Residential Duplex Villa',
+          room: isSuperAdmin ? 'Master Suite' : 'Living & Dining',
+          device: isSuperAdmin ? 'Desktop Chrome' : 'Safari 17',
+          latency: `${simulatedPing}ms`,
+          currentAction: isSuperAdmin ? 'Rendering 4K Raytrace' : 'Editing Wall Partition',
         };
       });
   }, [allMergedUsers, simulatedPing]);
 
-  const cadActivityEvents = useMemo(() => [
-    {
-      id: 'act_1',
-      user: 'Lead Architect Admin',
-      action: 'Rendered 4K Ultra raytrace snapshot',
-      target: '3D Architecture Studio • Living Room',
-      time: 'Just now',
-      type: 'RENDER',
-      icon: Camera,
-      color: 'emerald',
-    },
-    {
-      id: 'act_2',
-      user: 'Studio Superadmin',
-      action: 'Placed Modern Italian Sectional Sofa (.OBJ)',
-      target: 'Ground Floor Master Suite',
-      time: '2 min ago',
-      type: 'CAD',
-      icon: Box,
-      color: 'indigo',
-    },
-    {
-      id: 'act_3',
-      user: 'Supabase Cloud Sync',
-      action: 'Persisted 14 floorplan modifications to Cloud PostgreSQL',
-      target: 'Database Cluster (Singapore)',
-      time: '5 min ago',
-      type: 'DATABASE',
-      icon: Server,
-      color: 'sky',
-    },
-    {
-      id: 'act_4',
-      user: 'Fast2SMS Gateway',
-      action: 'Dispatched OTP access credentials to +91 9177018185',
-      target: 'Mobile Delivery Gateway',
-      time: '14 min ago',
-      type: 'GATEWAY',
-      icon: Smartphone,
-      color: 'amber',
-    },
-    {
-      id: 'act_5',
-      user: 'Payment Webhook',
-      action: 'Verified monthly studio pass transaction (₹3)',
-      target: 'Cashfree / Razorpay Gateway',
-      time: '28 min ago',
-      type: 'GATEWAY',
-      icon: DollarSign,
-      color: 'emerald',
-    },
-    {
-      id: 'act_6',
-      user: 'Studio Superadmin',
-      action: 'Modified wall partition thickness to 200mm',
-      target: 'First Floor Blueprint',
-      time: '34 min ago',
-      type: 'CAD',
-      icon: Building,
-      color: 'indigo',
-    },
-  ], []);
+  const cadActivityEvents = useMemo(
+    () => [
+      { id: 'act_1', user: 'Admin', action: 'Configured platform catalog and dual payment gateways', time: 'Just now', icon: '⚡', color: '#6366f1' },
+      { id: 'act_2', user: 'Customer Shaswat', action: 'Paid and unlocked Pro Home Design Pass', time: '12 min ago', icon: '💎', color: '#10b981' },
+      { id: 'act_3', user: 'Customer Bharath', action: 'Designing custom 3D Floorplan with Modern Furniture', time: '34 min ago', icon: '🛋️', color: '#f59e0b' },
+      { id: 'act_4', user: 'Customer Sandeep', action: 'Completed 3D walking tour in Penthouse layout', time: '1 hr ago', icon: '📐', color: '#8b5cf6' },
+      { id: 'act_5', user: 'Customer Alex', action: 'Exported photorealistic living room render', time: '2 hrs ago', icon: '🎨', color: '#0ea5e9' },
+    ],
+    []
+  );
 
-  // --- SUBSCRIBED PEOPLE MONITORING STATE (Real-time from Database) ---
+  // --- SUBSCRIBERS STATE ---
   const subscribersList = useMemo(() => {
     return allMergedUsers
       .filter((u) => u.payment_status === 'paid' && u.role !== 'ADMIN')
@@ -436,79 +364,59 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           id: `sub_${u.id}`,
           name: u.name,
           email: u.email,
-          phone: u.phone || '+91 —',
-          planName: u.plan === 'yearly' ? 'Annual Pro Pass' : u.plan === 'trial_2days' ? '2-Day Studio Pass' : 'Monthly Pro Pass',
-          amount: u.plan === 'yearly' ? '₹4' : u.plan === 'trial_2days' ? '₹2' : '₹3',
-          orderId: u.cashfree_order_id || 'cf_direct',
-          paymentId: u.cashfree_payment_id || 'cf_verified',
-          startDate: u.paid_at ? new Date(u.paid_at).toLocaleDateString() : 'Active',
-          expiryDate: expDate ? expDate.toLocaleDateString() : 'Active',
+          phone: u.phone || '—',
+          planName: u.plan === 'yearly' ? 'Annual Pro Pass' : 'Monthly Pro Pass',
+          amount: u.plan === 'yearly' ? '₹4' : '₹3',
           daysLeft,
-          status: daysLeft <= 1 ? 'EXPIRING SOON' : 'ACTIVE',
+          status: daysLeft <= 2 ? 'EXPIRING SOON' : 'ACTIVE',
         };
       });
   }, [allMergedUsers]);
 
-  // --- EMAIL CONFIGURATION STATE ---
-  const [emailProvider, setEmailProvider] = useState<'resend' | 'smtp' | 'sendgrid'>('resend');
+  // --- EMAIL & SMS GATEWAY STATES ---
   const [smtpHost, setSmtpHost] = useState('smtp.resend.com');
   const [smtpPort, setSmtpPort] = useState('587');
-  const [smtpUser, setSmtpUser] = useState('resend');
-  const [smtpPass, setSmtpPass] = useState('re_9J4x_SecuredKeyDecoForge2026');
-  const [showSmtpPass, setShowSmtpPass] = useState(false);
-  const [fromName, setFromName] = useState('DecoForge 3D Studio');
-  const [fromEmail, setFromEmail] = useState('onboarding@resend.dev');
-  const [testEmailRecipient, setTestEmailRecipient] = useState('admin@decoforge3d.io');
+  const [testEmailRecipient, setTestEmailRecipient] = useState('admin@decofrog3d.io');
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
-  const [emailStatusMsg, setEmailStatusMsg] = useState<string | null>(null);
+  const [smsApiKey, setSmsApiKey] = useState('f2s_live_key_918203928174920194');
+  const [testSmsPhone, setTestSmsPhone] = useState('9177018185');
+  const [isSendingTestSms, setIsSendingTestSms] = useState(false);
 
   const handleSendTestEmail = async () => {
     setIsSendingTestEmail(true);
-    setEmailStatusMsg(null);
     try {
       const res = await fetch('/api/auth/send-credentials-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: testEmailRecipient,
-          name: 'DecoForge Admin Test',
+          name: 'DecoFrog Admin Test',
           phone: '9999999999',
           password: 'TestPassword#2026',
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setEmailStatusMsg(`Test email sent successfully to ${testEmailRecipient}!`);
+        message.success(`Test email sent to ${testEmailRecipient}`);
       } else {
-        setEmailStatusMsg(`Error: ${data.error || 'Failed to dispatch'}`);
+        message.warning(`Email response: ${data.error || 'Dispatched'}`);
       }
     } catch (e: any) {
-      setEmailStatusMsg(`Failed to send test email: ${e.message}`);
+      message.error(`Failed to send test email: ${e.message}`);
     } finally {
       setIsSendingTestEmail(false);
     }
   };
 
-  // --- SMS GATEWAY SETUP STATE ---
-  const [smsProvider, setSmsProvider] = useState<'fast2sms' | 'msg91' | 'twilio' | 'gupshup' | 'local'>('fast2sms');
-  const [smsApiKey, setSmsApiKey] = useState('f2s_live_key_918203928174920194');
-  const [showSmsApiKey, setShowSmsApiKey] = useState(false);
-  const [smsSenderId, setSmsSenderId] = useState('DCFRGE');
-  const [smsRouteType, setSmsRouteType] = useState('otp');
-  const [testSmsPhone, setTestSmsPhone] = useState('9177018185');
-  const [isSendingTestSms, setIsSendingTestSms] = useState(false);
-  const [smsStatusMsg, setSmsStatusMsg] = useState<string | null>(null);
-
   const handleSendTestSms = () => {
     setIsSendingTestSms(true);
-    setSmsStatusMsg(null);
     setTimeout(() => {
       setIsSendingTestSms(false);
-      setSmsStatusMsg(`Simulated OTP SMS dispatched to +91 ${testSmsPhone}: "Your DecoForge 3D verification code is 492019. Valid for 10 mins."`);
+      message.success(`Simulated OTP SMS dispatched to +91 ${testSmsPhone}`);
     }, 600);
   };
 
-  // --- 3D CATALOG & FLOOR STATES ---
+  // --- 3D CATALOG STATES ---
   const [previewCatalogItem, setPreviewCatalogItem] = useState<CatalogItem | null>(null);
   const [editingCatalogItem, setEditingCatalogItem] = useState<CatalogItem | null>(null);
   const [catalogSearch, setCatalogSearch] = useState('');
@@ -529,16 +437,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return ['ALL', ...Array.from(set)];
   }, [catalog]);
 
-  // --- TEMPLATE DESIGNS STATE (Cloud Database Synced) ---
+  // --- FLOOR TEMPLATES STATES ---
   const [templateList, setTemplateList] = useState<FloorTemplate[]>(templates || []);
   const [templateSearchQuery, setTemplateSearchQuery] = useState('');
   const [templateCategoryFilter, setTemplateCategoryFilter] = useState('ALL');
-  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+  const [previewingTemplate, setPreviewingTemplate] = useState<FloorTemplate | null>(null);
   const [newTemplateName, setNewTemplateName] = useState('');
   const [newTemplateCategory, setNewTemplateCategory] = useState('Apartment');
   const [newTemplateDesc, setNewTemplateDesc] = useState('');
-  const [templateActionNotice, setTemplateActionNotice] = useState<string | null>(null);
 
   const refreshTemplatesList = async () => {
     try {
@@ -582,10 +489,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleSaveCurrentPlanAsTemplate = async () => {
     if (!newTemplateName.trim()) {
-      alert('Please enter a template name.');
+      message.error('Please enter a template name');
       return;
     }
-    setIsSavingTemplate(true);
     try {
       const tplId = `tpl_${Date.now()}`;
       const payload = {
@@ -607,2115 +513,1592 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       });
 
       if (res.ok) {
-        setTemplateActionNotice(`Template "${newTemplateName}" saved successfully to Cloud DB!`);
+        message.success(`Template "${newTemplateName}" saved to Supabase DB!`);
         setShowSaveTemplateModal(false);
         setNewTemplateName('');
         setNewTemplateDesc('');
         await refreshTemplatesList();
-        setTimeout(() => setTemplateActionNotice(null), 4000);
       } else {
-        alert('Failed to save template to database.');
+        message.error('Failed to save template to DB');
       }
     } catch (err: any) {
-      alert(err.message || 'Error saving template');
-    } finally {
-      setIsSavingTemplate(false);
+      message.error(err.message || 'Error saving template');
     }
   };
 
   const handleDeleteTemplate = async (templateId: string, templateName: string) => {
-    if (!confirm(`Are you sure you want to delete template "${templateName}" from database?`)) return;
     try {
       const res = await fetch(`/api/templates?id=${encodeURIComponent(templateId)}`, {
         method: 'DELETE',
       });
       if (res.ok) {
-        setTemplateActionNotice(`Template "${templateName}" removed from database.`);
+        message.success(`Template "${templateName}" deleted from DB`);
         setTemplateList((prev) => prev.filter((t) => t.id !== templateId));
-        setTimeout(() => setTemplateActionNotice(null), 3000);
       } else {
-        alert('Failed to delete template from database.');
+        message.error('Failed to delete template');
       }
     } catch (err: any) {
-      alert(err.message || 'Error deleting template');
+      message.error(err.message || 'Error deleting template');
     }
   };
 
-  return (
-    <div className={`flex-1 flex h-full overflow-hidden select-none font-sans transition-colors duration-200 ${
-      isLight ? 'bg-[#f8fafc] text-slate-800' : 'bg-[#080d19] text-slate-100'
-    }`}>
-      {/* ========================================================= */}
-      {/* ADMIN CONTROL PANEL SIDEBAR                               */}
-      {/* ========================================================= */}
-      <aside className={`w-64 flex flex-col shrink-0 transition-colors duration-200 ${
-        isLight ? 'bg-slate-50/90 border-r border-slate-200' : 'bg-[#0B0F17] border-r border-slate-800'
-      }`}>
-        {/* Sidebar Header: Brand & Live Status */}
-        <div className={`h-14 px-4 flex items-center justify-between border-b transition-colors ${
-          isLight ? 'border-slate-200 bg-white/80' : 'border-slate-800 bg-[#0c121e]/80'
-        }`}>
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold shadow-sm shadow-indigo-600/30 shrink-0">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-xs font-bold tracking-tight text-slate-900 dark:text-white">Admin Console</div>
-              <div className="text-[10px] text-slate-400 flex items-center gap-1.5 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span>Supabase Live</span>
-              </div>
-            </div>
-          </div>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-200/60 dark:border-indigo-800/60">
-            v2.4
-          </span>
-        </div>
-
-        {/* Navigation Menu Items */}
-        <nav className="flex-1 overflow-y-auto p-3.5 space-y-4 custom-scrollbar text-xs">
-          {/* Group 1: Monitoring & Users */}
+  // Columns for Overview User Mini Table
+  const overviewUserColumns = [
+    {
+      title: <span style={{ fontSize: 11, fontWeight: 700 }}>Client & Designer</span>,
+      dataIndex: 'name',
+      key: 'name',
+      render: (_: any, u: any) => (
+        <Space size={8}>
+          <Avatar
+            size={24}
+            style={{
+              background: u.role === 'ADMIN' ? 'linear-gradient(135deg, #7c3aed, #4f46e5)' : 'linear-gradient(135deg, #4f46e5, #06b6d4)',
+              fontSize: 11,
+              fontWeight: 700,
+            }}
+          >
+            {(u.name || 'U').charAt(0).toUpperCase()}
+          </Avatar>
           <div>
-            <div className={`px-2.5 pb-2 text-[10px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
-              Platform & Telemetry
-            </div>
-            <div className="space-y-1">
-              {/* 1. Overview */}
-              <button
-                onClick={() => handleSelectTab('overview')}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
-                  activeTab === 'overview'
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
-                    : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                }`}
-              >
-                <LayoutDashboard className={`w-4 h-4 shrink-0 ${activeTab === 'overview' ? 'text-white' : 'text-slate-400'}`} />
-                <span className="truncate">Executive Overview</span>
-              </button>
-
-              {/* 2. User Management System */}
-              <button
-                onClick={() => handleSelectTab('users')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
-                  activeTab === 'users'
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
-                    : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                }`}
-              >
-                <div className="flex items-center gap-3 truncate">
-                  <Users className={`w-4 h-4 shrink-0 ${activeTab === 'users' ? 'text-white' : 'text-slate-400'}`} />
-                  <span className="truncate">User Directory</span>
-                </div>
-                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
-                  activeTab === 'users'
-                    ? 'bg-white/20 text-white'
-                    : isLight ? 'bg-slate-200/80 text-slate-700' : 'bg-slate-800 text-slate-300'
-                }`}>
-                  {allMergedUsers.length}
-                </span>
-              </button>
-
-              {/* 3. Live People Monitoring */}
-              <button
-                onClick={() => handleSelectTab('live_people')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
-                  activeTab === 'live_people'
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
-                    : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                }`}
-              >
-                <div className="flex items-center gap-3 truncate">
-                  <Radio className={`w-4 h-4 shrink-0 ${activeTab === 'live_people' ? 'text-white' : 'text-slate-400'}`} />
-                  <span className="truncate">Live Telemetry</span>
-                </div>
-                <span className={`flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                  activeTab === 'live_people'
-                    ? 'bg-white/20 text-white'
-                    : isLight ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' : 'bg-emerald-950/60 text-emerald-400'
-                }`}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  {liveSessions.length}
-                </span>
-              </button>
-
-              {/* 4. Subscribed People Monitoring */}
-              <button
-                onClick={() => handleSelectTab('subscribers')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
-                  activeTab === 'subscribers'
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
-                    : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                }`}
-              >
-                <div className="flex items-center gap-3 truncate">
-                  <Crown className={`w-4 h-4 shrink-0 ${activeTab === 'subscribers' ? 'text-white' : 'text-slate-400'}`} />
-                  <span className="truncate">Pass Subscribers</span>
-                </div>
-                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
-                  activeTab === 'subscribers'
-                    ? 'bg-white/20 text-white'
-                    : isLight ? 'bg-amber-50 text-amber-700 border border-amber-200/60' : 'bg-amber-950/60 text-amber-400'
-                }`}>
-                  {subscribersList.length}
-                </span>
-              </button>
-            </div>
+            <div style={{ fontWeight: 600, fontSize: 12, lineHeight: '14px', color: isLight ? '#0f172a' : '#f8fafc' }}>{u.name}</div>
+            <div style={{ fontSize: 10, color: '#64748b' }}>{u.email}</div>
           </div>
-
-          {/* Group 2: Finances & Gateways */}
-          <div>
-            <div className={`px-2.5 pb-2 text-[10px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
-              Finances & Gateways
-            </div>
-            <div className="space-y-1">
-              {/* 5. Money Management (Cashfree & Razorpay) */}
-              <button
-                onClick={() => handleSelectTab('payments')}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
-                  activeTab === 'payments'
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
-                    : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                }`}
-              >
-                <DollarSign className={`w-4 h-4 shrink-0 ${activeTab === 'payments' ? 'text-white' : 'text-slate-400'}`} />
-                <span className="truncate">Billing & Gateways</span>
-              </button>
-
-              {/* 6. Unified Email & OTP Gateways */}
-              <button
-                onClick={() => handleSelectTab('email_config')}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
-                  activeTab === 'email_config' || (activeTab as string) === 'sms_gateway'
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
-                    : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                }`}
-              >
-                <Mail className={`w-4 h-4 shrink-0 ${activeTab === 'email_config' || (activeTab as string) === 'sms_gateway' ? 'text-white' : 'text-slate-400'}`} />
-                <span className="truncate">Email & OTP Gateways</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Group 3: 3D Catalog */}
-          <div>
-            <div className={`px-2.5 pb-2 text-[10px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
-              Assets & 3D
-            </div>
-            <div className="space-y-1">
-              <button
-                onClick={() => handleSelectTab('catalog')}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
-                  activeTab === 'catalog'
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
-                    : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                }`}
-              >
-                <Box className={`w-4 h-4 shrink-0 ${activeTab === 'catalog' ? 'text-white' : 'text-slate-400'}`} />
-                <span className="truncate">3D Model Catalog</span>
-              </button>
-
-              <button
-                onClick={() => handleSelectTab('floors')}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
-                  activeTab === 'floors'
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
-                    : isLight
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                }`}
-              >
-                <Building className={`w-4 h-4 shrink-0 ${activeTab === 'floors' ? 'text-white' : 'text-slate-400'}`} />
-                <span className="truncate">Floor Templates</span>
-              </button>
-            </div>
-          </div>
-        </nav>
-
-        {/* Sidebar Footer: Cloud Status Indicator */}
-        <div className={`p-4 border-t transition-colors ${
-          isLight ? 'border-slate-200 bg-white/70' : 'border-slate-800 bg-[#0c121e]/70'
-        }`}>
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1">
-            <div className="flex items-center gap-2">
-              <Server className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-              <span className="font-semibold text-slate-700 dark:text-slate-200 text-[11px]">Supabase DB</span>
-            </div>
-            <span className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              Connected
-            </span>
-          </div>
-        </div>
-      </aside>
-
-      {/* ========================================================= */}
-      {/* MAIN ADMIN WORKSPACE                                      */}
-      {/* ========================================================= */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden">
-        {activeTab === 'overview' ? (
-          /* ======================================================= */
-          /* TAB 1: EXECUTIVE DASHBOARD / OVERVIEW (FIT SCREEN)      */
-          /* ======================================================= */
-          <div className="flex-1 h-full flex flex-col justify-between p-3.5 sm:p-4 overflow-hidden select-none gap-3">
-            {/* 4 Primary Metric Cards (shrink-0) */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 shrink-0">
-              {/* Card 1: Registered Users */}
-              <div
-                onClick={() => handleSelectTab('users')}
-                className={`border rounded-xl p-2.5 px-3.5 transition-all cursor-pointer shadow-xs hover:border-indigo-500/50 ${
-                  isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Registered Users</span>
-                  <div className="w-6 h-6 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                    <Users className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-                <div className="flex items-baseline justify-between mt-0.5">
-                  <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{dbUsers.length}</span>
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                    Cloud DB
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-400 truncate">Supabase PostgreSQL synced</p>
-              </div>
-
-              {/* Card 2: Live CAD Designers */}
-              <div
-                onClick={() => handleSelectTab('live_people')}
-                className={`border rounded-xl p-2.5 px-3.5 transition-all cursor-pointer shadow-xs hover:border-emerald-500/50 ${
-                  isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Live Designers</span>
-                  <div className="w-6 h-6 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                    <Radio className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-                <div className="flex items-baseline justify-between mt-0.5">
-                  <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    {liveSessions.length}
-                  </span>
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                    Active Now
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-400 truncate">Active CAD & 3D walkthroughs</p>
-              </div>
-
-              {/* Card 3: Active Subscribers */}
-              <div
-                onClick={() => handleSelectTab('subscribers')}
-                className={`border rounded-xl p-2.5 px-3.5 transition-all cursor-pointer shadow-xs hover:border-amber-500/50 ${
-                  isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Pass Subscribers</span>
-                  <div className="w-6 h-6 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                    <Crown className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-                <div className="flex items-baseline justify-between mt-0.5">
-                  <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{subscribersList.length}</span>
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                    Pass Holders
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-400 truncate">Verified database records</p>
-              </div>
-
-              {/* Card 4: Gross Revenue */}
-              <div
-                onClick={() => handleSelectTab('payments')}
-                className={`border rounded-xl p-2.5 px-3.5 transition-all cursor-pointer shadow-xs hover:border-emerald-500/50 ${
-                  isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Gross Revenue</span>
-                  <div className="w-6 h-6 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                    <DollarSign className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-                <div className="flex items-baseline justify-between mt-0.5">
-                  <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">₹36,497</span>
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                    Dual Gateways
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-400 truncate">Cashfree & Razorpay live ledger</p>
-              </div>
-            </div>
-
-            {/* Middle Section: Real DB Users Table (7 cols) + Quick Actions & Live Stream (5 cols) */}
-            <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3">
-              {/* Left (7 cols): Real DB Users Table */}
-              <div className={`lg:col-span-7 border rounded-xl p-3 flex flex-col justify-between overflow-hidden shadow-xs ${
-                isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
-              }`}>
-                <div className="flex-1 min-h-0 flex flex-col">
-                  {/* Table Card Header */}
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-200/70 dark:border-slate-800 mb-2 shrink-0">
-                    <div>
-                      <h2 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <Users className="w-3.5 h-3.5 text-indigo-500" />
-                        <span>Supabase User Accounts</span>
-                        <span className="text-[10px] font-mono font-normal text-slate-400">({dbUsers.length} in database)</span>
-                      </h2>
-                      <p className="text-[10px] text-slate-400">PostgreSQL cloud synchronized records</p>
-                    </div>
-
-                    <button
-                      onClick={onOpenAddUserModal}
-                      className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <UserPlus className="w-3 h-3" />
-                      <span>Add User</span>
-                    </button>
-                  </div>
-
-                  {/* Table of actual DB users */}
-                  <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className={`border-b text-[10px] font-semibold uppercase tracking-wider ${
-                          isLight ? 'border-slate-200/60 text-slate-400' : 'border-slate-800 text-slate-500'
-                        }`}>
-                          <th className="py-1.5">User</th>
-                          <th className="py-1.5">Role</th>
-                          <th className="py-1.5">Pass / Access</th>
-                          <th className="py-1.5 text-right">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/50'}`}>
-                        {dbUsers.slice(0, 5).map((u) => (
-                          <tr key={u.id} className={`transition-colors ${isLight ? 'hover:bg-slate-50/70' : 'hover:bg-slate-800/30'}`}>
-                            <td className="py-1.5 pr-2">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-600 to-sky-500 text-white font-bold flex items-center justify-center text-[10px] shrink-0">
-                                  {(u.name || 'U').charAt(0).toUpperCase()}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="font-semibold text-slate-900 dark:text-white truncate max-w-[130px] sm:max-w-[170px] text-[11px]">{u.name}</div>
-                                  <div className="text-[10px] text-slate-400 truncate max-w-[130px] sm:max-w-[170px] font-mono">{u.email}</div>
-                                </div>
-                              </div>
-                            </td>
-
-                            <td className="py-1.5">
-                              <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${
-                                u.role === 'ADMIN'
-                                  ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200/60'
-                                  : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200/60'
-                              }`}>
-                                {u.role}
-                              </span>
-                            </td>
-
-                            <td className="py-1.5 text-[10px]">
-                              <span className={`font-medium ${
-                                u.payment_status === 'paid' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'
-                              }`}>
-                                {u.payment_status === 'paid' ? 'Active Pass' : 'Unpaid'}
-                              </span>
-                            </td>
-
-                            <td className="py-1.5 text-right">
-                              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                Synced
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Table Footer */}
-                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
-                  <span className="text-[10px] text-slate-400">Showing {Math.min(5, dbUsers.length)} of {dbUsers.length} verified accounts</span>
-                  <button
-                    onClick={() => handleSelectTab('users')}
-                    className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Manage all in User Directory</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Right (5 cols): Quick Actions & Live Stream */}
-              <div className="lg:col-span-5 flex flex-col justify-between gap-2.5 overflow-hidden">
-                {/* Quick Control Actions */}
-                <div className={`border rounded-xl p-3 shadow-xs flex-1 min-h-0 flex flex-col justify-between ${
-                  isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
-                }`}>
-                  <div className="flex items-center justify-between pb-1 border-b border-slate-200/60 dark:border-slate-800 shrink-0">
-                    <h2 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                      Quick Control Shortcuts
-                    </h2>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 mt-2 flex-1">
-                    <button
-                      onClick={() => handleSelectTab('payments')}
-                      className={`p-2 rounded-lg border text-left transition-all group cursor-pointer flex flex-col justify-between ${
-                        isLight
-                          ? 'bg-slate-50/70 hover:bg-slate-100/90 border-slate-200/80 hover:border-slate-300'
-                          : 'bg-slate-900/60 hover:bg-slate-800/80 border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <DollarSign className="w-3.5 h-3.5 text-emerald-500 mb-0.5" />
-                      <div>
-                        <div className="text-[11px] font-bold text-slate-900 dark:text-white">Dual Gateways</div>
-                        <p className="text-[9px] text-slate-400">Cashfree & Razorpay</p>
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={() => handleSelectTab('email_config')}
-                      className={`p-2 rounded-lg border text-left transition-all group cursor-pointer flex flex-col justify-between ${
-                        isLight
-                          ? 'bg-slate-50/70 hover:bg-slate-100/90 border-slate-200/80 hover:border-slate-300'
-                          : 'bg-slate-900/60 hover:bg-slate-800/80 border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <Mail className="w-3.5 h-3.5 text-sky-500 mb-0.5" />
-                      <div>
-                        <div className="text-[11px] font-bold text-slate-900 dark:text-white">Email & OTP</div>
-                        <p className="text-[9px] text-slate-400">Resend & Fast2SMS</p>
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={() => handleSelectTab('catalog')}
-                      className={`p-2 rounded-lg border text-left transition-all group cursor-pointer flex flex-col justify-between ${
-                        isLight
-                          ? 'bg-slate-50/70 hover:bg-slate-100/90 border-slate-200/80 hover:border-slate-300'
-                          : 'bg-slate-900/60 hover:bg-slate-800/80 border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <Box className="w-3.5 h-3.5 text-purple-500 mb-0.5" />
-                      <div>
-                        <div className="text-[11px] font-bold text-slate-900 dark:text-white">3D Catalog</div>
-                        <p className="text-[9px] text-slate-400">3D Furniture models</p>
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={() => handleSelectTab('live_people')}
-                      className={`p-2 rounded-lg border text-left transition-all group cursor-pointer flex flex-col justify-between ${
-                        isLight
-                          ? 'bg-slate-50/70 hover:bg-slate-100/90 border-slate-200/80 hover:border-slate-300'
-                          : 'bg-slate-900/60 hover:bg-slate-800/80 border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <Radio className="w-3.5 h-3.5 text-emerald-500 mb-0.5" />
-                      <div>
-                        <div className="text-[11px] font-bold text-slate-900 dark:text-white">Live Telemetry</div>
-                        <p className="text-[9px] text-slate-400">{liveSessions.length} active sessions</p>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Live Activity Telemetry */}
-                <div className={`border rounded-xl p-3 shadow-xs flex-1 min-h-0 flex flex-col justify-between ${
-                  isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
-                }`}>
-                  <div className="flex items-center justify-between pb-1 border-b border-slate-200/60 dark:border-slate-800 shrink-0">
-                    <h2 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                      <Activity className="w-3.5 h-3.5 text-emerald-500" />
-                      Live CAD Activity Stream
-                    </h2>
-                    <span className="text-[9px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Live
-                    </span>
-                  </div>
-
-                  <div className="space-y-1.5 mt-2 overflow-y-auto no-scrollbar flex-1 min-h-0">
-                    {cadActivityEvents.slice(0, 3).map((evt) => {
-                      const IconComponent = evt.icon;
-                      return (
-                        <div key={evt.id} className="flex items-center gap-2 text-xs py-0.5">
-                          <div className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
-                            <IconComponent className="w-3 h-3" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <span className="font-semibold text-slate-900 dark:text-slate-100 text-[11px] mr-1.5">{evt.user}</span>
-                            <span className="text-[10px] text-slate-400">{evt.action}</span>
-                          </div>
-                          <span className="text-[9px] text-slate-400 font-mono shrink-0">{evt.time}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Enterprise Infrastructure & Dual Gateways Health Strip (shrink-0) */}
-            <div className={`border rounded-xl p-2 px-3.5 shadow-xs shrink-0 flex items-center justify-between gap-4 ${
-              isLight ? 'bg-white border-slate-200/90' : 'bg-[#0f172a]/80 border-slate-800'
-            }`}>
-              <div className="flex items-center gap-2">
-                <Server className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                <span className="text-[11px] font-bold text-slate-900 dark:text-white">Cloud Infrastructure Cluster</span>
-              </div>
-
-              <div className="hidden sm:flex items-center gap-4 text-[10px]">
-                <div className="flex items-center gap-1.5 text-slate-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">Cashfree PG</span>
-                  <span className="text-emerald-500 font-mono">(Live 24ms)</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-slate-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">Razorpay PG</span>
-                  <span className="text-emerald-500 font-mono">(Dual Ready)</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-slate-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">Resend & SMS</span>
-                  <span className="text-sky-500 font-mono">(Active)</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-slate-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">Supabase Cloud</span>
-                  <span className="text-indigo-500 font-mono">(PostgreSQL 15)</span>
-                </div>
-              </div>
-
-              <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Operational
-              </span>
-            </div>
-          </div>
-        ) : (
-          /* ======================================================= */
-          /* OTHER TABS (Dedicated Scrollable Area)                  */
-          /* ======================================================= */
-          <div className="flex-1 overflow-y-auto p-5 sm:p-6 custom-scrollbar space-y-5">
-            {/* TAB 2: USER MANAGEMENT SYSTEM */}
-            {activeTab === 'users' && (
-            <div className="space-y-5">
-              {/* Header & Filter Controls */}
-              <div className={`border rounded-2xl p-4 shadow-sm space-y-4 ${
-                isLight ? 'bg-white border-slate-200' : 'bg-[#0e1628] border-slate-800'
-              }`}>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h2 className={`text-sm font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>Registered Users Monitoring</h2>
-                    <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Total {allMergedUsers.length} accounts registered</p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={refreshUsersList}
-                      className={`p-2 rounded-xl border transition-colors ${
-                        isLight
-                          ? 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
-                          : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
-                      }`}
-                      title="Refresh users"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={onOpenAddUserModal}
-                      className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <UserPlus className="w-4 h-4" />
-                      <span>Add User</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Search & Filter Pills */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                  <div className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border ${
-                    isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/90 border-slate-800'
-                  }`}>
-                    <Search className="w-4 h-4 text-slate-400 shrink-0" />
-                    <input
-                      type="text"
-                      placeholder="Search users by name, email, or mobile number..."
-                      value={userSearchQuery}
-                      onChange={(e) => setUserSearchQuery(e.target.value)}
-                      className={`bg-transparent text-xs focus:outline-none w-full ${
-                        isLight ? 'text-slate-900 placeholder-slate-400' : 'text-white placeholder-slate-500'
-                      }`}
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-                    {(['ALL', 'PAID', 'UNPAID', 'ADMIN', 'DESIGNER'] as const).map((role) => (
-                      <button
-                        key={role}
-                        onClick={() => setUserFilterRole(role)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
-                          userFilterRole === role
-                            ? 'bg-indigo-600 text-white shadow-xs'
-                            : isLight
-                            ? 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 border border-slate-200/80'
-                            : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-                        }`}
-                      >
-                        {role === 'ALL' ? 'All Accounts' : role}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Users Data Table */}
-              <div className={`border rounded-2xl overflow-hidden shadow-sm ${
-                isLight ? 'bg-white border-slate-200' : 'bg-[#0e1628] border-slate-800'
-              }`}>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className={`border-b font-semibold ${
-                        isLight ? 'border-slate-200 bg-slate-50 text-slate-600' : 'border-slate-800 bg-[#0a1224]/80 text-slate-400'
-                      }`}>
-                        <th className="py-3 px-4">User Details</th>
-                        <th className="py-3 px-4">Mobile / Contact</th>
-                        <th className="py-3 px-4">Role</th>
-                        <th className="py-3 px-4">Access & Payment</th>
-                        <th className="py-3 px-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/60'}`}>
-                      {filteredUsers.map((user) => (
-                        <tr key={user.id} className={`transition-colors ${isLight ? 'hover:bg-slate-50' : 'hover:bg-slate-800/30'}`}>
-                          {/* User info */}
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
-                                {user.name.charAt(0).toUpperCase()}
-                              </div>
-                              <div className="min-w-0">
-                                <div className={`font-bold truncate ${isLight ? 'text-slate-900' : 'text-white'}`}>{user.name}</div>
-                                <div className={`text-[11px] truncate ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{user.email}</div>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Mobile */}
-                          <td className={`py-3 px-4 font-mono ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
-                            {user.phone ? `+91 ${user.phone}` : <span className="text-slate-400 italic">Not set</span>}
-                          </td>
-
-                          {/* Role */}
-                          <td className="py-3 px-4">
-                            <button
-                              onClick={() => handleToggleRole(user)}
-                              title="Click to toggle role"
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors cursor-pointer ${
-                                user.role === 'ADMIN'
-                                  ? isLight
-                                    ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
-                                    : 'bg-purple-500/20 text-purple-300 border-purple-500/40 hover:bg-purple-500/30'
-                                  : isLight
-                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                                  : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/30'
-                              }`}
-                            >
-                              {user.role}
-                            </button>
-                          </td>
-
-                          {/* Access / Payment Status */}
-                          <td className="py-3 px-4">
-                            <button
-                              onClick={() => handleTogglePaymentStatus(user)}
-                              title="Click to Grant/Revoke access"
-                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
-                                user.payment_status === 'paid'
-                                  ? isLight
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-                                  : isLight
-                                  ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-                                  : 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
-                              }`}
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full ${user.payment_status === 'paid' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                              <span>{user.payment_status === 'paid' ? 'Paid (Pass Active)' : 'Unpaid (Blocked)'}</span>
-                            </button>
-                          </td>
-
-                          {/* Actions */}
-                          <td className="py-3 px-4 text-right space-x-2">
-                            <button
-                              disabled={resettingUserId === user.id}
-                              onClick={() => handleResetPassword(user)}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer ${
-                                isLight
-                                  ? 'bg-slate-100 hover:bg-slate-200 text-sky-700 border-slate-300'
-                                  : 'bg-slate-800 hover:bg-slate-700 text-sky-400 border-slate-700'
-                              }`}
-                              title="Generate temporary password and email to user"
-                            >
-                              {resettingUserId === user.id ? 'Sending...' : 'Reset Pass'}
-                            </button>
-                            <button
-                              onClick={() => handleDeleteUserDirect(user.id, user.name)}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer ${
-                                isLight
-                                  ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
-                                  : 'bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border-rose-800/40'
-                              }`}
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ======================================================= */}
-          {/* ======================================================= */}
-          {/* TAB 3: LIVE PEOPLE & REAL-TIME CAD TELEMETRY HUB        */}
-          {/* ======================================================= */}
-          {activeTab === 'live_people' && (
-            <div className="space-y-6 animate-in fade-in duration-150">
-              {/* 1. THREE MINIMALIST METRIC CARDS */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* Metric 1: Active Designers */}
-                <div className={`p-5 rounded-2xl border transition-all ${
-                  isLight ? 'bg-white border-slate-200/80 shadow-xs' : 'bg-[#0f172a] border-slate-800'
-                }`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      Active 3D Viewports
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Live Now
-                    </span>
-                  </div>
-                  <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                    {liveSessions.length} <span className="text-xs font-normal text-slate-500">collaborators</span>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                    <Radio className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    <span>Real-time designers in 3D floorplans</span>
-                  </p>
-                </div>
-
-                {/* Metric 2: WebSocket Latency */}
-                <div className={`p-5 rounded-2xl border transition-all ${
-                  isLight ? 'bg-white border-slate-200/80 shadow-xs' : 'bg-[#0f172a] border-slate-800'
-                }`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      WebSocket Latency
-                    </span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-400 border border-sky-200/60 dark:border-sky-800/60">
-                      Direct Channel
-                    </span>
-                  </div>
-                  <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white font-mono">
-                    {simulatedPing} <span className="text-xs font-normal text-slate-500">ms</span>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                    <Wifi className="w-3.5 h-3.5 text-sky-500 shrink-0" />
-                    <span>Direct cloud WebSocket connection</span>
-                  </p>
-                </div>
-
-                {/* Metric 3: Database Synchronization */}
-                <div className={`p-5 rounded-2xl border transition-all ${
-                  isLight ? 'bg-white border-slate-200/80 shadow-xs' : 'bg-[#0f172a] border-slate-800'
-                }`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      Database Cluster
-                    </span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60">
-                      PostgreSQL 15
-                    </span>
-                  </div>
-                  <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                    Supabase Cloud
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                    <Server className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                    <span>Auto-persisting projects & templates</span>
-                  </p>
-                </div>
-              </div>
-
-              {/* 2. AIRY SESSIONS TABLE */}
-              <div className={`border rounded-2xl overflow-hidden transition-all ${
-                isLight ? 'bg-white border-slate-200/80 shadow-xs' : 'bg-[#0e1628] border-slate-800'
-              }`}>
-                {/* Table Header Bar */}
-                <div className={`px-6 py-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                  isLight ? 'border-slate-200/80 bg-slate-50/50' : 'border-slate-800 bg-slate-900/40'
-                }`}>
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900 dark:text-white">Active Designers & Viewports</h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Live sessions currently drafting 3D scenes or exploring blueprints</p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-[11px] font-medium">
-                      <button
-                        onClick={() => setTelemetryFilter('ALL')}
-                        className={`px-2.5 py-1 rounded-md transition-colors ${
-                          telemetryFilter === 'ALL'
-                            ? isLight ? 'bg-white text-slate-900 shadow-xs' : 'bg-slate-700 text-white shadow-xs'
-                            : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                        }`}
-                      >
-                        All ({liveSessions.length})
-                      </button>
-                      <button
-                        onClick={() => setTelemetryFilter('ACTIVE')}
-                        className={`px-2.5 py-1 rounded-md transition-colors ${
-                          telemetryFilter === 'ACTIVE'
-                            ? isLight ? 'bg-white text-slate-900 shadow-xs' : 'bg-slate-700 text-white shadow-xs'
-                            : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                        }`}
-                      >
-                        Active Only
-                      </button>
-                    </div>
-
-                    <button
-                      onClick={refreshUsersList}
-                      className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                        isLight
-                          ? 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
-                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                      }`}
-                      title="Refresh Sessions"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Table Rows */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className={`border-b font-medium text-[11px] uppercase tracking-wider ${
-                        isLight ? 'border-slate-200/80 bg-slate-50/30 text-slate-500' : 'border-slate-800/80 bg-slate-900/20 text-slate-400'
-                      }`}>
-                        <th className="py-3 px-6">Designer</th>
-                        <th className="py-3 px-4">Role</th>
-                        <th className="py-3 px-4">Current Space</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4">Device</th>
-                        <th className="py-3 px-4">Latency</th>
-                        <th className="py-3 px-6 text-right">Canvas</th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/60'}`}>
-                      {liveSessions.map((sess) => (
-                        <tr key={sess.id} className={`transition-colors ${isLight ? 'hover:bg-slate-50/70' : 'hover:bg-slate-800/30'}`}>
-                          {/* Designer info */}
-                          <td className="py-3.5 px-6">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-sky-500 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-xs">
-                                {sess.userName.charAt(0).toUpperCase()}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="font-semibold text-slate-900 dark:text-white truncate">{sess.userName}</div>
-                                <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono truncate">{sess.email}</div>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Role */}
-                          <td className="py-3.5 px-4">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                              sess.role === 'ADMIN'
-                                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60'
-                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60'
-                            }`}>
-                              {sess.role}
-                            </span>
-                          </td>
-
-                          {/* Space / Floor */}
-                          <td className="py-3.5 px-4">
-                            <div className="flex flex-col">
-                              <span className="font-medium text-slate-900 dark:text-slate-200 flex items-center gap-1.5">
-                                <Layers className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                                {sess.activeProject}
-                              </span>
-                              <span className="text-[11px] text-slate-400 mt-0.5">
-                                {sess.floor} • {sess.room}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Status */}
-                          <td className="py-3.5 px-4">
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              Active now
-                            </span>
-                          </td>
-
-                          {/* Device */}
-                          <td className="py-3.5 px-4 text-xs text-slate-600 dark:text-slate-300">
-                            <div className="flex items-center gap-1.5">
-                              <Laptop className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                              <span className="truncate max-w-[140px]">{sess.device}</span>
-                            </div>
-                          </td>
-
-                          {/* Latency */}
-                          <td className="py-3.5 px-4">
-                            <span className="font-mono text-xs text-slate-700 dark:text-slate-300">
-                              {sess.latency}
-                            </span>
-                          </td>
-
-                          {/* Action */}
-                          <td className="py-3.5 px-6 text-right">
-                            <button
-                              onClick={() => setSelectedLiveSession(sess)}
-                              className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
-                                isLight
-                                  ? 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                              }`}
-                            >
-                              <Eye className="w-3.5 h-3.5 text-slate-400" />
-                              <span>Inspect</span>
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* 3. RECENT STUDIO ACTIVITY FEED */}
-              <div className={`border rounded-2xl p-6 transition-all ${
-                isLight ? 'bg-white border-slate-200/80 shadow-xs' : 'bg-[#0e1628] border-slate-800'
-              }`}>
-                <div className="flex items-center justify-between pb-4 border-b border-slate-200/70 dark:border-slate-800">
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <Activity className="w-4 h-4 text-indigo-500" />
-                      Recent Studio Activity
-                    </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Audit log of 3D floorplan edits, snapshot renders, and database synchronization
-                    </p>
-                  </div>
-                  <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    Listening to events
-                  </span>
-                </div>
-
-                <div className="divide-y divide-slate-100 dark:divide-slate-800/60 mt-2">
-                  {cadActivityEvents.slice(0, 5).map((evt) => {
-                    const IconComponent = evt.icon;
-                    return (
-                      <div key={evt.id} className="py-3.5 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3.5 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
-                            <IconComponent className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-semibold text-slate-900 dark:text-white truncate">
-                                {evt.user}
-                              </span>
-                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium">
-                                {evt.type}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-600 dark:text-slate-300 truncate mt-0.5">
-                              {evt.action} • <span className="text-slate-400">{evt.target}</span>
-                            </p>
-                          </div>
-                        </div>
-                        <span className="text-[11px] text-slate-400 font-mono shrink-0">
-                          {evt.time}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* 4. CLEAN INSPECTOR MODAL */}
-              {selectedLiveSession && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
-                  <div className={`w-full max-w-lg rounded-2xl border p-6 space-y-5 shadow-2xl ${
-                    isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-900 border-slate-800 text-slate-100'
-                  }`}>
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-sky-500 flex items-center justify-center font-bold text-white shadow-xs">
-                          {selectedLiveSession.userName.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-bold flex items-center gap-2">
-                            <span>{selectedLiveSession.userName}</span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
-                              Active
-                            </span>
-                          </h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{selectedLiveSession.email}</p>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => setSelectedLiveSession(null)}
-                        className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-                      >
-                        ✕
-                      </button>
-                    </div>
-
-                    <div className="space-y-2 text-xs">
-                      <div className={`p-4 rounded-xl border space-y-2 font-mono text-[11px] ${
-                        isLight ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-slate-800/60 border-slate-700/60 text-slate-200'
-                      }`}>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Current Scene:</span>
-                          <span className="font-semibold text-indigo-600 dark:text-indigo-400">{selectedLiveSession.activeProject}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Space & Room:</span>
-                          <span>{selectedLiveSession.room} ({selectedLiveSession.floor})</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Live Action:</span>
-                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{selectedLiveSession.currentAction}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Device & OS:</span>
-                          <span>{selectedLiveSession.device}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Location:</span>
-                          <span>{selectedLiveSession.location}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Ping:</span>
-                          <span className="text-emerald-600 dark:text-emerald-400 font-bold">{selectedLiveSession.latency}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 pt-2">
-                      <button
-                        onClick={() => {
-                          setSelectedLiveSession(null);
-                          if (onSwitchToStudio) onSwitchToStudio();
-                        }}
-                        className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <Palette className="w-4 h-4" />
-                        <span>Open in 3D Design Studio</span>
-                      </button>
-                      <button
-                        onClick={() => setSelectedLiveSession(null)}
-                        className={`py-2.5 px-4 rounded-xl border text-xs font-medium transition-colors cursor-pointer ${
-                          isLight ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
-                        }`}
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ======================================================= */}
-          {/* TAB 4: SUBSCRIBED PEOPLE MONITORING                     */}
-          {/* ======================================================= */}
-          {activeTab === 'subscribers' && (
-            <div className="space-y-5">
-              <div className={`border rounded-2xl p-5 shadow-sm space-y-4 ${
-                isLight ? 'bg-white border-slate-200' : 'bg-[#0e1628] border-slate-800'
-              }`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                      <Crown className="w-4 h-4 text-amber-500" />
-                      Paying Subscribers & Pass Monitoring
-                    </h2>
-                    <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Subscribers who purchased passes via Cashfree Payments</p>
-                  </div>
-                  <span className={`text-xs font-mono font-bold px-3 py-1 rounded-full border ${
-                    isLight ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                  }`}>
-                    3 Active Subscribers
-                  </span>
-                </div>
-
-                {/* Subscribers Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className={`border-b font-semibold ${isLight ? 'border-slate-200 text-slate-600' : 'border-slate-800 text-slate-400'}`}>
-                        <th className="pb-3">Subscriber</th>
-                        <th className="pb-3">Plan Purchased</th>
-                        <th className="pb-3">Order / Payment ID</th>
-                        <th className="pb-3">Validity</th>
-                        <th className="pb-3">Status</th>
-                        <th className="pb-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/60'}`}>
-                      {subscribersList.map((sub) => (
-                        <tr key={sub.id} className={`transition-colors ${isLight ? 'hover:bg-slate-50' : 'hover:bg-slate-800/30'}`}>
-                          <td className="py-3.5">
-                            <div className={`font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{sub.name}</div>
-                            <div className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{sub.email}</div>
-                          </td>
-                          <td className="py-3.5">
-                            <div className={`font-semibold ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>{sub.planName}</div>
-                            <div className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">{sub.amount}</div>
-                          </td>
-                          <td className={`py-3.5 font-mono text-[11px] ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
-                            <div>{sub.orderId}</div>
-                            <div className="text-slate-400">{sub.paymentId}</div>
-                          </td>
-                          <td className={`py-3.5 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
-                            <div>{sub.startDate} → {sub.expiryDate}</div>
-                            <div className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">{sub.daysLeft} days remaining</div>
-                          </td>
-                          <td className="py-3.5">
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                                sub.status === 'ACTIVE'
-                                  ? isLight
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                                  : isLight
-                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                  : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                              }`}
-                            >
-                              {sub.status}
-                            </span>
-                          </td>
-                          <td className="py-3.5 text-right space-x-2">
-                            <button
-                              onClick={() => alert(`Access extended +30 days for ${sub.name}!`)}
-                              className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-medium cursor-pointer"
-                            >
-                              +30 Days
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ======================================================= */}
-          {/* TAB 5: MONEY MANAGEMENT (CASHFREE PAYMENTS)             */}
-          {/* ======================================================= */}
-          {activeTab === 'payments' && (
-            <div className="space-y-4">
-              <AdminPaymentsView currentUser={currentUser || null} theme={theme} />
-            </div>
-          )}
-
-          {/* ======================================================= */}
-          {/* ======================================================= */}
-          {/* TAB 6: UNIFIED EMAIL & MOBILE OTP GATEWAYS (ONE SCREEN)  */}
-          {/* ======================================================= */}
-          {(activeTab === 'email_config' || (activeTab as string) === 'sms_gateway') && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* LEFT COLUMN: EMAIL GATEWAY CONFIGURATION */}
-                <div className="space-y-6">
-                  <div className={`border rounded-2xl p-5 shadow-xs space-y-4 ${
-                    isLight ? 'bg-white border-slate-200' : 'bg-[#0e1628] border-slate-800'
-                  }`}>
-                    <div>
-                      <h2 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                        <Mail className="w-5 h-5 text-sky-500" />
-                        Email Gateway & SMTP Configuration
-                      </h2>
-                      <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                        Configure SMTP server or Resend API key for account passwords & credential emails.
-                      </p>
-                    </div>
-
-                    {/* Email Provider Selector */}
-                    <div>
-                      <label className={`block text-xs font-bold mb-2 uppercase tracking-wide ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
-                        Provider Type
-                      </label>
-                      <div className="grid grid-cols-3 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmailProvider('resend');
-                            setSmtpHost('smtp.resend.com');
-                            setSmtpPort('587');
-                          }}
-                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                            emailProvider === 'resend'
-                              ? 'bg-sky-500/10 border-sky-500 text-sky-700 dark:text-white shadow-xs'
-                              : isLight
-                              ? 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
-                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          <div className="font-bold text-xs flex items-center justify-between">
-                            <span>Resend</span>
-                            {emailProvider === 'resend' && <Check className="w-3.5 h-3.5 text-sky-500" />}
-                          </div>
-                          <span className={`text-[10px] block ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Fast API</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmailProvider('smtp');
-                            setSmtpHost('smtp.gmail.com');
-                            setSmtpPort('587');
-                          }}
-                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                            emailProvider === 'smtp'
-                              ? 'bg-sky-500/10 border-sky-500 text-sky-700 dark:text-white shadow-xs'
-                              : isLight
-                              ? 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
-                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          <div className="font-bold text-xs flex items-center justify-between">
-                            <span>SMTP</span>
-                            {emailProvider === 'smtp' && <Check className="w-3.5 h-3.5 text-sky-500" />}
-                          </div>
-                          <span className={`text-[10px] block ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Gmail/SES</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmailProvider('sendgrid');
-                            setSmtpHost('smtp.sendgrid.net');
-                            setSmtpPort('587');
-                          }}
-                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                            emailProvider === 'sendgrid'
-                              ? 'bg-sky-500/10 border-sky-500 text-sky-700 dark:text-white shadow-xs'
-                              : isLight
-                              ? 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
-                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          <div className="font-bold text-xs flex items-center justify-between">
-                            <span>SendGrid</span>
-                            {emailProvider === 'sendgrid' && <Check className="w-3.5 h-3.5 text-sky-500" />}
-                          </div>
-                          <span className={`text-[10px] block ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Twilio API</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Connection Parameters */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={`block text-xs font-bold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>SMTP Host</label>
-                        <input
-                          type="text"
-                          value={smtpHost}
-                          onChange={(e) => setSmtpHost(e.target.value)}
-                          className={`w-full h-9 px-3 rounded-xl text-xs focus:outline-none focus:border-sky-500 ${
-                            isLight ? 'bg-slate-50 border border-slate-300 text-slate-900' : 'bg-slate-900 border border-slate-800 text-white'
-                          }`}
-                        />
-                      </div>
-
-                      <div>
-                        <label className={`block text-xs font-bold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Port</label>
-                        <input
-                          type="text"
-                          value={smtpPort}
-                          onChange={(e) => setSmtpPort(e.target.value)}
-                          className={`w-full h-9 px-3 rounded-xl text-xs focus:outline-none focus:border-sky-500 ${
-                            isLight ? 'bg-slate-50 border border-slate-300 text-slate-900' : 'bg-slate-900 border border-slate-800 text-white'
-                          }`}
-                        />
-                      </div>
-
-                      <div>
-                        <label className={`block text-xs font-bold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Username</label>
-                        <input
-                          type="text"
-                          value={smtpUser}
-                          onChange={(e) => setSmtpUser(e.target.value)}
-                          className={`w-full h-9 px-3 rounded-xl text-xs focus:outline-none focus:border-sky-500 ${
-                            isLight ? 'bg-slate-50 border border-slate-300 text-slate-900' : 'bg-slate-900 border border-slate-800 text-white'
-                          }`}
-                        />
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className={`block text-xs font-bold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Password / Key</label>
-                          <button
-                            type="button"
-                            onClick={() => setShowSmtpPass(!showSmtpPass)}
-                            className="text-[10px] text-slate-500 hover:text-slate-800 cursor-pointer"
-                          >
-                            {showSmtpPass ? 'Hide' : 'Show'}
-                          </button>
-                        </div>
-                        <input
-                          type={showSmtpPass ? 'text' : 'password'}
-                          value={smtpPass}
-                          onChange={(e) => setSmtpPass(e.target.value)}
-                          className={`w-full h-9 px-3 rounded-xl text-xs focus:outline-none focus:border-sky-500 ${
-                            isLight ? 'bg-slate-50 border border-slate-300 text-slate-900' : 'bg-slate-900 border border-slate-800 text-white'
-                          }`}
-                        />
-                      </div>
-
-                      <div>
-                        <label className={`block text-xs font-bold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Sender Name</label>
-                        <input
-                          type="text"
-                          value={fromName}
-                          onChange={(e) => setFromName(e.target.value)}
-                          className={`w-full h-9 px-3 rounded-xl text-xs focus:outline-none focus:border-sky-500 ${
-                            isLight ? 'bg-slate-50 border border-slate-300 text-slate-900' : 'bg-slate-900 border border-slate-800 text-white'
-                          }`}
-                        />
-                      </div>
-
-                      <div>
-                        <label className={`block text-xs font-bold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Sender Email</label>
-                        <input
-                          type="email"
-                          value={fromEmail}
-                          onChange={(e) => setFromEmail(e.target.value)}
-                          className={`w-full h-9 px-3 rounded-xl text-xs focus:outline-none focus:border-sky-500 ${
-                            isLight ? 'bg-slate-50 border border-slate-300 text-slate-900' : 'bg-slate-900 border border-slate-800 text-white'
-                          }`}
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => alert('Email Gateway settings saved successfully!')}
-                      className="w-full py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
-                    >
-                      Save Email Configuration
-                    </button>
-                  </div>
-
-                  {/* Live Test Email Dispatcher */}
-                  <div className={`border rounded-2xl p-5 shadow-xs space-y-3 ${
-                    isLight ? 'bg-white border-slate-200' : 'bg-[#0e1628] border-slate-800'
-                  }`}>
-                    <div>
-                      <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                        <Send className="w-4 h-4 text-sky-500" />
-                        Send Live Test Email
-                      </h3>
-                      <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Dispatch sample credentials to verify inbox delivery.</p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="email"
-                        value={testEmailRecipient}
-                        onChange={(e) => setTestEmailRecipient(e.target.value)}
-                        placeholder="Recipient email address..."
-                        className={`flex-1 h-9 px-3 rounded-xl text-xs focus:outline-none focus:border-sky-500 ${
-                          isLight ? 'bg-slate-50 border border-slate-300 text-slate-900' : 'bg-slate-900 border border-slate-800 text-white'
-                        }`}
-                      />
-                      <button
-                        disabled={isSendingTestEmail || !testEmailRecipient}
-                        onClick={handleSendTestEmail}
-                        className="h-9 px-4 rounded-xl bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shrink-0"
-                      >
-                        {isSendingTestEmail ? (
-                          <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ) : (
-                          <Send className="w-3.5 h-3.5" />
-                        )}
-                        <span>Dispatch Test</span>
-                      </button>
-                    </div>
-
-                    {emailStatusMsg && (
-                      <div className={`p-2.5 rounded-xl text-xs font-medium border ${
-                        isLight ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-sky-500/10 border-sky-500/20 text-sky-300'
-                      }`}>
-                        {emailStatusMsg}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* RIGHT COLUMN: SMS & MOBILE OTP SETUP */}
-                <div className="space-y-6">
-                  <div className={`border rounded-2xl p-5 shadow-xs space-y-4 ${
-                    isLight ? 'bg-white border-slate-200' : 'bg-[#0e1628] border-slate-800'
-                  }`}>
-                    <div>
-                      <h2 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                        <Smartphone className="w-5 h-5 text-amber-500" />
-                        SMS & Mobile OTP Gateway Setup
-                      </h2>
-                      <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                        Send 6-digit OTP verification codes during registration and mobile login.
-                      </p>
-                    </div>
-
-                    {/* SMS Provider Selector */}
-                    <div>
-                      <label className={`block text-xs font-bold mb-2 uppercase tracking-wide ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
-                        SMS Provider
-                      </label>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setSmsProvider('fast2sms')}
-                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                            smsProvider === 'fast2sms'
-                              ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-white shadow-xs'
-                              : isLight
-                              ? 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
-                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          <div className="font-bold text-xs flex items-center justify-between">
-                            <span>Fast2SMS</span>
-                            {smsProvider === 'fast2sms' && <Check className="w-3.5 h-3.5 text-amber-500" />}
-                          </div>
-                          <span className={`text-[10px] block ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>India DLT</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setSmsProvider('msg91')}
-                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                            smsProvider === 'msg91'
-                              ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-white shadow-xs'
-                              : isLight
-                              ? 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
-                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          <div className="font-bold text-xs flex items-center justify-between">
-                            <span>MSG91</span>
-                            {smsProvider === 'msg91' && <Check className="w-3.5 h-3.5 text-amber-500" />}
-                          </div>
-                          <span className={`text-[10px] block ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Enterprise</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setSmsProvider('twilio')}
-                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                            smsProvider === 'twilio'
-                              ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-white shadow-xs'
-                              : isLight
-                              ? 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
-                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          <div className="font-bold text-xs flex items-center justify-between">
-                            <span>Twilio</span>
-                            {smsProvider === 'twilio' && <Check className="w-3.5 h-3.5 text-amber-500" />}
-                          </div>
-                          <span className={`text-[10px] block ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Global</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setSmsProvider('local')}
-                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                            smsProvider === 'local'
-                              ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-white shadow-xs'
-                              : isLight
-                              ? 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
-                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          <div className="font-bold text-xs flex items-center justify-between">
-                            <span>Local</span>
-                            {smsProvider === 'local' && <Check className="w-3.5 h-3.5 text-amber-500" />}
-                          </div>
-                          <span className={`text-[10px] block ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Simulator</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* SMS Parameters */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className={`block text-xs font-bold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>API Key / Token</label>
-                          <button
-                            type="button"
-                            onClick={() => setShowSmsApiKey(!showSmsApiKey)}
-                            className="text-[10px] text-slate-500 hover:text-slate-800 cursor-pointer"
-                          >
-                            {showSmsApiKey ? 'Hide' : 'Show'}
-                          </button>
-                        </div>
-                        <input
-                          type={showSmsApiKey ? 'text' : 'password'}
-                          value={smsApiKey}
-                          onChange={(e) => setSmsApiKey(e.target.value)}
-                          className={`w-full h-9 px-3 rounded-xl text-xs focus:outline-none focus:border-amber-500 ${
-                            isLight ? 'bg-slate-50 border border-slate-300 text-slate-900' : 'bg-slate-900 border border-slate-800 text-white'
-                          }`}
-                        />
-                      </div>
-
-                      <div>
-                        <label className={`block text-xs font-bold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Sender ID</label>
-                        <input
-                          type="text"
-                          maxLength={6}
-                          value={smsSenderId}
-                          onChange={(e) => setSmsSenderId(e.target.value.toUpperCase())}
-                          placeholder="DCFRGE"
-                          className={`w-full h-9 px-3 rounded-xl text-xs font-mono focus:outline-none focus:border-amber-500 ${
-                            isLight ? 'bg-slate-50 border border-slate-300 text-slate-900' : 'bg-slate-900 border border-slate-800 text-white'
-                          }`}
-                        />
-                      </div>
-
-                      <div>
-                        <label className={`block text-xs font-bold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Route Type</label>
-                        <select
-                          value={smsRouteType}
-                          onChange={(e) => setSmsRouteType(e.target.value)}
-                          className={`w-full h-9 px-3 rounded-xl text-xs focus:outline-none focus:border-amber-500 ${
-                            isLight ? 'bg-slate-50 border border-slate-300 text-slate-900' : 'bg-slate-900 border border-slate-800 text-white'
-                          }`}
-                        >
-                          <option value="otp">Quick OTP (High Priority)</option>
-                          <option value="dlt">DLT Approved Template</option>
-                          <option value="promo">Promotional / Marketing</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className={`block text-xs font-bold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>DLT Template ID</label>
-                        <input
-                          type="text"
-                          defaultValue="1407168920192837"
-                          className={`w-full h-9 px-3 rounded-xl text-xs font-mono focus:outline-none focus:border-amber-500 ${
-                            isLight ? 'bg-slate-50 border border-slate-300 text-slate-900' : 'bg-slate-900 border border-slate-800 text-white'
-                          }`}
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => alert('SMS Gateway parameters saved successfully!')}
-                      className="w-full py-2 rounded-xl bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
-                    >
-                      Save SMS Gateway Configuration
-                    </button>
-                  </div>
-
-                  {/* Live Test SMS Dispatcher */}
-                  <div className={`border rounded-2xl p-5 shadow-xs space-y-3 ${
-                    isLight ? 'bg-white border-slate-200' : 'bg-[#0e1628] border-slate-800'
-                  }`}>
-                    <div>
-                      <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                        <Send className="w-4 h-4 text-amber-500" />
-                        Send Live Test OTP SMS
-                      </h3>
-                      <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Dispatch test OTP to your mobile phone.</p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className={`flex-1 flex h-9 items-center rounded-xl border overflow-hidden ${
-                        isLight ? 'border-slate-300 bg-slate-50' : 'border-slate-800 bg-slate-900'
-                      }`}>
-                        <span className={`px-2.5 text-xs font-bold border-r select-none shrink-0 ${
-                          isLight ? 'text-slate-600 border-slate-300 bg-slate-100' : 'text-slate-400 border-slate-800 bg-slate-800/80'
-                        }`}>
-                          🇮🇳 +91
-                        </span>
-                        <input
-                          type="tel"
-                          maxLength={10}
-                          value={testSmsPhone}
-                          onChange={(e) => setTestSmsPhone(e.target.value.replace(/\D/g, ''))}
-                          placeholder="10-digit mobile number"
-                          className={`w-full px-2.5 bg-transparent text-xs focus:outline-none ${isLight ? 'text-slate-900' : 'text-white'}`}
-                        />
-                      </div>
-                      <button
-                        disabled={isSendingTestSms || testSmsPhone.length < 10}
-                        onClick={handleSendTestSms}
-                        className="h-9 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shrink-0"
-                      >
-                        {isSendingTestSms ? (
-                          <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ) : (
-                          <Send className="w-3.5 h-3.5" />
-                        )}
-                        <span>Dispatch OTP</span>
-                      </button>
-                    </div>
-
-                    {smsStatusMsg && (
-                      <div className={`p-2.5 rounded-xl text-xs font-medium border ${
-                        isLight ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
-                      }`}>
-                        {smsStatusMsg}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ======================================================= */}
-          {/* TAB 8: 3D MODEL CATALOG                                */}
-          {/* ======================================================= */}
-          {activeTab === 'catalog' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className={`text-base font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>3D Furniture & Assets Catalog</h2>
-                  <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Manage 3D models, dimensions and textures</p>
-                </div>
-                <button
-                  onClick={onOpenAddItemModal}
-                  className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add 3D Model
-                </button>
-              </div>
-
-              {/* Filters */}
-              <div className={`flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-2xl border ${
-                isLight ? 'bg-white border-slate-200' : 'bg-[#0e1628] border-slate-800'
-              }`}>
-                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border flex-1 ${
-                  isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900 border-slate-800'
-                }`}>
-                  <Search className="w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search 3D catalog..."
-                    value={catalogSearch}
-                    onChange={(e) => setCatalogSearch(e.target.value)}
-                    className={`bg-transparent text-xs focus:outline-none w-full ${
-                      isLight ? 'text-slate-900 placeholder-slate-400' : 'text-white placeholder-slate-500'
-                    }`}
-                  />
-                </div>
-
-                <div className="flex items-center gap-1.5 overflow-x-auto">
-                  {categories.slice(0, 5).map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setCatalogCategory(cat)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                        catalogCategory === cat
-                          ? 'bg-indigo-600 text-white'
-                          : isLight
-                          ? 'bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200'
-                          : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                {filteredCatalog.slice(0, 24).map((item) => (
-                  <div
-                    key={item.id}
-                    className={`border rounded-2xl p-3 flex flex-col justify-between group transition-all ${
-                      isLight
-                        ? 'bg-white border-slate-200 hover:border-indigo-400 hover:shadow-md'
-                        : 'bg-[#0e1628] border-slate-800 hover:border-indigo-500/50'
-                    }`}
-                  >
-                    <div className={`h-28 flex items-center justify-center rounded-xl overflow-hidden mb-2 ${
-                      isLight ? 'bg-slate-100' : 'bg-slate-900/50'
-                    }`}>
-                      <CatalogThumbnail icon={item.icon} name={item.name} category={item.category} />
-                    </div>
-                    <div>
-                      <span className={`text-[10px] uppercase font-semibold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{item.category}</span>
-                      <h4 className={`text-xs font-bold truncate ${isLight ? 'text-slate-900' : 'text-white'}`}>{item.name}</h4>
-                    </div>
-                    <div className={`mt-2 pt-2 border-t flex items-center justify-between ${isLight ? 'border-slate-100' : 'border-slate-800'}`}>
-                      <button
-                        onClick={() => setPreviewCatalogItem(item)}
-                        className="text-[10px] text-sky-600 dark:text-sky-400 hover:underline cursor-pointer"
-                      >
-                        3D View
-                      </button>
-                      <button
-                        onClick={() => onDeleteCatalogItem(item.id)}
-                        className="text-slate-400 hover:text-rose-500 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ======================================================= */}
-          {/* TAB 8: FLOOR TEMPLATES & ARCHITECTURAL DESIGNS          */}
-          {/* ======================================================= */}
-          {activeTab === 'floors' && (
-            <div className="space-y-6">
-              {/* Notice Banner */}
-              {templateActionNotice && (
-                <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center justify-between animate-in fade-in">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>{templateActionNotice}</span>
-                  </div>
-                  <button onClick={() => setTemplateActionNotice(null)} className="hover:opacity-75">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-
-              {/* Action & Filter Toolbar */}
-              <div className={`p-4 rounded-2xl border transition-colors ${
-                isLight ? 'bg-white border-slate-200/80 shadow-xs' : 'bg-[#0B0F17] border-slate-800'
-              }`}>
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  {/* Search Bar */}
-                  <div className="relative flex-1 max-w-md">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Search design templates by name or category..."
-                      value={templateSearchQuery}
-                      onChange={(e) => setTemplateSearchQuery(e.target.value)}
-                      className={`w-full pl-9 pr-4 py-2 rounded-xl text-xs border focus:outline-hidden transition-all ${
-                        isLight
-                          ? 'bg-slate-50 border-slate-200 text-slate-900 focus:border-sky-500 focus:bg-white'
-                          : 'bg-slate-900/60 border-slate-700 text-white focus:border-sky-500'
-                      }`}
-                    />
-                  </div>
-
-                  {/* Top Action Buttons */}
-                  <div className="flex items-center gap-2.5">
-                    <button
-                      onClick={refreshTemplatesList}
-                      className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition ${
-                        isLight
-                          ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                          : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                      }`}
-                      title="Sync from Cloud Supabase Database"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Sync Cloud</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setNewTemplateName(plan?.name ? `${plan.name} Template` : 'New Custom Template');
-                        setShowSaveTemplateModal(true);
-                      }}
-                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Save Studio Plan as Template</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Category Filter Pills */}
-                <div className="flex flex-wrap items-center gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
-                  <span className="text-[11px] font-bold text-slate-400 mr-1">Categories:</span>
-                  {templateCategories.map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setTemplateCategoryFilter(cat)}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
-                        templateCategoryFilter === cat
-                          ? 'bg-sky-500 text-white shadow-xs'
-                          : isLight
-                          ? 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                  <span className="ml-auto text-[11px] text-slate-400 font-medium">
-                    Showing {filteredTemplates.length} of {templateList.length} templates
-                  </span>
-                </div>
-              </div>
-
-              {/* Template Cards Grid */}
-              {filteredTemplates.length === 0 ? (
-                <div className={`p-12 text-center rounded-2xl border ${
-                  isLight ? 'bg-white border-slate-200 text-slate-500' : 'bg-[#0B0F17] border-slate-800 text-slate-400'
-                }`}>
-                  <Building className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">No template designs found</h3>
-                  <p className="text-xs text-slate-400 mt-1">Try adjusting your search query or save the current studio plan as a template.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredTemplates.map((tpl) => {
-                    const planData = tpl.plan || tpl.data;
-                    const roomsCount = planData?.rooms?.length || 0;
-                    const furnitureCount = planData?.furniture?.length || 0;
-                    const wallsCount = planData?.walls?.length || 0;
-                    const floorsCount = tpl.floors || planData?.floors?.length || 1;
-
-                    return (
-                      <div
-                        key={tpl.id}
-                        className={`rounded-2xl border p-4 flex flex-col justify-between transition-all duration-200 hover:shadow-lg ${
-                          isLight
-                            ? 'bg-white border-slate-200/90 hover:border-sky-300'
-                            : 'bg-[#0B0F17] border-slate-800 hover:border-slate-700'
-                        }`}
-                      >
-                        <div>
-                          {/* Card Top Badges */}
-                          <div className="flex items-center justify-between gap-2 mb-2">
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/60">
-                              {tpl.category || 'Apartment'}
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                                {floorsCount} {floorsCount === 1 ? 'Floor' : 'Floors'}
-                              </span>
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
-                                {tpl.area || 'Spacious'}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Template Title */}
-                          <h3 className="text-sm font-bold text-slate-900 dark:text-white line-clamp-1 mb-1">
-                            {tpl.name}
-                          </h3>
-
-                          {/* Description */}
-                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-3">
-                            {tpl.description || 'Pre-configured architectural layout ready for interior design and walkthrough.'}
-                          </p>
-
-                          {/* Plan Statistics */}
-                          <div className="grid grid-cols-3 gap-1.5 py-2 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60 text-[11px] mb-3">
-                            <div className="text-center">
-                              <span className="text-[10px] text-slate-400 block">Rooms</span>
-                              <span className="font-bold text-slate-700 dark:text-slate-200">{roomsCount}</span>
-                            </div>
-                            <div className="text-center border-x border-slate-200/60 dark:border-slate-800">
-                              <span className="text-[10px] text-slate-400 block">Furniture</span>
-                              <span className="font-bold text-slate-700 dark:text-slate-200">{furnitureCount}</span>
-                            </div>
-                            <div className="text-center">
-                              <span className="text-[10px] text-slate-400 block">Walls</span>
-                              <span className="font-bold text-slate-700 dark:text-slate-200">{wallsCount}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Card Bottom Actions */}
-                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                          <button
-                            onClick={() => onOpenStudioWithTemplate(tpl.id)}
-                            className="flex-1 py-1.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
-                          >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            <span>Load into Studio</span>
-                          </button>
-
-                          <button
-                            onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}
-                            className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
-                            title="Delete template from database"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Modal: Save Current Studio Plan as Cloud Template */}
-          {showSaveTemplateModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
-              <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl animate-in zoom-in-95 ${
-                isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-900 border-slate-800 text-white'
-              }`}>
-                <h3 className="text-base font-bold mb-1">Save Studio Plan as Template</h3>
-                <p className="text-xs text-slate-400 mb-4">
-                  Saves the current 2D/3D studio blueprint directly to Supabase Cloud PostgreSQL as a reusable design template.
-                </p>
-
-                <div className="space-y-3.5">
-                  <div>
-                    <label className="block text-xs font-bold mb-1">Template Name</label>
-                    <input
-                      type="text"
-                      value={newTemplateName}
-                      onChange={(e) => setNewTemplateName(e.target.value)}
-                      placeholder="e.g. Modern Scandinavian Penthouse"
-                      className={`w-full px-3.5 py-2 rounded-xl text-xs border focus:outline-hidden ${
-                        isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-slate-800 border-slate-700 text-white'
-                      }`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold mb-1">Category</label>
-                    <select
-                      value={newTemplateCategory}
-                      onChange={(e) => setNewTemplateCategory(e.target.value)}
-                      className={`w-full px-3.5 py-2 rounded-xl text-xs border focus:outline-hidden ${
-                        isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-slate-800 border-slate-700 text-white'
-                      }`}
-                    >
-                      <option value="Apartment">Apartment</option>
-                      <option value="Duplex">Duplex</option>
-                      <option value="Villa">Villa</option>
-                      <option value="House">House</option>
-                      <option value="Studio">Studio</option>
-                      <option value="Commercial">Commercial</option>
-                      <option value="Blank">Blank Canvas</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold mb-1">Description (Optional)</label>
-                    <textarea
-                      rows={2}
-                      value={newTemplateDesc}
-                      onChange={(e) => setNewTemplateDesc(e.target.value)}
-                      placeholder="Brief architectural details (rooms, theme, style)..."
-                      className={`w-full px-3.5 py-2 rounded-xl text-xs border focus:outline-hidden ${
-                        isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-slate-800 border-slate-700 text-white'
-                      }`}
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-6 flex items-center justify-end gap-2.5">
-                  <button
-                    onClick={() => setShowSaveTemplateModal(false)}
-                    disabled={isSavingTemplate}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveCurrentPlanAsTemplate}
-                    disabled={isSavingTemplate}
-                    className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  >
-                    {isSavingTemplate ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Saving to Cloud DB...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Save to Supabase DB</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          </div>
-        )}
-      </main>
-
-      {/* 3D Catalog Item Preview Modal */}
-      {previewCatalogItem && (
-        <Catalog3DPreviewModal
-          item={previewCatalogItem}
-          isOpen={!!previewCatalogItem}
-          onClose={() => setPreviewCatalogItem(null)}
-        />
-      )}
-
-      {/* Edit Catalog Item Modal */}
-      {editingCatalogItem && (
-        <EditCatalogItemModal
-          item={editingCatalogItem}
-          isOpen={!!editingCatalogItem}
-          onClose={() => setEditingCatalogItem(null)}
-          onSave={(updated) => {
-            if (onUpdateCatalogItem) onUpdateCatalogItem(updated);
-            setEditingCatalogItem(null);
+        </Space>
+      ),
+    },
+    {
+      title: <span style={{ fontSize: 11, fontWeight: 700 }}>Role</span>,
+      dataIndex: 'role',
+      key: 'role',
+      render: (_: string, record: any) => {
+        const isSuperAdmin = (record.email || '').toLowerCase() === 'admin@visualrendered.io' || record.id === 'admin_visual';
+        return (
+          <Tag
+            color={isSuperAdmin ? 'purple' : 'blue'}
+            style={{ fontSize: 10, borderRadius: 6, fontWeight: 600, padding: '1px 6px', margin: 0 }}
+          >
+            {isSuperAdmin ? '★ SUPERADMIN' : 'CUSTOMER'}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: <span style={{ fontSize: 11, fontWeight: 700 }}>Membership</span>,
+      dataIndex: 'payment_status',
+      key: 'payment_status',
+      render: (status: string) => (
+        <Tag
+          color={status === 'paid' ? 'success' : 'default'}
+          style={{ fontSize: 10, borderRadius: 6, fontWeight: 600, padding: '1px 6px', margin: 0 }}
+        >
+          {status === 'paid' ? '★ Pro Pass' : 'Trial'}
+        </Tag>
+      ),
+    },
+    {
+      title: <span style={{ fontSize: 11, fontWeight: 700 }}>Workspace</span>,
+      key: 'action',
+      align: 'right' as const,
+      render: (_: any, record: any) => (
+        <Button
+          size="small"
+          type="primary"
+          ghost
+          icon={<CompassOutlined style={{ fontSize: 10 }} />}
+          style={{ fontSize: 10, height: 22, padding: '0 8px', borderRadius: 6 }}
+          onClick={() => {
+            if (onStartNewDesignForClient) {
+              onStartNewDesignForClient(record);
+            } else if (onSwitchToStudio) {
+              onSwitchToStudio();
+            }
           }}
-        />
-      )}
-    </div>
+        >
+          Launch Studio
+        </Button>
+      ),
+    },
+  ];
+
+  // Columns for Full User Directory Table
+  const userDirectoryColumns = [
+    {
+      title: 'User Profile',
+      key: 'user',
+      render: (_: any, u: any) => (
+        <Space orientation="horizontal" size={8}>
+          <Avatar size={26} style={{ backgroundColor: '#4f46e5', fontSize: 11 }}>
+            {(u.name || 'U').charAt(0).toUpperCase()}
+          </Avatar>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 12, lineHeight: '14px' }}>
+              {u.name}
+            </div>
+            <div style={{ fontSize: 10, color: '#8c8c8c' }}>{u.email}</div>
+            {u.phone && <div style={{ fontSize: 9, color: '#bfbfbf', fontFamily: 'monospace' }}>{u.phone}</div>}
+          </div>
+        </Space>
+      ),
+    },
+    {
+      title: 'Account Role',
+      dataIndex: 'role',
+      key: 'role',
+      render: (_: string, record: any) => {
+        const isSuperAdmin = (record.email || '').toLowerCase() === 'admin@visualrendered.io' || record.id === 'admin_visual';
+        if (isSuperAdmin) {
+          return (
+            <Tag color="purple" style={{ fontSize: 10, fontWeight: 700, borderRadius: 6 }}>
+              ★ SUPERADMIN
+            </Tag>
+          );
+        }
+        return (
+          <Tag color="blue" style={{ fontSize: 10, fontWeight: 600, borderRadius: 6 }}>
+            CUSTOMER
+          </Tag>
+        );
+      },
+    },
+    {
+      title: 'Pass Status',
+      key: 'pass',
+      render: (_: any, record: any) => (
+        <Space size={6}>
+          <Switch
+            size="small"
+            checked={record.payment_status === 'paid'}
+            onChange={() => handleTogglePaymentStatus(record)}
+            checkedChildren="PAID"
+            unCheckedChildren="UNPAID"
+          />
+          <Tag color={record.payment_status === 'paid' ? 'success' : 'default'} style={{ fontSize: 10 }}>
+            {record.payment_status === 'paid' ? 'Pro Pass Active' : 'Blocked'}
+          </Tag>
+        </Space>
+      ),
+    },
+    {
+      title: 'Cloud DB',
+      key: 'db',
+      render: () => <Badge status="success" text={<span style={{ fontSize: 11 }}>Supabase Live</span>} />,
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      align: 'right' as const,
+      render: (_: any, record: any) => {
+        const isSuperAdmin = (record.email || '').toLowerCase() === 'admin@visualrendered.io' || record.id === 'admin_visual';
+        return (
+          <Space size={4}>
+            <Tooltip title="Reset Password & Send Credentials">
+              <Button
+                size="small"
+                icon={<KeyOutlined style={{ fontSize: 11 }} />}
+                loading={resettingUserId === record.id}
+                onClick={() => handleResetPassword(record)}
+              />
+            </Tooltip>
+            {!isSuperAdmin && (
+              <Popconfirm
+                title="Delete customer from Supabase?"
+                description={`Permanently remove "${record.name}"?`}
+                onConfirm={() => handleDeleteUserDirect(record.id, record.name)}
+                okText="Delete"
+                cancelText="Cancel"
+                okButtonProps={{ danger: true, size: 'small' }}
+              >
+                <Button size="small" danger icon={<DeleteOutlined style={{ fontSize: 11 }} />} />
+              </Popconfirm>
+            )}
+          </Space>
+        );
+      },
+    },
+  ];
+
+  // Ant Design Sidebar Menu Items (Categorized with Badges)
+  const menuItems = [
+    {
+      type: 'group' as const,
+      label: <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.05em' }}>MAIN STUDIO</span>,
+      children: [
+        {
+          key: 'overview',
+          icon: <DashboardOutlined style={{ fontSize: 13 }} />,
+          label: 'Executive Overview',
+        },
+        {
+          key: 'users',
+          icon: <TeamOutlined style={{ fontSize: 13 }} />,
+          label: (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Customers</span>
+              <Badge count={allMergedUsers.length} overflowCount={999} style={{ backgroundColor: '#4f46e5' }} />
+            </div>
+          ),
+        },
+        {
+          key: 'live_people',
+          icon: <RadarChartOutlined style={{ fontSize: 13 }} />,
+          label: (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Live Customers</span>
+              <Badge count={liveSessions.length} style={{ backgroundColor: '#10b981' }} />
+            </div>
+          ),
+        },
+        {
+          key: 'subscribers',
+          icon: <CrownOutlined style={{ fontSize: 13 }} />,
+          label: (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Paid Customers</span>
+              <Badge count={subscribersList.length} style={{ backgroundColor: '#f59e0b' }} />
+            </div>
+          ),
+        },
+      ],
+    },
+    {
+      type: 'group' as const,
+      label: <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.05em' }}>3D ASSETS & DESIGNS</span>,
+      children: [
+        {
+          key: 'catalog',
+          icon: <AppstoreOutlined style={{ fontSize: 13 }} />,
+          label: (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>3D Furniture Catalog</span>
+              <Badge count={catalog.length} overflowCount={999} style={{ backgroundColor: '#6366f1' }} />
+            </div>
+          ),
+        },
+        {
+          key: 'floors',
+          icon: <BuildOutlined style={{ fontSize: 13 }} />,
+          label: (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Floor Templates</span>
+              <Badge count={templateList.length} style={{ backgroundColor: '#8b5cf6' }} />
+            </div>
+          ),
+        },
+      ],
+    },
+    {
+      type: 'group' as const,
+      label: <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.05em' }}>COMMERCE & GATEWAYS</span>,
+      children: [
+        {
+          key: 'payments',
+          icon: <DollarOutlined style={{ fontSize: 13 }} />,
+          label: 'Billing & Gateways',
+        },
+        {
+          key: 'email_config',
+          icon: <MailOutlined style={{ fontSize: 13 }} />,
+          label: 'Email & OTP Gateways',
+        },
+      ],
+    },
+  ];
+
+  return (
+    <ConfigProvider
+      theme={{
+        algorithm: isLight ? antdTheme.defaultAlgorithm : antdTheme.darkAlgorithm,
+        token: {
+          colorPrimary: '#4f46e5',
+          fontSize: 12,
+          fontSizeSM: 11,
+          fontSizeLG: 13,
+          fontSizeHeading1: 18,
+          fontSizeHeading2: 16,
+          fontSizeHeading3: 14,
+          fontSizeHeading4: 13,
+          fontSizeHeading5: 12,
+          controlHeight: 28,
+          controlHeightSM: 24,
+          borderRadius: 8,
+          borderRadiusSM: 6,
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        },
+        components: {
+          Table: {
+            fontSize: 11,
+            headerBg: isLight ? '#f8fafc' : '#0f172a',
+            cellPaddingBlockSM: 6,
+            cellPaddingInlineSM: 8,
+          },
+          Card: {
+            headerHeight: 36,
+            headerFontSize: 13,
+            paddingLG: 14,
+          },
+          Statistic: {
+            titleFontSize: 11,
+            contentFontSize: 20,
+          },
+          Menu: {
+            itemHeight: 32,
+            fontSize: 12,
+            iconSize: 13,
+          },
+          Button: {
+            fontSize: 11,
+            controlHeight: 28,
+            controlHeightSM: 24,
+          },
+          Tag: {
+            fontSize: 10,
+            lineHeight: 1.5,
+          },
+          Input: {
+            fontSize: 11,
+            controlHeight: 28,
+          },
+          Select: {
+            fontSize: 11,
+            controlHeight: 28,
+          },
+        },
+      }}
+    >
+      <Layout style={{ height: '100%', overflow: 'hidden' }}>
+        {/* ========================================================= */}
+        {/* ANT DESIGN ADMIN SIDEBAR                                  */}
+        {/* ========================================================= */}
+        <Sider
+          width={230}
+          theme={isLight ? 'light' : 'dark'}
+          style={{
+            borderRight: isLight ? '1px solid #eef2f6' : '1px solid #1f293d',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            height: '100%',
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {/* Menu Items */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '10px 8px' }}>
+              <Menu
+                mode="inline"
+                selectedKeys={[activeTab]}
+                onClick={({ key }) => handleSelectTab(key as AdminSectionTab)}
+                items={menuItems}
+                style={{ borderRight: 0, fontSize: 12, background: 'transparent' }}
+              />
+            </div>
+
+            {/* Sider Footer: User Profile & Studio Switch */}
+            <div
+              style={{
+                padding: '10px 14px',
+                borderTop: isLight ? '1px solid #f0f0f0' : '1px solid #1f293d',
+                background: isLight ? '#fafafa' : '#0f172a',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Space size={8}>
+                  <Avatar
+                    size={28}
+                    style={{
+                      background: 'linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)',
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {(currentUser?.name || 'A').charAt(0).toUpperCase()}
+                  </Avatar>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, lineHeight: '13px', color: isLight ? '#0f172a' : '#f8fafc' }}>
+                      {currentUser?.name || 'Lead Architect'}
+                    </div>
+                    <div style={{ fontSize: 9, color: '#64748b' }}>Admin Workspace</div>
+                  </div>
+                </Space>
+                <Tooltip title="Switch to 3D Design Studio">
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<CompassOutlined style={{ color: '#4f46e5', fontSize: 14 }} />}
+                    onClick={onSwitchToStudio}
+                  />
+                </Tooltip>
+              </div>
+            </div>
+          </div>
+        </Sider>
+
+        {/* ========================================================= */}
+        {/* ANT DESIGN MAIN CONTENT WORKSPACE                         */}
+        {/* ========================================================= */}
+        <Layout style={{ height: '100%', overflow: 'hidden' }}>
+          <Content style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {activeTab === 'overview' ? (
+              /* ======================================================= */
+              /* TAB 1: EXECUTIVE DASHBOARD / OVERVIEW (FIT SCREEN)      */
+              /* ======================================================= */
+              <div
+                style={{
+                  height: '100%',
+                  overflowY: 'auto',
+                  padding: '12px 16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                  background: isLight ? '#f8fafc' : '#0b0f17',
+                }}
+              >
+                {/* 1. Four Vibrant KPI Metric Cards */}
+                <Row gutter={[12, 12]}>
+                  {/* Metric 1: Total Registered Accounts */}
+                  <Col span={6}>
+                    <Card
+                      hoverable
+                      onClick={() => handleSelectTab('users')}
+                      style={{
+                        borderRadius: 12,
+                        border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                        background: isLight ? '#ffffff' : '#111827',
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                      }}
+                      bodyStyle={{ padding: '12px 16px' }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: isLight ? '#64748b' : '#94a3b8' }}>
+                            Registered Accounts
+                          </div>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: isLight ? '#0f172a' : '#f8fafc', marginTop: 3 }}>
+                            {allMergedUsers.length}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3, fontSize: 11, color: '#10b981', fontWeight: 600 }}>
+                            <span>↑ 100% active</span>
+                            <span style={{ color: '#94a3b8', fontWeight: 400 }}>• Customers & Admin</span>
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: 10,
+                            background: isLight ? '#eef2ff' : 'rgba(99, 102, 241, 0.15)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#4f46e5',
+                            fontSize: 18,
+                          }}
+                        >
+                          <TeamOutlined />
+                        </div>
+                      </div>
+                    </Card>
+                  </Col>
+
+                  {/* Metric 2: Active Customer Sessions */}
+                  <Col span={6}>
+                    <Card
+                      hoverable
+                      onClick={() => handleSelectTab('live_people')}
+                      style={{
+                        borderRadius: 12,
+                        border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                        background: isLight ? '#ffffff' : '#111827',
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                      }}
+                      bodyStyle={{ padding: '12px 16px' }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: isLight ? '#64748b' : '#94a3b8' }}>
+                            Active Customer Sessions
+                          </div>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: isLight ? '#0f172a' : '#f8fafc', marginTop: 3 }}>
+                            {liveSessions.length}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3, fontSize: 11, color: '#10b981', fontWeight: 600 }}>
+                            <span>🟢 Online Now</span>
+                            <span style={{ color: '#94a3b8', fontWeight: 400 }}>• 3D Studio Live</span>
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: 10,
+                            background: isLight ? '#ecfdf5' : 'rgba(16, 185, 129, 0.15)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#059669',
+                            fontSize: 18,
+                          }}
+                        >
+                          <RadarChartOutlined />
+                        </div>
+                      </div>
+                    </Card>
+                  </Col>
+
+                  {/* Metric 3: Paid Customer Passes */}
+                  <Col span={6}>
+                    <Card
+                      hoverable
+                      onClick={() => handleSelectTab('subscribers')}
+                      style={{
+                        borderRadius: 12,
+                        border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                        background: isLight ? '#ffffff' : '#111827',
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                      }}
+                      bodyStyle={{ padding: '12px 16px' }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: isLight ? '#64748b' : '#94a3b8' }}>
+                            Paid Customer Passes
+                          </div>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: isLight ? '#0f172a' : '#f8fafc', marginTop: 3 }}>
+                            {subscribersList.length}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3, fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
+                            <span>★ Active Pass Holders</span>
+                            <span style={{ color: '#94a3b8', fontWeight: 400 }}>• Paying Users</span>
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: 10,
+                            background: isLight ? '#fffbeb' : 'rgba(245, 158, 11, 0.15)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#d97706',
+                            fontSize: 18,
+                          }}
+                        >
+                          <CrownOutlined />
+                        </div>
+                      </div>
+                    </Card>
+                  </Col>
+
+                  {/* Metric 4: Platform Revenue */}
+                  <Col span={6}>
+                    <Card
+                      hoverable
+                      onClick={() => handleSelectTab('payments')}
+                      style={{
+                        borderRadius: 12,
+                        border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                        background: isLight ? '#ffffff' : '#111827',
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                      }}
+                      bodyStyle={{ padding: '12px 16px' }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: isLight ? '#64748b' : '#94a3b8' }}>
+                            Customer Revenue
+                          </div>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: isLight ? '#0f172a' : '#f8fafc', marginTop: 3 }}>
+                            ₹36,497
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3, fontSize: 11, color: '#10b981', fontWeight: 600 }}>
+                            <span>↑ +₹4,999 this week</span>
+                            <span style={{ color: '#94a3b8', fontWeight: 400 }}>• Gateways Live</span>
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: 10,
+                            background: isLight ? '#faf5ff' : 'rgba(124, 58, 237, 0.15)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#7c3aed',
+                            fontSize: 18,
+                          }}
+                        >
+                          <DollarOutlined />
+                        </div>
+                      </div>
+                    </Card>
+                  </Col>
+                </Row>
+
+                {/* 3. Balanced Middle Content Section */}
+                <Row gutter={[12, 12]}>
+                  {/* Left (14 cols): Client Directory + Featured Architectural Templates */}
+                  <Col span={14} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {/* Card A: Recent Clients & Designers */}
+                    <Card
+                      title={
+                        <Space size={8}>
+                          <TeamOutlined style={{ color: '#4f46e5', fontSize: 14 }} />
+                          <span style={{ fontSize: 13, fontWeight: 700 }}>Customer Directory</span>
+                          <Tag color="blue" style={{ borderRadius: 6, fontSize: 10, fontWeight: 600, margin: 0 }}>
+                            {allMergedUsers.length} Customers & Admin
+                          </Tag>
+                        </Space>
+                      }
+                      extra={
+                        <Space size={6}>
+                          <Tooltip title="Refresh DB Data">
+                            <Button
+                              size="small"
+                              icon={<ReloadOutlined style={{ fontSize: 10 }} />}
+                              onClick={refreshUsersList}
+                              loading={isUsersLoading}
+                              style={{ borderRadius: 6 }}
+                            />
+                          </Tooltip>
+                          <Button
+                            type="primary"
+                            size="small"
+                            icon={<UserAddOutlined style={{ fontSize: 10 }} />}
+                            onClick={onOpenAddUserModal}
+                            style={{ fontSize: 11, borderRadius: 6 }}
+                          >
+                            Add Customer
+                          </Button>
+                          <Button
+                            type="link"
+                            size="small"
+                            onClick={() => handleSelectTab('users')}
+                            style={{ fontSize: 11, padding: 0 }}
+                          >
+                            Full Directory <RightOutlined style={{ fontSize: 9 }} />
+                          </Button>
+                        </Space>
+                      }
+                      style={{
+                        borderRadius: 12,
+                        border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                        background: isLight ? '#ffffff' : '#111827',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                      }}
+                      bodyStyle={{ padding: 0 }}
+                    >
+                      <Table
+                        size="small"
+                        pagination={false}
+                        dataSource={allMergedUsers.slice(0, 5)}
+                        rowKey="id"
+                        columns={overviewUserColumns}
+                      />
+                    </Card>
+
+                    {/* Card B: Featured 3D Floorplan Blueprints & Templates */}
+                    <Card
+                      title={
+                        <Space size={8}>
+                          <BuildOutlined style={{ color: '#8b5cf6', fontSize: 14 }} />
+                          <span style={{ fontSize: 13, fontWeight: 700 }}>Featured Architectural 3D Floorplans</span>
+                          <Tag color="purple" style={{ borderRadius: 6, fontSize: 10, fontWeight: 600, margin: 0 }}>
+                            {templateList.length} Layouts
+                          </Tag>
+                        </Space>
+                      }
+                      extra={
+                        <Button
+                          type="link"
+                          size="small"
+                          onClick={() => handleSelectTab('floors')}
+                          style={{ fontSize: 11, padding: 0 }}
+                        >
+                          Browse All Layouts <RightOutlined style={{ fontSize: 9 }} />
+                        </Button>
+                      }
+                      style={{
+                        borderRadius: 12,
+                        border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                        background: isLight ? '#ffffff' : '#111827',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                      }}
+                      bodyStyle={{ padding: '10px 14px' }}
+                    >
+                      <Row gutter={[10, 10]}>
+                        {templateList.slice(0, 3).map((tpl) => (
+                          <Col span={8} key={tpl.id}>
+                            <div
+                              style={{
+                                border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                                borderRadius: 10,
+                                padding: '10px 12px',
+                                background: isLight ? '#f8fafc' : '#0f172a',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'space-between',
+                                height: 110,
+                                transition: 'all 0.2s ease',
+                              }}
+                            >
+                              <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <Tag color="purple" style={{ fontSize: 9, borderRadius: 4, margin: 0 }}>
+                                    {tpl.category || 'Luxury'}
+                                  </Tag>
+                                  <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>
+                                    {tpl.area || '120 m²'}
+                                  </span>
+                                </div>
+                                <div
+                                  style={{
+                                    fontWeight: 700,
+                                    fontSize: 12,
+                                    color: isLight ? '#0f172a' : '#f8fafc',
+                                    marginTop: 6,
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                  }}
+                                  title={tpl.name}
+                                >
+                                  {tpl.name}
+                                </div>
+                                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+                                  {tpl.floors || 1} Floor(s) • Ready for 3D Walk
+                                </div>
+                              </div>
+                              <Button
+                                size="small"
+                                type="primary"
+                                ghost
+                                icon={<CompassOutlined style={{ fontSize: 10 }} />}
+                                onClick={() => onOpenStudioWithTemplate(tpl.id)}
+                                style={{ width: '100%', fontSize: 10, height: 24, borderRadius: 6, marginTop: 6 }}
+                              >
+                                Launch in Studio
+                              </Button>
+                            </div>
+                          </Col>
+                        ))}
+                      </Row>
+                    </Card>
+                  </Col>
+
+                  {/* Right (10 cols): Shortcuts + Live Highlights + Resource Health */}
+                  <Col span={10} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {/* Card 1: Quick Studio Launchpad */}
+                    <Card
+                      title={
+                        <Space size={8}>
+                          <ThunderboltOutlined style={{ color: '#f59e0b', fontSize: 14 }} />
+                          <span style={{ fontSize: 13, fontWeight: 700 }}>Quick Studio Launchpad</span>
+                        </Space>
+                      }
+                      style={{
+                        borderRadius: 12,
+                        border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                        background: isLight ? '#ffffff' : '#111827',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                      }}
+                      bodyStyle={{ padding: 10 }}
+                    >
+                      <Row gutter={[8, 8]}>
+                        <Col span={12}>
+                          <div
+                            onClick={() => handleSelectTab('payments')}
+                            style={{
+                              border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                              borderRadius: 8,
+                              padding: '10px 12px',
+                              background: isLight ? '#ffffff' : '#0f172a',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              transition: 'all 0.2s',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 8,
+                                background: isLight ? '#ecfdf5' : 'rgba(16, 185, 129, 0.15)',
+                                color: '#059669',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 15,
+                              }}
+                            >
+                              <DollarOutlined />
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, lineHeight: '14px', color: isLight ? '#0f172a' : '#f8fafc' }}>
+                                Billing & Invoices
+                              </div>
+                              <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Razorpay & Cashfree</div>
+                            </div>
+                          </div>
+                        </Col>
+
+                        <Col span={12}>
+                          <div
+                            onClick={() => handleSelectTab('catalog')}
+                            style={{
+                              border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                              borderRadius: 8,
+                              padding: '10px 12px',
+                              background: isLight ? '#ffffff' : '#0f172a',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              transition: 'all 0.2s',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 8,
+                                background: isLight ? '#ede9fe' : 'rgba(139, 92, 246, 0.15)',
+                                color: '#7c3aed',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 15,
+                              }}
+                            >
+                              <AppstoreOutlined />
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, lineHeight: '14px', color: isLight ? '#0f172a' : '#f8fafc' }}>
+                                3D Model Catalog
+                              </div>
+                              <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{catalog.length} Curated Assets</div>
+                            </div>
+                          </div>
+                        </Col>
+
+                        <Col span={12}>
+                          <div
+                            onClick={() => handleSelectTab('floors')}
+                            style={{
+                              border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                              borderRadius: 8,
+                              padding: '10px 12px',
+                              background: isLight ? '#ffffff' : '#0f172a',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              transition: 'all 0.2s',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 8,
+                                background: isLight ? '#eef2ff' : 'rgba(99, 102, 241, 0.15)',
+                                color: '#4f46e5',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 15,
+                              }}
+                            >
+                              <BuildOutlined />
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, lineHeight: '14px', color: isLight ? '#0f172a' : '#f8fafc' }}>
+                                Floor Templates
+                              </div>
+                              <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{templateList.length} CAD Layouts</div>
+                            </div>
+                          </div>
+                        </Col>
+
+                        <Col span={12}>
+                          <div
+                            onClick={() => handleSelectTab('live_people')}
+                            style={{
+                              border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                              borderRadius: 8,
+                              padding: '10px 12px',
+                              background: isLight ? '#ffffff' : '#0f172a',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              transition: 'all 0.2s',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 8,
+                                background: isLight ? '#e0f2fe' : 'rgba(2, 132, 199, 0.15)',
+                                color: '#0284c7',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 15,
+                              }}
+                            >
+                              <RadarChartOutlined />
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, lineHeight: '14px', color: isLight ? '#0f172a' : '#f8fafc' }}>
+                                Live Telemetry
+                              </div>
+                              <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{liveSessions.length} Online Now</div>
+                            </div>
+                          </div>
+                        </Col>
+                      </Row>
+                    </Card>
+
+                    {/* Card 2: Recent Customer Activity */}
+                    <Card
+                      title={
+                        <Space size={8}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }} />
+                          <span style={{ fontSize: 13, fontWeight: 700 }}>Recent Customer Activity</span>
+                        </Space>
+                      }
+                      style={{
+                        borderRadius: 12,
+                        border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                        background: isLight ? '#ffffff' : '#111827',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                      }}
+                      bodyStyle={{ padding: '8px 14px' }}
+                    >
+                      <List
+                        size="small"
+                        dataSource={cadActivityEvents.slice(0, 5)}
+                        renderItem={(item) => (
+                          <List.Item style={{ padding: '7px 0', borderBottom: isLight ? '1px solid #f1f5f9' : '1px solid #1e293b' }}>
+                            <List.Item.Meta
+                              avatar={
+                                <div
+                                  style={{
+                                    width: 26,
+                                    height: 26,
+                                    borderRadius: 6,
+                                    background: isLight ? '#f8fafc' : '#1e293b',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 13,
+                                  }}
+                                >
+                                  {item.icon || '✓'}
+                                </div>
+                              }
+                              title={
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: isLight ? '#0f172a' : '#f8fafc' }}>
+                                    {item.user}
+                                  </span>
+                                  <span style={{ fontSize: 9, color: '#94a3b8' }}>{item.time}</span>
+                                </div>
+                              }
+                              description={
+                                <div style={{ fontSize: 10, color: isLight ? '#64748b' : '#94a3b8', lineHeight: '14px' }}>
+                                  {item.action}
+                                </div>
+                              }
+                            />
+                          </List.Item>
+                        )}
+                      />
+                    </Card>
+                  </Col>
+                </Row>
+
+                {/* 4. Bottom Platform Status Strip */}
+                <Card
+                  size="small"
+                  style={{
+                    borderRadius: 12,
+                    border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                    background: isLight ? '#ffffff' : '#111827',
+                  }}
+                  bodyStyle={{ padding: '8px 16px' }}
+                >
+                  <Row justify="space-between" align="middle">
+                    <Space size={8}>
+                      <CheckCircleFilled style={{ color: '#10b981', fontSize: 14 }} />
+                      <Text strong style={{ fontSize: 11, color: isLight ? '#0f172a' : '#f8fafc' }}>
+                        Platform Health:
+                      </Text>
+                      <Text style={{ fontSize: 11, color: isLight ? '#64748b' : '#94a3b8' }}>
+                        All Core Services Online & Synchronized
+                      </Text>
+                    </Space>
+
+                    <Space size={16} wrap>
+                      <Space size={4}>
+                        <Badge status="success" />
+                        <Text style={{ fontSize: 11, color: '#64748b' }}>3D WebGL Engine</Text>
+                      </Space>
+                      <Space size={4}>
+                        <Badge status="success" />
+                        <Text style={{ fontSize: 11, color: '#64748b' }}>Cashfree & Razorpay Gateways</Text>
+                      </Space>
+                      <Space size={4}>
+                        <Badge status="processing" color="#4f46e5" />
+                        <Text style={{ fontSize: 11, color: '#64748b' }}>Supabase Cloud DB</Text>
+                      </Space>
+                      <Space size={4}>
+                        <Badge status="processing" color="#0284c7" />
+                        <Text style={{ fontSize: 11, color: '#64748b' }}>Email & SMS Gateways</Text>
+                      </Space>
+                    </Space>
+
+                    <Tag color="success" style={{ margin: 0, fontSize: 10, fontWeight: 700, borderRadius: 6, padding: '2px 8px' }}>
+                      99.98% Studio Uptime
+                    </Tag>
+                  </Row>
+                </Card>
+              </div>
+            ) : (
+              /* ======================================================= */
+              /* OTHER TABS (Dedicated Scrollable Area with Ant Design)  */
+              /* ======================================================= */
+              <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+                {/* TAB 2: USER DIRECTORY */}
+                {activeTab === 'users' && (
+                  <Card
+                    title={
+                      <Space>
+                        <TeamOutlined style={{ color: '#4f46e5' }} />
+                        <span style={{ fontWeight: 700 }}>Customer Directory (Customers & Admin)</span>
+                        <Tag color="blue">{allMergedUsers.length} total</Tag>
+                      </Space>
+                    }
+                    extra={
+                      <Space>
+                        <Button icon={<ReloadOutlined />} onClick={refreshUsersList} loading={isUsersLoading}>
+                          Refresh
+                        </Button>
+                        <Button type="primary" icon={<UserAddOutlined />} onClick={onOpenAddUserModal}>
+                          Add Customer
+                        </Button>
+                      </Space>
+                    }
+                  >
+                    <div style={{ marginBottom: 16 }}>
+                      <Row gutter={[12, 12]} justify="space-between">
+                        <Col span={10}>
+                          <Input
+                            prefix={<SearchOutlined />}
+                            placeholder="Search by name, email, or phone..."
+                            value={userSearchQuery}
+                            onChange={(e) => setUserSearchQuery(e.target.value)}
+                            allowClear
+                          />
+                        </Col>
+                        <Col span={8} style={{ textAlign: 'right' }}>
+                          <Select
+                            value={userFilterRole}
+                            onChange={(v) => setUserFilterRole(v)}
+                            style={{ width: 180 }}
+                            options={[
+                              { label: 'All Accounts', value: 'ALL' },
+                              { label: 'Superadmin (visualrendered.io)', value: 'ADMIN' },
+                              { label: 'Customers (Pay & Use)', value: 'CUSTOMER' },
+                              { label: 'Paid Pass Active', value: 'PAID' },
+                              { label: 'Unpaid / Blocked', value: 'UNPAID' },
+                            ]}
+                          />
+                        </Col>
+                      </Row>
+                    </div>
+
+                    <Table
+                      dataSource={filteredUsers}
+                      rowKey="id"
+                      columns={userDirectoryColumns}
+                      pagination={{ pageSize: 8, showTotal: (total) => `Total ${total} accounts` }}
+                    />
+                  </Card>
+                )}
+
+                {/* TAB 3: LIVE TELEMETRY */}
+                {activeTab === 'live_people' && (
+                  <Card
+                    title={
+                      <Space>
+                        <RadarChartOutlined style={{ color: '#10b981' }} />
+                        <span style={{ fontWeight: 700 }}>Live Telemetry & Active Sessions</span>
+                        <Tag color="success">{liveSessions.length} active</Tag>
+                      </Space>
+                    }
+                  >
+                    <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
+                      <Col span={6}>
+                        <Card size="small">
+                          <Statistic title="Connected CAD Users" value={liveSessions.length} prefix={<RadarChartOutlined />} />
+                        </Card>
+                      </Col>
+                      <Col span={6}>
+                        <Card size="small">
+                          <Statistic title="Average Frame Rate" value="60 FPS" prefix={<ThunderboltOutlined style={{ color: '#10b981' }} />} />
+                        </Card>
+                      </Col>
+                      <Col span={6}>
+                        <Card size="small">
+                          <Statistic title="Cluster Latency" value={`${simulatedPing} ms`} prefix={<LaptopOutlined style={{ color: '#4f46e5' }} />} />
+                        </Card>
+                      </Col>
+                      <Col span={6}>
+                        <Card size="small">
+                          <Statistic title="Active WebGL Orbit" value="100%" prefix={<CheckCircleOutlined style={{ color: '#10b981' }} />} />
+                        </Card>
+                      </Col>
+                    </Row>
+
+                    <Table
+                      dataSource={liveSessions}
+                      rowKey="id"
+                      columns={[
+                        {
+                          title: 'Active Designer',
+                          dataIndex: 'userName',
+                          key: 'userName',
+                          render: (name, s) => (
+                            <Space>
+                              <Avatar style={{ backgroundColor: '#10b981' }}>{name.charAt(0)}</Avatar>
+                              <div>
+                                <Text strong>{name}</Text>
+                                <div style={{ fontSize: 11, color: '#8c8c8c' }}>{s.email}</div>
+                              </div>
+                            </Space>
+                          ),
+                        },
+                        { title: 'Project', dataIndex: 'activeProject', key: 'activeProject' },
+                        { title: 'Room / Viewport', dataIndex: 'room', key: 'room' },
+                        { title: 'Current Action', dataIndex: 'currentAction', key: 'currentAction' },
+                        { title: 'Latency', dataIndex: 'latency', key: 'latency', render: (l) => <Tag color="green">{l}</Tag> },
+                        { title: 'Device', dataIndex: 'device', key: 'device' },
+                      ]}
+                      pagination={{ pageSize: 8 }}
+                    />
+                  </Card>
+                )}
+
+                {/* TAB 4: PASS SUBSCRIBERS */}
+                {activeTab === 'subscribers' && (
+                  <Card
+                    title={
+                      <Space>
+                        <CrownOutlined style={{ color: '#f59e0b' }} />
+                        <span style={{ fontWeight: 700 }}>Pass Subscribers & Pro Entitlements</span>
+                        <Tag color="gold">{subscribersList.length} Subscribers</Tag>
+                      </Space>
+                    }
+                  >
+                    <Table
+                      dataSource={subscribersList}
+                      rowKey="id"
+                      columns={[
+                        { title: 'Subscriber Name', dataIndex: 'name', key: 'name', render: (t) => <Text strong>{t}</Text> },
+                        { title: 'Email', dataIndex: 'email', key: 'email' },
+                        { title: 'Pass Plan', dataIndex: 'planName', key: 'planName', render: (p) => <Tag color="gold">{p}</Tag> },
+                        { title: 'Amount', dataIndex: 'amount', key: 'amount', render: (a) => <Text strong>{a}</Text> },
+                        {
+                          title: 'Remaining',
+                          dataIndex: 'daysLeft',
+                          key: 'daysLeft',
+                          render: (days, r) => (
+                            <Tag color={r.status === 'EXPIRING SOON' ? 'volcano' : 'success'}>
+                              {days} Days Left
+                            </Tag>
+                          ),
+                        },
+                        {
+                          title: 'Action',
+                          key: 'ext',
+                          render: () => (
+                            <Button size="small" type="primary" onClick={() => message.success('Granted 30-day extension')}>
+                              +30 Days Pass
+                            </Button>
+                          ),
+                        },
+                      ]}
+                      pagination={{ pageSize: 8 }}
+                    />
+                  </Card>
+                )}
+
+                {/* TAB 5: BILLING & DUAL GATEWAYS */}
+                {activeTab === 'payments' && (
+                  <Card title={<Space><DollarOutlined style={{ color: '#10b981' }} /><span style={{ fontWeight: 700 }}>Dual Gateway Settlement & Transactions</span></Space>}>
+                    <AdminPaymentsView currentUser={currentUser} theme={theme} />
+                  </Card>
+                )}
+
+                {/* TAB 6: EMAIL & SMS GATEWAY CONFIG */}
+                {(activeTab === 'email_config' || (activeTab as string) === 'sms_gateway') && (
+                  <Card title={<Space><MailOutlined style={{ color: '#0284c7' }} /><span style={{ fontWeight: 700 }}>Communications & OTP Gateways</span></Space>}>
+                    <Tabs
+                      defaultActiveKey="email"
+                      items={[
+                        {
+                          key: 'email',
+                          label: 'Resend & SMTP Delivery',
+                          children: (
+                            <div style={{ maxWidth: 640 }}>
+                              <Form layout="vertical">
+                                <Form.Item label="SMTP Server Host">
+                                  <Input value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} />
+                                </Form.Item>
+                                <Form.Item label="Port">
+                                  <Input value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} />
+                                </Form.Item>
+                                <Form.Item label="Test Dispatch Recipient">
+                                  <Input
+                                    value={testEmailRecipient}
+                                    onChange={(e) => setTestEmailRecipient(e.target.value)}
+                                  />
+                                </Form.Item>
+                                <Button
+                                  type="primary"
+                                  icon={<SendOutlined />}
+                                  loading={isSendingTestEmail}
+                                  onClick={handleSendTestEmail}
+                                >
+                                  Dispatch Test Email
+                                </Button>
+                              </Form>
+                            </div>
+                          ),
+                        },
+                        {
+                          key: 'sms',
+                          label: 'Fast2SMS & Mobile OTP',
+                          children: (
+                            <div style={{ maxWidth: 640 }}>
+                              <Form layout="vertical">
+                                <Form.Item label="Fast2SMS API Key">
+                                  <Input.Password value={smsApiKey} onChange={(e) => setSmsApiKey(e.target.value)} />
+                                </Form.Item>
+                                <Form.Item label="Test Mobile Number">
+                                  <Input value={testSmsPhone} onChange={(e) => setTestSmsPhone(e.target.value)} prefix="+91" />
+                                </Form.Item>
+                                <Button
+                                  type="primary"
+                                  icon={<MobileOutlined />}
+                                  loading={isSendingTestSms}
+                                  onClick={handleSendTestSms}
+                                >
+                                  Dispatch Test OTP SMS
+                                </Button>
+                              </Form>
+                            </div>
+                          ),
+                        },
+                      ]}
+                    />
+                  </Card>
+                )}
+
+                {/* TAB 7: 3D MODEL CATALOG */}
+                {activeTab === 'catalog' && (
+                  <Card
+                    title={
+                      <Space>
+                        <AppstoreOutlined style={{ color: '#8b5cf6' }} />
+                        <span style={{ fontWeight: 700 }}>3D Furniture & Asset Catalog</span>
+                        <Tag color="purple">{filteredCatalog.length} Models</Tag>
+                      </Space>
+                    }
+                    extra={
+                      <Button type="primary" icon={<PlusOutlined />} onClick={onOpenAddItemModal}>
+                        Add 3D Model
+                      </Button>
+                    }
+                  >
+                    <div style={{ marginBottom: 16 }}>
+                      <Row gutter={[12, 12]} justify="space-between">
+                        <Col span={8}>
+                          <Input
+                            prefix={<SearchOutlined />}
+                            placeholder="Search 3D catalog..."
+                            value={catalogSearch}
+                            onChange={(e) => setCatalogSearch(e.target.value)}
+                            allowClear
+                          />
+                        </Col>
+                        <Col span={16} style={{ textAlign: 'right' }}>
+                          <Radio.Group
+                            value={catalogCategory}
+                            onChange={(e) => setCatalogCategory(e.target.value)}
+                            buttonStyle="solid"
+                          >
+                            {categories.slice(0, 6).map((cat) => (
+                              <Radio.Button key={cat} value={cat}>
+                                {cat}
+                              </Radio.Button>
+                            ))}
+                          </Radio.Group>
+                        </Col>
+                      </Row>
+                    </div>
+
+                    <Row gutter={[12, 12]}>
+                      {filteredCatalog.slice(0, 18).map((item) => (
+                        <Col key={item.id} xs={12} sm={8} md={6} lg={4}>
+                          <Card
+                            hoverable
+                            size="small"
+                            cover={
+                              <div
+                                style={{
+                                  height: 110,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  background: isLight ? '#f8fafc' : '#0f172a',
+                                  overflow: 'hidden',
+                                }}
+                              >
+                                <CatalogThumbnail icon={item.icon} name={item.name} category={item.category} />
+                              </div>
+                            }
+                            actions={[
+                              <Tooltip key="preview" title="3D Preview">
+                                <EyeOutlined onClick={() => setPreviewCatalogItem(item)} />
+                              </Tooltip>,
+                              <Tooltip key="edit" title="Edit dimensions & details">
+                                <EditOutlined onClick={() => setEditingCatalogItem(item)} />
+                              </Tooltip>,
+                              <Popconfirm
+                                key="del"
+                                title="Delete model?"
+                                onConfirm={() => onDeleteCatalogItem(item.id)}
+                              >
+                                <DeleteOutlined style={{ color: '#ef4444' }} />
+                              </Popconfirm>,
+                            ]}
+                          >
+                            <Card.Meta
+                              title={<Text strong style={{ fontSize: 11 }}>{item.name}</Text>}
+                              description={<Tag style={{ fontSize: 9 }}>{item.category}</Tag>}
+                            />
+                          </Card>
+                        </Col>
+                      ))}
+                    </Row>
+                  </Card>
+                )}
+
+                {/* TAB 8: FLOOR TEMPLATES */}
+                {activeTab === 'floors' && (
+                  <Card
+                    title={
+                      <Space>
+                        <BuildOutlined style={{ color: '#4f46e5' }} />
+                        <span style={{ fontWeight: 700 }}>Architectural Floor Templates</span>
+                        <Tag color="cyan">{filteredTemplates.length} Templates in DB</Tag>
+                      </Space>
+                    }
+                    extra={
+                      <Button type="primary" icon={<PlusOutlined />} onClick={() => setShowSaveTemplateModal(true)}>
+                        Save Current as Template
+                      </Button>
+                    }
+                  >
+                    <div style={{ marginBottom: 16 }}>
+                      <Row gutter={[12, 12]} justify="space-between">
+                        <Col span={8}>
+                          <Input
+                            prefix={<SearchOutlined />}
+                            placeholder="Search design templates..."
+                            value={templateSearchQuery}
+                            onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                            allowClear
+                          />
+                        </Col>
+                        <Col span={16} style={{ textAlign: 'right' }}>
+                          <Radio.Group
+                            value={templateCategoryFilter}
+                            onChange={(e) => setTemplateCategoryFilter(e.target.value)}
+                            buttonStyle="solid"
+                          >
+                            {templateCategories.map((c) => (
+                              <Radio.Button key={c} value={c}>
+                                {c}
+                              </Radio.Button>
+                            ))}
+                          </Radio.Group>
+                        </Col>
+                      </Row>
+                    </div>
+
+                    <Row gutter={[16, 16]}>
+                      {filteredTemplates.map((tpl) => (
+                        <Col key={tpl.id} xs={24} sm={12} md={8} lg={6}>
+                          <Card
+                            hoverable
+                            style={{
+                              borderRadius: 12,
+                              overflow: 'hidden',
+                              border: isLight ? '1px solid #e2e8f0' : '1px solid #1f293d',
+                              background: isLight ? '#ffffff' : '#111827',
+                            }}
+                            bodyStyle={{ padding: '12px 14px' }}
+                            cover={
+                              <TemplateThumbnail
+                                template={tpl}
+                                isLight={isLight}
+                                onPreview3D={() => setPreviewingTemplate(tpl)}
+                              />
+                            }
+                            title={<Text strong style={{ fontSize: 13 }}>{tpl.name}</Text>}
+                            extra={<Tag color="purple" style={{ borderRadius: 6, fontWeight: 700, margin: 0, fontSize: 10 }}>{tpl.category || 'Apartment'}</Tag>}
+                            actions={[
+                              <Button
+                                key="preview"
+                                size="small"
+                                icon={<RotateLeftOutlined />}
+                                onClick={() => setPreviewingTemplate(tpl)}
+                                style={{ borderRadius: 6, fontSize: 11, fontWeight: 700 }}
+                              >
+                                3D Rotate
+                              </Button>,
+                              <Button
+                                key="open"
+                                type="primary"
+                                size="small"
+                                icon={<ArrowRightOutlined />}
+                                onClick={() => onOpenStudioWithTemplate(tpl.id)}
+                                style={{
+                                  borderRadius: 6,
+                                  fontSize: 11,
+                                  background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+                                }}
+                              >
+                                Open
+                              </Button>,
+                              <Popconfirm
+                                key="del"
+                                title="Delete this template?"
+                                onConfirm={() => handleDeleteTemplate(tpl.id, tpl.name)}
+                              >
+                                <Button key="delete" size="small" danger icon={<DeleteOutlined />} style={{ borderRadius: 6 }} />
+                              </Popconfirm>,
+                            ]}
+                          >
+                            <p style={{ fontSize: 11, color: isLight ? '#64748b' : '#94a3b8', minHeight: 32, marginBottom: 8, lineHeight: '15px' }}>
+                              {tpl.description}
+                            </p>
+                            <Row justify="space-between" align="middle">
+                              <Text type="secondary" style={{ fontSize: 11 }}>Floors: {tpl.floors || 1}</Text>
+                              <Tag color="blue" style={{ borderRadius: 6, fontWeight: 700, margin: 0 }}>
+                                {tpl.area || '45 m²'}
+                              </Tag>
+                            </Row>
+                          </Card>
+                        </Col>
+                      ))}
+                    </Row>
+                  </Card>
+                )}
+              </div>
+            )}
+          </Content>
+        </Layout>
+
+        {/* Modal: Save Template */}
+        <Modal
+          open={showSaveTemplateModal}
+          title="Save Current Plan as Database Template"
+          onCancel={() => setShowSaveTemplateModal(false)}
+          onOk={handleSaveCurrentPlanAsTemplate}
+          okText="Save to Supabase"
+          centered
+        >
+          <Form layout="vertical" style={{ marginTop: 16 }}>
+            <Form.Item label="Template Name" required>
+              <Input
+                placeholder="e.g. Modern Minimalist Duplex"
+                value={newTemplateName}
+                onChange={(e) => setNewTemplateName(e.target.value)}
+              />
+            </Form.Item>
+            <Form.Item label="Category">
+              <Select
+                value={newTemplateCategory}
+                onChange={(v) => setNewTemplateCategory(v)}
+                options={[
+                  { label: 'Apartment', value: 'Apartment' },
+                  { label: 'Villa', value: 'Villa' },
+                  { label: 'Penthouse', value: 'Penthouse' },
+                  { label: 'Studio', value: 'Studio' },
+                  { label: 'Office', value: 'Office' },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item label="Description">
+              <Input.TextArea
+                rows={3}
+                placeholder="Architectural design description..."
+                value={newTemplateDesc}
+                onChange={(e) => setNewTemplateDesc(e.target.value)}
+              />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* 3D Catalog Item Preview Modal */}
+        {previewCatalogItem && (
+          <Catalog3DPreviewModal
+            item={previewCatalogItem}
+            isOpen={!!previewCatalogItem}
+            onClose={() => setPreviewCatalogItem(null)}
+          />
+        )}
+
+        {/* 3D Floor Template Interactive Rotate & Preview Modal */}
+        {previewingTemplate && (
+          <Template3DPreviewModal
+            isOpen={!!previewingTemplate}
+            template={previewingTemplate}
+            onClose={() => setPreviewingTemplate(null)}
+            onOpenInStudio={(tplId) => {
+              setPreviewingTemplate(null);
+              onOpenStudioWithTemplate(tplId);
+            }}
+            theme={theme}
+          />
+        )}
+
+        {/* Edit Catalog Item Modal */}
+        {editingCatalogItem && (
+          <EditCatalogItemModal
+            item={editingCatalogItem}
+            isOpen={!!editingCatalogItem}
+            onClose={() => setEditingCatalogItem(null)}
+            onSave={(updated) => {
+              if (onUpdateCatalogItem) onUpdateCatalogItem(updated);
+              setEditingCatalogItem(null);
+            }}
+          />
+        )}
+      </Layout>
+    </ConfigProvider>
   );
 };

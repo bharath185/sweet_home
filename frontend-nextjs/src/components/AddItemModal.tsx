@@ -31,6 +31,7 @@ import {
 } from '../services/proceduralFurniture';
 import { registerCustomObjGeometry, loadObjGeometry } from '../services/objParser';
 import { loadGltfModel, registerLocalModelBlob, getLocalModelBlob } from '../services/modelLoader';
+import { createSafeWebGLRenderer, safelyDisposeRenderer } from '../services/webglHelper';
 
 interface AddItemModalProps {
   isOpen: boolean;
@@ -302,7 +303,11 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     const camera = new THREE.PerspectiveCamera(45, widthPx / heightPx, 0.1, 100);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = createSafeWebGLRenderer({ antialias: true, alpha: true });
+    if (!renderer) {
+      console.warn('Could not initialize preview WebGL context in AddItemModal.');
+      return;
+    }
     renderer.setSize(widthPx, heightPx);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
@@ -379,12 +384,9 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     return () => {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animId);
-      if (mount && renderer.domElement && mount.contains(renderer.domElement)) {
-        mount.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
+      safelyDisposeRenderer(renderer, mount);
     };
-  }, [isOpen, height]);
+  }, [isOpen]);
 
   // Update Preview Mesh on parameters change
   useEffect(() => {

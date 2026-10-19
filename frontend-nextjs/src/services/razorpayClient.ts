@@ -93,7 +93,7 @@ export async function initiateSubscriptionCheckout({
       key: orderData.keyId,
       amount: orderData.amount,
       currency: orderData.currency || 'INR',
-      name: 'SweetHome 3D Studio',
+      name: 'VisualRendered 3D Studio',
       description: `${orderData.planName} Plan Activation`,
       order_id: orderData.orderId,
       prefill: {

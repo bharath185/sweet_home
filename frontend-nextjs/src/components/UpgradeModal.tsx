@@ -260,7 +260,7 @@ export default function UpgradeModal({
             <div className="text-center max-w-2xl mx-auto mb-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-full text-xs font-semibold uppercase tracking-wider mb-3">
                 <Sparkles className="w-3.5 h-3.5" />
-                SweetHome 3D Studio Access
+                VisualRendered 3D Studio Access
               </div>
               <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
                 Select Your Access Pass

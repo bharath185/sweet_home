@@ -42,7 +42,7 @@
         const displayDiv = document.getElementById('cheerpj-display');
         cheerpjCreateDisplay(-1, -1, displayDiv);
 
-        status.innerText = "Loading SweetHome3D.jar and Classpath...";
+        status.innerText = "Loading DecoFrog 3D Engine and Classpath...";
         const classpath = [
           "/app/SweetHome3D.jar",
           "/app/lib/j3dcore.jar",
@@ -54,7 +54,7 @@
           "/app/lib/batik-svgpathparser-1.7.jar"
         ].join(":");
 
-        status.innerText = "Executing Sweet Home 3D Java Application...";
+        status.innerText = "Executing DecoFrog 3D Java Application...";
         setTimeout(() => {
           status.style.display = "none";
         }, 4000);

@@ -1,4 +1,5 @@
 import { HomePlan } from '../types/plan';
+import { referenceLuxuryPlan } from './referencePlans';
 
 // ============================================================================
 // 1. EMPTY HOME (Architectural Shell with Entrance Door & Daylight Windows)
@@ -247,7 +248,7 @@ export const oneBedroomAptPlan: HomePlan = {
 };
 
 // ============================================================================
-// 4. 2-BEDROOM APARTMENT (Exact Sweet Home 3D Reference Demo)
+// 4. 2-BEDROOM APARTMENT (Exact DecoFrog 3D Reference Demo)
 // ============================================================================
 export const twoBedroomAptPlan: HomePlan = {
   id: 'demo-2-bedroom-apt',
@@ -894,9 +895,9 @@ export const houseWithMezzaninePlan: HomePlan = {
 };
 
 // ============================================================================
-// The Complete 9 Sweet Home 3D Demos List
+// The Complete 10 DecoFrog 3D Demos List
 // ============================================================================
-export interface SweetHomeDemoItem {
+export interface DecoFrogDemoItem {
   id: string;
   name: string;
   badge?: string;
@@ -905,7 +906,17 @@ export interface SweetHomeDemoItem {
   plan: HomePlan;
 }
 
-export const SWEET_HOME_DEMOS: SweetHomeDemoItem[] = [
+export type SweetHomeDemoItem = DecoFrogDemoItem;
+
+export const DECOFROG_DEMOS: DecoFrogDemoItem[] = [
+  {
+    id: 'reference-luxury-villa',
+    name: "30' × 42' Premier Luxury Villa",
+    badge: '★ Reference 100% Match',
+    category: 'House',
+    previewType: 'topdown',
+    plan: referenceLuxuryPlan,
+  },
   {
     id: 'empty-home',
     name: 'Empty home',
@@ -970,3 +981,5 @@ export const SWEET_HOME_DEMOS: SweetHomeDemoItem[] = [
     plan: houseWithMezzaninePlan,
   },
 ];
+
+export const SWEET_HOME_DEMOS = DECOFROG_DEMOS;

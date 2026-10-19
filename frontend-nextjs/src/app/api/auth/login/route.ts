@@ -19,18 +19,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Check Superadmin shortcut
+    // 1. Check Superadmin shortcut (single superadmin: admin@visualrendered.io)
     if (
-      (cleanId.toLowerCase() === 'admin' || cleanId.toLowerCase() === 'admin@sweethome3d.io' || cleanId.toLowerCase() === 'admin@visualrendered.io') &&
+      (cleanId.toLowerCase() === 'admin' || cleanId.toLowerCase() === 'admin@visualrendered.io') &&
       cleanPass.toLowerCase() === 'admin'
     ) {
-      const email = cleanId.includes('@') ? cleanId.toLowerCase() : 'admin@sweethome3d.io';
+      const email = 'admin@visualrendered.io';
       let adminRecord = await findUserInDb(email);
       if (!adminRecord) {
         adminRecord = await upsertUserInDb({
-          id: 'admin_1',
+          id: 'admin_visual',
           email,
-          name: 'Studio Superadmin',
+          name: 'Superadmin',
           role: 'ADMIN',
           payment_status: 'paid',
           plan: 'yearly',

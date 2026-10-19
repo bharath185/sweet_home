@@ -128,7 +128,7 @@ export const FurnitureListPane: React.FC<FurnitureListPaneProps> = ({
                       ? 'bg-indigo-600 text-white shadow-2xs'
                       : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
                   }`}
-                  title="Sweet Home 3D Table View"
+                  title="Architectural Inventory View"
                 >
                   Table
                 </button>
@@ -179,7 +179,7 @@ export const FurnitureListPane: React.FC<FurnitureListPaneProps> = ({
               No placed items on this floor.
             </div>
           ) : viewMode === 'table' ? (
-            /* Sweet Home 3D Standard Tabular Spreadsheet */
+            /* DecoFrog 3D Standard Tabular Spreadsheet */
             <table className="w-full text-left text-[11px] border-collapse">
               <thead className={`sticky top-0 z-10 border-b text-[10px] uppercase font-bold tracking-wider ${
                 isDark ? 'bg-[#0f172a] text-slate-400 border-slate-800' : 'bg-slate-100 text-slate-600 border-slate-200'

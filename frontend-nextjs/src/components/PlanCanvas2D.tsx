@@ -49,6 +49,10 @@ interface PlanCanvas2DProps {
   onUpdateVisitorCamera?: (state: Partial<VisitorCameraState>) => void;
   isWalkMode?: boolean;
   onToggleWalkMode?: () => void;
+  activeToolModeProp?: ToolMode;
+  onToolModeChangeProp?: (mode: ToolMode) => void;
+  hideFloatingToolbar?: boolean;
+  showRulers?: boolean;
 }
 
 export type ToolMode =
@@ -97,12 +101,22 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   onUpdateVisitorCamera,
   isWalkMode = false,
   onToggleWalkMode,
+  activeToolModeProp,
+  onToolModeChangeProp,
+  hideFloatingToolbar = false,
+  showRulers = true,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const blueprintImgRef = useRef<HTMLImageElement | null>(null);
 
   // CAD Modes & Precision Controls
-  const [toolMode, setToolMode] = useState<ToolMode>('select');
+  const [internalToolMode, setInternalToolMode] = useState<ToolMode>('select');
+  const toolMode = activeToolModeProp ?? internalToolMode;
+  const setToolMode = (mode: ToolMode | ((prev: ToolMode) => ToolMode)) => {
+    const nextMode = typeof mode === 'function' ? mode(toolMode) : mode;
+    setInternalToolMode(nextMode);
+    if (onToolModeChangeProp) onToolModeChangeProp(nextMode);
+  };
   const [scale, setScale] = useState<number>(0.8);
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDraggingVisitor, setIsDraggingVisitor] = useState(false);
@@ -610,23 +624,28 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   const handleInsertDoor = (wall: Wall, clickPt: { x: number; y: number }) => {
     const dx = wall.xEnd - wall.xStart;
     const dy = wall.yEnd - wall.yStart;
+    const lenSq = dx * dx + dy * dy;
+    const t = lenSq > 0 ? Math.max(0.08, Math.min(0.92, ((clickPt.x - wall.xStart) * dx + (clickPt.y - wall.yStart) * dy) / lenSq)) : 0.5;
+    const snapX = Math.round(wall.xStart + t * dx);
+    const snapY = Math.round(wall.yStart + t * dy);
     const angle = Math.atan2(dy, dx);
+    const wallThick = wall.thickness || 15;
 
     const newDoor: FurnitureItem = {
       id: 'door_' + Date.now(),
-      catalogId: 'door',
+      catalogId: 'doorModernFlush',
       name: 'Architectural Swing Door',
       category: 'Doors & Windows',
-      x: Math.round(clickPt.x),
-      y: Math.round(clickPt.y),
+      x: snapX,
+      y: snapY,
       elevation: 0,
       angle: angle + (doorSwingFlipped ? Math.PI : 0),
       width: 90,
-      depth: 12,
+      depth: wallThick,
       height: 210,
-      model: '/models/door.obj',
+      model: 'procedural:door:{"type":"modern_flush"}',
       icon: '/models/door.png',
-      color: '#0284c7',
+      color: '#ffffff',
       floorLevel: activeFloor,
     };
 
@@ -643,23 +662,28 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   const handleInsertWindow = (wall: Wall, clickPt: { x: number; y: number }) => {
     const dx = wall.xEnd - wall.xStart;
     const dy = wall.yEnd - wall.yStart;
+    const lenSq = dx * dx + dy * dy;
+    const t = lenSq > 0 ? Math.max(0.08, Math.min(0.92, ((clickPt.x - wall.xStart) * dx + (clickPt.y - wall.yStart) * dy) / lenSq)) : 0.5;
+    const snapX = Math.round(wall.xStart + t * dx);
+    const snapY = Math.round(wall.yStart + t * dy);
     const angle = Math.atan2(dy, dx);
+    const wallThick = wall.thickness || 15;
 
     const newWindow: FurnitureItem = {
       id: 'window_' + Date.now(),
-      catalogId: 'window',
+      catalogId: 'windowModernSliding',
       name: 'Double-Glazed Casement Window',
       category: 'Doors & Windows',
-      x: Math.round(clickPt.x),
-      y: Math.round(clickPt.y),
+      x: snapX,
+      y: snapY,
       elevation: 90,
       angle: angle,
       width: 120,
-      depth: 15,
+      depth: wallThick,
       height: 120,
-      model: '/models/window.obj',
-      icon: '/models/window.png',
-      color: '#38bdf8',
+      model: 'procedural:window:{"type":"modern_sliding"}',
+      icon: '/models/window85x123.png',
+      color: '#ffffff',
       floorLevel: activeFloor,
     };
 
@@ -1105,8 +1129,20 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         // ==========================================
         if (layers.furniture || layers.structure) {
           curFurniture.forEach((item) => {
-            const isDoor = item.catalogId === 'door' || item.category === 'Doors & Windows';
-            if (!isDoor) {
+            const lowerCat = (item.category || '').toLowerCase();
+            const lowerName = (item.name || '').toLowerCase();
+            const lowerCatId = (item.catalogId || '').toLowerCase();
+            const isOpening =
+              item.catalogId === 'door' ||
+              item.catalogId === 'window' ||
+              lowerCat === 'doors & windows' ||
+              lowerCat.includes('door') ||
+              lowerCat.includes('window') ||
+              lowerName.includes('door') ||
+              lowerName.includes('window') ||
+              lowerCatId.includes('door') ||
+              lowerCatId.includes('window');
+            if (!isOpening) {
               const isSelected = selectedId === item.id || selectedIds.includes(item.id);
               const sp = planToScreen(item.x, item.y, flLevel);
               const w = item.width * scale;
@@ -1155,7 +1191,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
                 ctx.textAlign = 'center';
                 ctx.fillText('UP', 0, d / 2 - 18);
               } else {
-                // Architectural 2D Furniture Top-View Symbols (Sweet Home 3D Quality)
+                // Architectural 2D Furniture Top-View Symbols (DecoFrog 3D Quality)
                 const primaryColor = item.partColors?.top || item.partColors?.seat || item.partColors?.cushions || item.partColors?.body || item.partColors?.bedding || item.color || '#f8fafc';
                 const lowerName = (item.name || '').toLowerCase();
                 const cat = item.category || '';
@@ -1167,67 +1203,73 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
                 if (cat === 'Bedroom' || lowerName.includes('bed')) {
                   // BED SYMBOL: Headboard, pillows, duvet cover
+                  const bedCornerR = Math.max(1, Math.min(4, w / 4, d / 4));
                   ctx.beginPath();
-                  ctx.roundRect(-w / 2, -d / 2, w, d, 4);
+                  ctx.roundRect(-w / 2, -d / 2, w, d, bedCornerR);
                   ctx.fill();
                   ctx.stroke();
 
                   // Headboard bar at top
-                  const hbThickness = Math.max(4, d * 0.12);
+                  const hbThickness = Math.max(2, Math.min(d * 0.15, 12));
                   ctx.fillStyle = '#475569';
                   ctx.fillRect(-w / 2, -d / 2, w, hbThickness);
 
                   // Pillows
-                  const pillowW = w > 80 * scale ? (w - 16) / 2 : w - 12;
-                  const pillowH = Math.max(8, d * 0.22);
-                  const pillowY = -d / 2 + hbThickness + 3;
+                  const availW = Math.max(4, w - 8);
+                  const pillowW = w > 80 * scale ? Math.max(4, (availW - 4) / 2) : availW;
+                  const pillowH = Math.max(3, Math.min(14, d * 0.22));
+                  const pillowY = -d / 2 + hbThickness + 2;
                   ctx.fillStyle = '#ffffff';
                   ctx.strokeStyle = '#94a3b8';
                   ctx.lineWidth = 1;
 
-                  if (w > 80 * scale) {
+                  if (w > 80 * scale && pillowW >= 6) {
                     // Dual sleeping pillows
                     ctx.beginPath();
-                    ctx.roundRect(-w / 2 + 4, pillowY, pillowW, pillowH, 3);
-                    ctx.roundRect(w / 2 - pillowW - 4, pillowY, pillowW, pillowH, 3);
+                    ctx.roundRect(-w / 2 + 3, pillowY, pillowW, pillowH, Math.min(2, pillowW / 2, pillowH / 2));
+                    ctx.roundRect(w / 2 - pillowW - 3, pillowY, pillowW, pillowH, Math.min(2, pillowW / 2, pillowH / 2));
                     ctx.fill();
                     ctx.stroke();
-                  } else {
+                  } else if (pillowW >= 4) {
                     // Single pillow
                     ctx.beginPath();
-                    ctx.roundRect(-pillowW / 2, pillowY, pillowW, pillowH, 3);
+                    ctx.roundRect(-pillowW / 2, pillowY, pillowW, pillowH, Math.min(2, pillowW / 2, pillowH / 2));
                     ctx.fill();
                     ctx.stroke();
                   }
 
                   // Duvet fold line
-                  const duvetY = -d / 2 + hbThickness + pillowH + 8;
-                  ctx.strokeStyle = '#cbd5e1';
-                  ctx.lineWidth = 1.5;
-                  ctx.beginPath();
-                  ctx.moveTo(-w / 2 + 4, duvetY);
-                  ctx.lineTo(w / 2 - 4, duvetY);
-                  ctx.stroke();
+                  const duvetY = -d / 2 + hbThickness + pillowH + 6;
+                  if (duvetY < d / 2 - 2 && duvetY > -d / 2 + hbThickness) {
+                    ctx.strokeStyle = '#cbd5e1';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(-w / 2 + 3, duvetY);
+                    ctx.lineTo(w / 2 - 3, duvetY);
+                    ctx.stroke();
+                  }
 
                 } else if (lowerName.includes('sofa') || lowerName.includes('couch') || lowerName.includes('armchair')) {
                   // SOFA SYMBOL: Backrest bar, armrests, cushion split
+                  const sofaCornerR = Math.max(1, Math.min(6, w / 4, d / 4));
                   ctx.beginPath();
-                  ctx.roundRect(-w / 2, -d / 2, w, d, 6);
+                  ctx.roundRect(-w / 2, -d / 2, w, d, sofaCornerR);
                   ctx.fill();
                   ctx.stroke();
 
                   // Armrests left and right
-                  const armW = Math.max(6, w * 0.14);
+                  const armW = Math.max(2, Math.min(12, w * 0.15));
                   ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
                   ctx.fillRect(-w / 2, -d / 2, armW, d);
                   ctx.fillRect(w / 2 - armW, -d / 2, armW, d);
 
                   // Backrest along top
-                  const backH = Math.max(8, d * 0.22);
-                  ctx.fillRect(-w / 2 + armW, -d / 2, w - armW * 2, backH);
+                  const backH = Math.max(2, Math.min(14, d * 0.22));
+                  const backW = Math.max(1, w - armW * 2);
+                  ctx.fillRect(-w / 2 + armW, -d / 2, backW, backH);
 
                   // Cushion split line if wide
-                  if (w > 90 * scale) {
+                  if (w > 90 * scale && d > backH + 6) {
                     ctx.strokeStyle = '#94a3b8';
                     ctx.lineWidth = 1;
                     ctx.beginPath();
@@ -1238,82 +1280,107 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
                 } else if (lowerName.includes('bath') && !lowerName.includes('mat')) {
                   // BATHTUB SYMBOL: Outer casing + inner rounded basin + drain
+                  const bathCornerR = Math.max(1, Math.min(6, w / 4, d / 4));
                   ctx.beginPath();
-                  ctx.roundRect(-w / 2, -d / 2, w, d, 6);
+                  ctx.roundRect(-w / 2, -d / 2, w, d, bathCornerR);
                   ctx.fill();
                   ctx.stroke();
 
-                  // Inner basin
+                  // Inner basin with safe positive margins
+                  const inset = Math.max(2, Math.min(6, w * 0.1, d * 0.1));
+                  const innerW = Math.max(2, w - inset * 2);
+                  const innerD = Math.max(2, d - inset * 2);
+                  const innerR = Math.max(1, Math.min(innerW / 3, innerD / 3));
+
                   ctx.fillStyle = '#ffffff';
                   ctx.strokeStyle = '#94a3b8';
                   ctx.lineWidth = 1.2;
                   ctx.beginPath();
-                  ctx.roundRect(-w / 2 + 6, -d / 2 + 6, w - 12, d - 12, Math.min(w, d) / 3);
+                  ctx.roundRect(-innerW / 2, -innerD / 2, innerW, innerD, innerR);
                   ctx.fill();
                   ctx.stroke();
 
                   // Drain circle
-                  ctx.fillStyle = '#64748b';
-                  ctx.beginPath();
-                  ctx.arc(-w / 2 + 16, 0, 3, 0, Math.PI * 2);
-                  ctx.fill();
+                  if (innerW > 12) {
+                    ctx.fillStyle = '#64748b';
+                    ctx.beginPath();
+                    ctx.arc(-innerW / 2 + Math.min(10, innerW * 0.25), 0, Math.min(3, innerD * 0.2), 0, Math.PI * 2);
+                    ctx.fill();
+                  }
 
                 } else if (lowerName.includes('toilet') || lowerName.includes('bidet')) {
                   // TOILET SYMBOL: Water tank + oval bowl
-                  const tankH = Math.max(8, d * 0.28);
+                  const tankH = Math.max(3, Math.min(d * 0.35, 14));
                   ctx.fillStyle = '#e2e8f0';
                   ctx.beginPath();
-                  ctx.roundRect(-w / 2, -d / 2, w, tankH, 3);
+                  ctx.roundRect(-w / 2, -d / 2, w, tankH, Math.min(3, w / 4, tankH / 2));
                   ctx.fill();
                   ctx.stroke();
 
-                  // Bowl
+                  // Bowl (Safeguard ellipse radii: must strictly be >= 1 to prevent IndexSizeError)
+                  const bowlRadiusX = Math.max(1, (w / 2) - 2);
+                  const availableH = Math.max(2, d - tankH);
+                  const bowlRadiusY = Math.max(1, (availableH / 2) - 2);
+                  const bowlCenterY = -d / 2 + tankH + (availableH / 2);
+
                   ctx.fillStyle = '#ffffff';
                   ctx.beginPath();
-                  ctx.ellipse(0, -d / 2 + tankH + (d - tankH) / 2, w / 2 - 2, (d - tankH) / 2 - 2, 0, 0, Math.PI * 2);
+                  ctx.ellipse(0, bowlCenterY, bowlRadiusX, bowlRadiusY, 0, 0, Math.PI * 2);
                   ctx.fill();
                   ctx.stroke();
 
                 } else if (lowerName.includes('sink') || lowerName.includes('washbasin')) {
                   // SINK / WASHBASIN SYMBOL
+                  const sinkCornerR = Math.max(1, Math.min(4, w / 4, d / 4));
                   ctx.beginPath();
-                  ctx.roundRect(-w / 2, -d / 2, w, d, 4);
+                  ctx.roundRect(-w / 2, -d / 2, w, d, sinkCornerR);
                   ctx.fill();
                   ctx.stroke();
 
-                  // Inner basin
+                  // Inner basin with safe positive margins
+                  const inset = Math.max(2, Math.min(5, w * 0.15, d * 0.15));
+                  const innerW = Math.max(2, w - inset * 2);
+                  const innerD = Math.max(2, d - inset * 2);
+                  const innerR = Math.max(1, Math.min(innerW / 3, innerD / 3, 6));
+
                   ctx.fillStyle = '#ffffff';
                   ctx.strokeStyle = '#94a3b8';
                   ctx.beginPath();
-                  ctx.roundRect(-w / 2 + 5, -d / 2 + 5, w - 10, d - 10, 8);
+                  ctx.roundRect(-innerW / 2, -innerD / 2, innerW, innerD, innerR);
                   ctx.fill();
                   ctx.stroke();
 
                   // Faucet dot
-                  ctx.fillStyle = '#475569';
-                  ctx.beginPath();
-                  ctx.arc(0, -d / 2 + 10, 3, 0, Math.PI * 2);
-                  ctx.fill();
+                  if (d > 8) {
+                    ctx.fillStyle = '#475569';
+                    ctx.beginPath();
+                    ctx.arc(0, -d / 2 + Math.min(8, d * 0.25), Math.max(1, Math.min(2.5, d * 0.1)), 0, Math.PI * 2);
+                    ctx.fill();
+                  }
 
                 } else if (lowerName.includes('table') || lowerName.includes('desk')) {
                   // TABLE / DESK SYMBOL: Top slab with leg markers
+                  const tableCornerR = Math.max(1, Math.min(4, w / 4, d / 4));
                   ctx.beginPath();
-                  ctx.roundRect(-w / 2, -d / 2, w, d, 4);
+                  ctx.roundRect(-w / 2, -d / 2, w, d, tableCornerR);
                   ctx.fill();
                   ctx.stroke();
 
                   // 4 Corner leg markers
                   ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-                  const legSize = Math.max(3, Math.min(8, w * 0.08));
-                  ctx.fillRect(-w / 2 + 2, -d / 2 + 2, legSize, legSize);
-                  ctx.fillRect(w / 2 - legSize - 2, -d / 2 + 2, legSize, legSize);
-                  ctx.fillRect(-w / 2 + 2, d / 2 - legSize - 2, legSize, legSize);
-                  ctx.fillRect(w / 2 - legSize - 2, d / 2 - legSize - 2, legSize, legSize);
+                  const legSize = Math.max(1, Math.min(6, w * 0.15, d * 0.15));
+                  if (w > legSize * 2 + 2 && d > legSize * 2 + 2) {
+                    ctx.fillRect(-w / 2 + 2, -d / 2 + 2, legSize, legSize);
+                    ctx.fillRect(w / 2 - legSize - 2, -d / 2 + 2, legSize, legSize);
+                    ctx.fillRect(-w / 2 + 2, d / 2 - legSize - 2, legSize, legSize);
+                    ctx.fillRect(w / 2 - legSize - 2, d / 2 - legSize - 2, legSize, legSize);
+                  }
 
                 } else {
                   // General Cabinet, Wardrobe, or Decor
+                  const defaultCornerR = Math.max(1, Math.min(4, w / 4, d / 4));
                   ctx.beginPath();
-                  ctx.roundRect(-w / 2, -d / 2, w, d, 4);
+                  ctx.roundRect(-w / 2, -d / 2, w, d, defaultCornerR);
                   ctx.fill();
                   ctx.stroke();
 
@@ -1356,7 +1423,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         }
 
         // ==========================================
-        // [Z-INDEX LAYER 3]: Architectural Walls (Sweet Home 3D Hatched CAD Style)
+        // [Z-INDEX LAYER 3]: Architectural Walls (DecoFrog 3D Hatched CAD Style)
         // ==========================================
         if (layers.walls) {
           curWalls.forEach((wall) => {
@@ -1385,7 +1452,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             }
             ctx.fillRect(0, -thPx / 2, len, thPx);
 
-            // 2. Sweet Home 3D Architectural Diagonal Hatch Pattern
+            // 2. DecoFrog 3D Architectural Diagonal Hatch Pattern
             if (!wall.color || wall.color === '#334155' || isSelected) {
               ctx.save();
               ctx.beginPath();
@@ -1439,20 +1506,40 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         }
 
         // ==========================================
-        // [Z-INDEX LAYER 4]: Openings (Doors & Windows - Sweet Home 3D Parity)
+        // [Z-INDEX LAYER 4]: Openings (Doors & Windows - DecoFrog 3D Parity)
         // ==========================================
         if (layers.openings) {
           curFurniture.forEach((item) => {
-            const isOpening = item.catalogId === 'door' || item.catalogId === 'window' || item.category === 'Doors & Windows';
-            if (!isOpening) return;
+            const lowerName = (item.name || '').toLowerCase();
+            const lowerId = (item.id || '').toLowerCase();
+            const lowerCatId = (item.catalogId || '').toLowerCase();
+            const lowerCat = (item.category || '').toLowerCase();
+            const isWindow =
+              item.catalogId === 'window' ||
+              lowerCatId.includes('window') ||
+              lowerName.includes('window') ||
+              lowerId.includes('window');
+            const isDoor =
+              item.catalogId === 'door' ||
+              lowerCatId.includes('door') ||
+              lowerName.includes('door') ||
+              lowerId.includes('door') ||
+              lowerCat === 'doors & windows';
+
+            if (!isWindow && !isDoor) return;
 
             const isSelected = selectedId === item.id || selectedIds.includes(item.id);
             const sp = planToScreen(item.x, item.y, flLevel);
             const w = item.width * scale;
             const d = item.depth * scale;
-            const lowerName = (item.name || '').toLowerCase();
-            const lowerId = (item.id || '').toLowerCase();
-            const isWindow = item.catalogId === 'window' || lowerName.includes('window') || lowerId.includes('window');
+
+            // Match against host wall to ensure opening cuts completely through the wall
+            const matchingWall = floorWalls.find((wObj) => {
+              const dist = pointToSegmentDist(item.x, item.y, wObj.xStart, wObj.yStart, wObj.xEnd, wObj.yEnd);
+              return dist <= (wObj.thickness || 15) / 2 + 35;
+            });
+            const wallThick = (matchingWall?.thickness || 15) * scale;
+            const cutDepth = Math.max(d, wallThick);
 
             ctx.save();
             ctx.translate(sp.x, sp.y);
@@ -1460,40 +1547,45 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
             if (isWindow) {
               // ----------------------------------------------------
-              // WINDOW CAD SYMBOL: Double Casing + 3 Parallel Panes + Sill
-              // (Sweet Home 3D Standard Window Representation)
+              // WINDOW CAD SYMBOL: Wall Cutout + Projected Sill + Glass Glazing + Jamb Stops
+              // (DecoFrog 3D Standard Window Representation)
               // ----------------------------------------------------
-              // 1. Sill background
+              // 1. Sill background (cuts cleanly through wall hatching)
               ctx.fillStyle = '#ffffff';
-              ctx.fillRect(-w / 2, -d / 2, w, d);
+              ctx.fillRect(-w / 2, -cutDepth / 2, w, cutDepth);
 
-              // 2. Outer frame
-              ctx.strokeStyle = isSelected ? '#0284c7' : '#0f172a';
-              ctx.lineWidth = isSelected ? 2.5 : 1.5;
-              ctx.strokeRect(-w / 2, -d / 2, w, d);
+              // 2. Wall jamb stops (clean dark architectural line at opening sides)
+              ctx.fillStyle = isSelected ? '#0284c7' : '#1e293b';
+              ctx.fillRect(-w / 2, -cutDepth / 2, 2.5, cutDepth);
+              ctx.fillRect(w / 2 - 2.5, -cutDepth / 2, 2.5, cutDepth);
 
-              // 3. Left and right wall jamb stops
-              ctx.fillStyle = '#334155';
-              ctx.fillRect(-w / 2, -d / 2, Math.max(3, w * 0.05), d);
-              ctx.fillRect(w / 2 - Math.max(3, w * 0.05), -d / 2, Math.max(3, w * 0.05), d);
+              // 3. Projecting exterior sill (extends 3px beyond wall on one side)
+              ctx.fillStyle = '#f1f5f9';
+              ctx.strokeStyle = isSelected ? '#0284c7' : '#334155';
+              ctx.lineWidth = isSelected ? 2 : 1.2;
+              ctx.fillRect(-w / 2 - 2, cutDepth / 2 - 3, w + 4, 5);
+              ctx.strokeRect(-w / 2 - 2, cutDepth / 2 - 3, w + 4, 5);
 
-              // 4. Parallel glass pane lines
-              ctx.strokeStyle = isSelected ? '#38bdf8' : '#0284c7';
-              ctx.lineWidth = 1.4;
+              // 4. Glazing pane lines with light-blue glass tint
+              ctx.fillStyle = isSelected ? 'rgba(56, 189, 248, 0.25)' : 'rgba(186, 230, 253, 0.35)';
+              ctx.fillRect(-w / 2 + 2.5, -cutDepth * 0.25, w - 5, cutDepth * 0.5);
+
+              ctx.strokeStyle = isSelected ? '#0284c7' : '#0284c7';
+              ctx.lineWidth = 1.2;
               ctx.beginPath();
-              ctx.moveTo(-w / 2, -d * 0.2);
-              ctx.lineTo(w / 2, -d * 0.2);
-              ctx.moveTo(-w / 2, d * 0.2);
-              ctx.lineTo(w / 2, d * 0.2);
+              ctx.moveTo(-w / 2 + 2, -cutDepth * 0.2);
+              ctx.lineTo(w / 2 - 2, -cutDepth * 0.2);
+              ctx.moveTo(-w / 2 + 2, cutDepth * 0.2);
+              ctx.lineTo(w / 2 - 2, cutDepth * 0.2);
               ctx.stroke();
 
-              // Center mullion divide if wide window
-              if (w > 70 * scale) {
-                ctx.strokeStyle = '#0f172a';
+              // 5. Center mullion divide if wide window
+              if (w > 60 * scale) {
+                ctx.strokeStyle = isSelected ? '#0284c7' : '#0f172a';
                 ctx.lineWidth = 2;
                 ctx.beginPath();
-                ctx.moveTo(0, -d / 2);
-                ctx.lineTo(0, d / 2);
+                ctx.moveTo(0, -cutDepth / 2);
+                ctx.lineTo(0, cutDepth / 2);
                 ctx.stroke();
               }
             } else {
@@ -1968,6 +2060,126 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(`${selectedIds.length} Selected`, left + width - 40, top + height - 14);
+        }
+        ctx.restore();
+      }
+
+      // 13. Sweet Home 3D Architectural Rulers (Top & Left)
+      if (showRulers) {
+        const rulerThick = 20;
+
+        // Top ruler bar
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, width, rulerThick);
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, rulerThick);
+        ctx.lineTo(width, rulerThick);
+        ctx.stroke();
+
+        // Left ruler bar
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, rulerThick, height);
+        ctx.beginPath();
+        ctx.moveTo(rulerThick, 0);
+        ctx.lineTo(rulerThick, height);
+        ctx.stroke();
+
+        // Origin square
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(0, 0, rulerThick, rulerThick);
+        ctx.strokeRect(0, 0, rulerThick, rulerThick);
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'bold 8px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(unit, rulerThick / 2, rulerThick / 2);
+
+        let tickIntervalCm = 100;
+        if (scale * 100 < 35) tickIntervalCm = 200;
+        if (scale * 100 < 15) tickIntervalCm = 500;
+        if (scale * 100 > 90) tickIntervalCm = 50;
+        if (scale * 100 > 180) tickIntervalCm = 20;
+
+        const minPlan = screenToPlan(rulerThick, rulerThick, activeFloor, true);
+        const maxPlan = screenToPlan(width, height, activeFloor, true);
+        const minX = Math.floor(Math.min(minPlan.x, maxPlan.x) / tickIntervalCm) * tickIntervalCm;
+        const maxX = Math.ceil(Math.max(minPlan.x, maxPlan.x) / tickIntervalCm) * tickIntervalCm;
+        const minY = Math.floor(Math.min(minPlan.y, maxPlan.y) / tickIntervalCm) * tickIntervalCm;
+        const maxY = Math.ceil(Math.max(minPlan.y, maxPlan.y) / tickIntervalCm) * tickIntervalCm;
+
+        ctx.save();
+        ctx.fillStyle = '#64748b';
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1;
+        ctx.font = '9px system-ui';
+
+        // Horizontal Ruler (Top)
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        for (let tx = minX; tx <= maxX; tx += tickIntervalCm) {
+          const sx = planToScreen(tx, 0, activeFloor).x;
+          if (sx >= rulerThick && sx <= width) {
+            ctx.beginPath();
+            ctx.moveTo(sx, rulerThick - 7);
+            ctx.lineTo(sx, rulerThick);
+            ctx.stroke();
+
+            const midSx = planToScreen(tx + tickIntervalCm / 2, 0, activeFloor).x;
+            if (midSx >= rulerThick && midSx <= width) {
+              ctx.beginPath();
+              ctx.moveTo(midSx, rulerThick - 4);
+              ctx.lineTo(midSx, rulerThick);
+              ctx.stroke();
+            }
+
+            const valStr = unit === 'm' ? (tx / 100).toFixed(tx % 100 === 0 ? 0 : 1) : `${Math.round(tx)}`;
+            ctx.fillText(valStr, sx, 2);
+          }
+        }
+
+        // Vertical Ruler (Left)
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        for (let ty = minY; ty <= maxY; ty += tickIntervalCm) {
+          const sy = planToScreen(0, ty, activeFloor).y;
+          if (sy >= rulerThick && sy <= height) {
+            ctx.beginPath();
+            ctx.moveTo(rulerThick - 7, sy);
+            ctx.lineTo(rulerThick, sy);
+            ctx.stroke();
+
+            const midSy = planToScreen(0, ty + tickIntervalCm / 2, activeFloor).y;
+            if (midSy >= rulerThick && midSy <= height) {
+              ctx.beginPath();
+              ctx.moveTo(rulerThick - 4, midSy);
+              ctx.lineTo(rulerThick, midSy);
+              ctx.stroke();
+            }
+
+            const valStr = unit === 'm' ? (ty / 100).toFixed(ty % 100 === 0 ? 0 : 1) : `${Math.round(ty)}`;
+            ctx.fillText(valStr, rulerThick - 8, sy);
+          }
+        }
+
+        // Cursor guide lines on rulers
+        if (mouseCanvasPos) {
+          const curScr = planToScreen(mouseCanvasPos.x, mouseCanvasPos.y, activeFloor);
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 1.5;
+          if (curScr.x >= rulerThick && curScr.x <= width) {
+            ctx.beginPath();
+            ctx.moveTo(curScr.x, 0);
+            ctx.lineTo(curScr.x, rulerThick);
+            ctx.stroke();
+          }
+          if (curScr.y >= rulerThick && curScr.y <= height) {
+            ctx.beginPath();
+            ctx.moveTo(0, curScr.y);
+            ctx.lineTo(rulerThick, curScr.y);
+            ctx.stroke();
+          }
         }
         ctx.restore();
       }
@@ -2446,214 +2658,216 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
   return (
     <div className="relative w-full h-full bg-slate-100 flex flex-col overflow-hidden select-none">
-      {/* CAD Top Engineering Toolbar */}
-      <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between gap-2 pointer-events-none select-none">
-        {/* Left: Complete Architectural & CAD Drafting Tools */}
-        <div
-          className="flex items-center gap-1 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200/90 shadow-sm pointer-events-auto overflow-x-auto no-scrollbar scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden shrink-0 max-w-[calc(100%-110px)]"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
-          {/* Select Tool */}
-          <button
-            onClick={() => { setToolMode('select'); setWallStart(null); setDimStart(null); setRoomVertices([]); }}
-            className={'p-1.5 rounded-lg text-xs font-semibold transition ' + (toolMode === 'select' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
-            title="Select & Move (V)"
+      {/* CAD Top Engineering Toolbar (Hidden when controlled by Sweet Home 3D Ribbon) */}
+      {!hideFloatingToolbar && (
+        <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between gap-2 pointer-events-none select-none">
+          {/* Left: Complete Architectural & CAD Drafting Tools */}
+          <div
+            className="flex items-center gap-1 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200/90 shadow-sm pointer-events-auto overflow-x-auto no-scrollbar scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden shrink-0 max-w-[calc(100%-110px)]"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
-            <MousePointer className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Draw Wall */}
-          <button
-            onClick={() => { setToolMode('drawWall'); setWallStart(null); }}
-            className={'p-1.5 rounded-lg text-xs font-semibold transition ' + (toolMode === 'drawWall' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
-            title="Draw Multi-Segment Walls (W)"
-          >
-            <Square className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Room Polygon Builder */}
-          <button
-            onClick={() => { setToolMode('drawRoom'); setRoomVertices([]); }}
-            className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'drawRoom' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
-            title="Room Polygon Builder (R) - Click vertices & press Enter"
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline text-[11px]">Room</span>
-          </button>
-
-          {/* Door Inserter */}
-          <button
-            onClick={() => setToolMode('door')}
-            className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'door' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
-            title="Insert Architectural Door (Click on wall, press F to flip swing)"
-          >
-            <DoorOpen className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline text-[11px]">Door</span>
-          </button>
-
-          {/* Window Inserter */}
-          <button
-            onClick={() => setToolMode('window')}
-            className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'window' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
-            title="Insert Double-Glazed Window (Click on wall)"
-          >
-            <Split className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline text-[11px]">Window</span>
-          </button>
-
-          {/* Staircase Inserter */}
-          <button
-            onClick={() => setToolMode('stairs')}
-            className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'stairs' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
-            title="Insert Architectural Staircase Flight (Click anywhere on floor)"
-          >
-            <Compass className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline text-[11px]">Stairs</span>
-          </button>
-
-          <div className="w-[1px] h-4 bg-slate-200 mx-0.5 shrink-0" />
-
-          {/* Aligned Dimension */}
-          <button
-            onClick={() => { setToolMode('dimension'); setDimStart(null); }}
-            className={'p-1.5 rounded-lg text-xs font-semibold transition ' + (toolMode === 'dimension' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
-            title="Aligned Dimension Line (D)"
-          >
-            <Ruler className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Auto Dimension All Walls */}
-          <button
-            onClick={handleAutoDimension}
-            className={
-              'p-1.5 rounded-lg text-xs font-semibold transition border ' +
-              (floorDimensionLines.length > 0
-                ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
-                : 'text-sky-700 bg-sky-50 hover:bg-sky-100 border-sky-200')
-            }
-            title={
-              floorDimensionLines.length > 0
-                ? 'Clear Measurements (Click to remove dimensions)'
-                : 'Auto-Dimension All Exterior Walls'
-            }
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-          </button>
-
-          <div className="w-[1px] h-4 bg-slate-200 mx-0.5 shrink-0" />
-
-          {/* Ortho Lock Toggle */}
-          <button
-            onClick={() => setOrthoLock(!orthoLock)}
-            className={'px-2 py-1 rounded-lg text-[11px] font-bold transition border ' + (orthoLock ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50')}
-            title="Ortho Mode (Hold Shift or toggle for 90° angle lock)"
-          >
-            ORTHO
-          </button>
-
-          {/* Snap Toggle */}
-          <button
-            onClick={() => setSnapToGrid(!snapToGrid)}
-            className={'p-1.5 rounded-lg text-xs transition ' + (snapToGrid ? 'text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold' : 'text-slate-500 hover:bg-slate-100')}
-            title={'Grid Snap: ' + (snapToGrid ? 'ON' : 'OFF') + ' (' + GRID_SIZE_CM + 'cm)'}
-          >
-            <Magnet className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Pan Tool */}
-          <button
-            onClick={() => { setToolMode('pan'); onSelectId(null); }}
-            className={'p-1.5 rounded-lg text-xs transition ' + (toolMode === 'pan' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
-            title="Pan Hand Tool (H or Hold Space)"
-          >
-            <Hand className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Right: Layers & Professional Export Actions */}
-        <div className="flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-xl border border-slate-200/90 shadow-md pointer-events-auto">
-          {/* CAD Layers Dropdown */}
-          <div className="relative" ref={layersMenuRef}>
+            {/* Select Tool */}
             <button
-              onClick={() => setIsLayersMenuOpen(!isLayersMenuOpen)}
-              className={
-                'px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 border ' +
-                (isLayersMenuOpen
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                  : 'text-slate-700 bg-white hover:bg-slate-100 border-slate-200')
-              }
-              title="CAD Layer Visibility Manager"
+              onClick={() => { setToolMode('select'); setWallStart(null); setDimStart(null); setRoomVertices([]); }}
+              className={'p-1.5 rounded-lg text-xs font-semibold transition ' + (toolMode === 'select' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+              title="Select & Move (V)"
             >
-              <Layers className={'w-3.5 h-3.5 ' + (isLayersMenuOpen ? 'text-white' : 'text-indigo-600')} />
-              <span>Layers</span>
+              <MousePointer className="w-3.5 h-3.5" />
             </button>
 
-            {isLayersMenuOpen && (
-              <div className="absolute right-0 top-10 w-56 bg-white border border-slate-200 rounded-2xl shadow-2xl p-2.5 z-50 flex flex-col gap-1 text-xs select-none animate-in fade-in zoom-in-95 duration-100 ring-1 ring-black/10">
-                <div className="flex items-center justify-between px-2 py-1 border-b border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CAD Layers</span>
-                  <span className="text-[10px] font-semibold text-indigo-600">Visibility</span>
-                </div>
-                <div className="flex flex-col gap-0.5 mt-1">
-                  {Object.keys(layers).map((lKey) => {
-                    const k = lKey as keyof CADLayers;
-                    const isActive = layers[k];
-                    return (
-                      <button
-                        key={k}
-                        onClick={() => setLayers((prev) => ({ ...prev, [k]: !prev[k] }))}
-                        className={
-                          'flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ' +
-                          (isActive
-                            ? 'text-slate-800 hover:bg-slate-100'
-                            : 'text-slate-400 hover:bg-slate-50 bg-slate-50/50')
-                        }
-                      >
-                        <span className="capitalize">{k}</span>
-                        {isActive ? (
-                          <Eye className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        ) : (
-                          <EyeOff className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {/* Draw Wall */}
+            <button
+              onClick={() => { setToolMode('drawWall'); setWallStart(null); }}
+              className={'p-1.5 rounded-lg text-xs font-semibold transition ' + (toolMode === 'drawWall' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+              title="Draw Multi-Segment Walls (W)"
+            >
+              <Square className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Room Polygon Builder */}
+            <button
+              onClick={() => { setToolMode('drawRoom'); setRoomVertices([]); }}
+              className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'drawRoom' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+              title="Room Polygon Builder (R) - Click vertices & press Enter"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline text-[11px]">Room</span>
+            </button>
+
+            {/* Door Inserter */}
+            <button
+              onClick={() => setToolMode('door')}
+              className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'door' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+              title="Insert Architectural Door (Click on wall, press F to flip swing)"
+            >
+              <DoorOpen className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline text-[11px]">Door</span>
+            </button>
+
+            {/* Window Inserter */}
+            <button
+              onClick={() => setToolMode('window')}
+              className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'window' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+              title="Insert Double-Glazed Window (Click on wall)"
+            >
+              <Split className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline text-[11px]">Window</span>
+            </button>
+
+            {/* Staircase Inserter */}
+            <button
+              onClick={() => setToolMode('stairs')}
+              className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'stairs' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+              title="Insert Architectural Staircase Flight (Click anywhere on floor)"
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline text-[11px]">Stairs</span>
+            </button>
+
+            <div className="w-[1px] h-4 bg-slate-200 mx-0.5 shrink-0" />
+
+            {/* Aligned Dimension */}
+            <button
+              onClick={() => { setToolMode('dimension'); setDimStart(null); }}
+              className={'p-1.5 rounded-lg text-xs font-semibold transition ' + (toolMode === 'dimension' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+              title="Aligned Dimension Line (D)"
+            >
+              <Ruler className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Auto Dimension All Walls */}
+            <button
+              onClick={handleAutoDimension}
+              className={
+                'p-1.5 rounded-lg text-xs font-semibold transition border ' +
+                (floorDimensionLines.length > 0
+                  ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                  : 'text-sky-700 bg-sky-50 hover:bg-sky-100 border-sky-200')
+              }
+              title={
+                floorDimensionLines.length > 0
+                  ? 'Clear Measurements (Click to remove dimensions)'
+                  : 'Auto-Dimension All Exterior Walls'
+              }
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+            </button>
+
+            <div className="w-[1px] h-4 bg-slate-200 mx-0.5 shrink-0" />
+
+            {/* Ortho Lock Toggle */}
+            <button
+              onClick={() => setOrthoLock(!orthoLock)}
+              className={'px-2 py-1 rounded-lg text-[11px] font-bold transition border ' + (orthoLock ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50')}
+              title="Ortho Mode (Hold Shift or toggle for 90° angle lock)"
+            >
+              ORTHO
+            </button>
+
+            {/* Snap Toggle */}
+            <button
+              onClick={() => setSnapToGrid(!snapToGrid)}
+              className={'p-1.5 rounded-lg text-xs transition ' + (snapToGrid ? 'text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold' : 'text-slate-500 hover:bg-slate-100')}
+              title={'Grid Snap: ' + (snapToGrid ? 'ON' : 'OFF') + ' (' + GRID_SIZE_CM + 'cm)'}
+            >
+              <Magnet className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Pan Tool */}
+            <button
+              onClick={() => { setToolMode('pan'); onSelectId(null); }}
+              className={'p-1.5 rounded-lg text-xs transition ' + (toolMode === 'pan' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+              title="Pan Hand Tool (H or Hold Space)"
+            >
+              <Hand className="w-3.5 h-3.5" />
+            </button>
           </div>
 
-          {/* Export SVG */}
-          <button
-            onClick={handleExportSVG}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition flex items-center gap-1 shadow-2xs cursor-pointer"
-            title="Export Scalable Vector SVG CAD File"
-          >
-            <FileCode2 className="w-3.5 h-3.5 text-indigo-600" />
-            <span className="hidden sm:inline">SVG</span>
-          </button>
+          {/* Right: Layers & Professional Export Actions */}
+          <div className="flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-xl border border-slate-200/90 shadow-md pointer-events-auto">
+            {/* CAD Layers Dropdown */}
+            <div className="relative" ref={layersMenuRef}>
+              <button
+                onClick={() => setIsLayersMenuOpen(!isLayersMenuOpen)}
+                className={
+                  'px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 border ' +
+                  (isLayersMenuOpen
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                    : 'text-slate-700 bg-white hover:bg-slate-100 border-slate-200')
+                }
+                title="CAD Layer Visibility Manager"
+              >
+                <Layers className={'w-3.5 h-3.5 ' + (isLayersMenuOpen ? 'text-white' : 'text-indigo-600')} />
+                <span>Layers</span>
+              </button>
 
-          {/* Export 4K HD Blueprint */}
-          <button
-            onClick={handleExportHDImage}
-            className="px-3 py-1 rounded-lg text-xs font-bold bg-sky-600 text-white hover:bg-sky-500 transition flex items-center gap-1.5 shadow-sm cursor-pointer"
-            title="Export Ultra HD 4K Architectural Blueprint (PNG)"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export 4K HD</span>
-          </button>
+              {isLayersMenuOpen && (
+                <div className="absolute right-0 top-10 w-56 bg-white border border-slate-200 rounded-2xl shadow-2xl p-2.5 z-50 flex flex-col gap-1 text-xs select-none animate-in fade-in zoom-in-95 duration-100 ring-1 ring-black/10">
+                  <div className="flex items-center justify-between px-2 py-1 border-b border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CAD Layers</span>
+                    <span className="text-[10px] font-semibold text-indigo-600">Visibility</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5 mt-1">
+                    {Object.keys(layers).map((lKey) => {
+                      const k = lKey as keyof CADLayers;
+                      const isActive = layers[k];
+                      return (
+                        <button
+                          key={k}
+                          onClick={() => setLayers((prev) => ({ ...prev, [k]: !prev[k] }))}
+                          className={
+                            'flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ' +
+                            (isActive
+                              ? 'text-slate-800 hover:bg-slate-100'
+                              : 'text-slate-400 hover:bg-slate-50 bg-slate-50/50')
+                          }
+                        >
+                          <span className="capitalize">{k}</span>
+                          {isActive ? (
+                            <Eye className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          ) : (
+                            <EyeOff className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
 
-          {/* Print Architectural Sheet */}
-          <button
-            onClick={handlePrintPlanSheet}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            title="Print Architectural Blueprint Sheet"
-          >
-            <Printer className="w-3.5 h-3.5 text-slate-600" />
-            <span className="hidden sm:inline">Print</span>
-          </button>
+            {/* Export SVG */}
+            <button
+              onClick={handleExportSVG}
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition flex items-center gap-1 shadow-2xs cursor-pointer"
+              title="Export Scalable Vector SVG CAD File"
+            >
+              <FileCode2 className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden sm:inline">SVG</span>
+            </button>
+
+            {/* Export 4K HD Blueprint */}
+            <button
+              onClick={handleExportHDImage}
+              className="px-3 py-1 rounded-lg text-xs font-bold bg-sky-600 text-white hover:bg-sky-500 transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Export Ultra HD 4K Architectural Blueprint (PNG)"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export 4K HD</span>
+            </button>
+
+            {/* Print Architectural Sheet */}
+            <button
+              onClick={handlePrintPlanSheet}
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              title="Print Architectural Blueprint Sheet"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-600" />
+              <span className="hidden sm:inline">Print</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Walk View Floor Boundary Warning Toast */}
       {walkWarning && (

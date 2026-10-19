@@ -13,7 +13,7 @@ export class SweetHomeBridge {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `SweetHome3D_Plan_${Date.now()}.json`;
+    a.download = `DecoFrog3D_Plan_${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }

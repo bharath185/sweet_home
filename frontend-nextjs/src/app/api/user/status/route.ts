@@ -42,15 +42,15 @@ export async function GET(req: NextRequest) {
     const isAdmin =
       roleHeader === 'ADMIN' ||
       record?.role === 'ADMIN' ||
-      (email && (email.toLowerCase().includes('admin') || email.toLowerCase() === 'admin@sweethome3d.io'));
+      (email && (email.toLowerCase() === 'admin@visualrendered.io' || email.toLowerCase().includes('admin')));
 
     if (isAdmin) {
       return NextResponse.json({
         success: true,
         user: {
-          id: record?.id || userId || 'admin',
-          email: record?.email || email || 'admin@sweethome.io',
-          name: record?.name || 'Administrator',
+          id: record?.id || userId || 'admin_visual',
+          email: record?.email || email || 'admin@visualrendered.io',
+          name: record?.name || 'Superadmin',
           role: 'ADMIN',
           payment_status: 'paid',
           plan: 'yearly',

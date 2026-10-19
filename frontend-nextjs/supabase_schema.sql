@@ -1,4 +1,4 @@
--- SweetHome 3D Studio Supabase Database Schema
+-- DecoFrog 3D Studio Supabase Database Schema
 -- Run this in the Supabase Dashboard -> SQL Editor -> New Query -> Run
 
 -- 1. USERS TABLE
@@ -113,7 +113,7 @@ CREATE POLICY "Allow all access to app_config" ON public.app_config FOR ALL USIN
 -- 6. PRE-SEED SUPERADMIN USERS WITH LIFETIME ACCESS
 INSERT INTO public.users (id, email, name, role, payment_status, plan, expires_at)
 VALUES 
-  ('admin_1', 'admin@sweethome3d.io', 'Studio Superadmin', 'ADMIN', 'paid', 'yearly', '2099-12-31T23:59:59.999Z'),
+  ('admin_1', 'admin@decofrog3d.io', 'Studio Superadmin', 'ADMIN', 'paid', 'yearly', '2099-12-31T23:59:59.999Z'),
   ('admin_2', 'admin@visualrendered.io', 'Lead Architect Admin', 'ADMIN', 'paid', 'yearly', '2099-12-31T23:59:59.999Z')
 ON CONFLICT (email) DO UPDATE 
 SET role = 'ADMIN', payment_status = 'paid', expires_at = '2099-12-31T23:59:59.999Z';

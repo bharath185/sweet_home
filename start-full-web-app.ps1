@@ -1,5 +1,5 @@
 Write-Host "========================================================" -ForegroundColor Cyan
-Write-Host "Starting Sweet Home 3D Full Web Platform" -ForegroundColor Yellow
+Write-Host "Starting DecoFrog 3D Full Web Platform" -ForegroundColor Yellow
 Write-Host " [Backend]: Spring Boot REST API -> http://localhost:8090" -ForegroundColor Green
 Write-Host " [Frontend]: Next.js CAD Studio -> http://localhost:3000" -ForegroundColor Green
 Write-Host "========================================================" -ForegroundColor Cyan

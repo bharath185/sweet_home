@@ -38,6 +38,7 @@ import {
 import { HomePlan, FurnitureItem, Wall, Room, CatalogItem, VisitorCameraState } from '../types/plan';
 import { isTabletopItem, autoAttachToTabletop } from '../services/tabletopAttachment';
 import { loadObjModel } from '../services/objParser';
+import { createSafeWebGLRenderer, safelyDisposeRenderer } from '../services/webglHelper';
 import { loadGltfModel, getLocalModelBlob } from '../services/modelLoader';
 import { buildSubPartMaterials, mapObjGroupToPartId } from '../services/partMaterials';
 import { soundEngine } from '../services/soundEffects';
@@ -61,6 +62,10 @@ import {
   buildCookerMeshGroup,
   buildSanitaryMeshGroup,
   buildDeskMeshGroup,
+  buildProceduralMeshGroup,
+  buildApplianceMeshGroup,
+  buildVehicleMeshGroup,
+  buildGardenBotanicalMeshGroup,
 } from '../services/proceduralFurniture';
 import { getProceduralTexture } from '../services/pbrTextures';
 import { RenderStudioModal, RenderSnapshotSettings } from './RenderStudioModal';
@@ -100,22 +105,39 @@ function buildSmartArchetypeFallback(
   const lowerCatId = (item.catalogId || '').toLowerCase();
 
   try {
-    // 1. TV Unit & Television
+    // 1. Appliances: Washing Machine, Dryer, Refrigerator, AC, Microwave
+    if (lowerName.includes('washer') || lowerName.includes('washing') || lowerName.includes('laundry')) {
+      return buildApplianceMeshGroup('washing_machine', item.width, item.depth, item.height);
+    }
+    if (lowerName.includes('dryer')) {
+      return buildApplianceMeshGroup('dryer', item.width, item.depth, item.height);
+    }
+    if (lowerName.includes('refrigerator') || lowerName.includes('fridge')) {
+      return buildApplianceMeshGroup('refrigerator', item.width, item.depth, item.height);
+    }
+    if (lowerName.includes('air conditioner') || lowerName.includes('ac unit') || lowerName.includes('split ac')) {
+      return buildApplianceMeshGroup('air_conditioner', item.width, item.depth, item.height);
+    }
+    if (lowerName.includes('microwave')) {
+      return buildApplianceMeshGroup('microwave', item.width, item.depth, item.height);
+    }
+
+    // 2. TV Unit & Television
     if (lowerName.includes('tv') || lowerName.includes('television') || lowerCatId.includes('tv')) {
       return buildTvUnitMeshGroup(item.width, item.depth, item.height, itemMat, partMats);
     }
 
-    // 2. Wall Radiators / Heaters
+    // 3. Wall Radiators / Heaters
     if (lowerName.includes('radiator') || lowerName.includes('heater') || lowerCatId.includes('radiator')) {
       return buildRadiatorMeshGroup(item.width, item.depth, item.height);
     }
 
-    // 3. Stoves / Ranges / Cookers
+    // 4. Stoves / Ranges / Cookers
     if (lowerName.includes('cooker') || lowerName.includes('stove') || lowerName.includes('range') || lowerCatId.includes('cooker')) {
       return buildCookerMeshGroup(item.width, item.depth, item.height);
     }
 
-    // 4. Sanitary Fixtures (Bath, Toilet, Sink)
+    // 5. Sanitary Fixtures (Bath, Toilet, Sink)
     if (lowerName.includes('bath') && !lowerName.includes('mat')) {
       return buildSanitaryMeshGroup('bath', item.width, item.depth, item.height);
     }
@@ -126,7 +148,76 @@ function buildSmartArchetypeFallback(
       return buildSanitaryMeshGroup('sink', item.width, item.depth, item.height);
     }
 
-    // 5. Desks
+    // 6. Curtains, Mirrors, Rugs & Wall Art
+    if (lowerName.includes('curtain') || lowerName.includes('drape')) {
+      return buildInteriorDecorMeshGroup({ type: 'curtains', width: item.width, depth: item.depth, height: item.height }, itemMat);
+    }
+    if (lowerName.includes('rug') || lowerName.includes('carpet') || lowerName.includes('mat')) {
+      return buildInteriorDecorMeshGroup({ type: 'area_rug', width: item.width, depth: item.depth, height: item.height }, itemMat);
+    }
+    if (lowerName.includes('mirror')) {
+      return buildInteriorDecorMeshGroup({ type: lowerName.includes('vanity') ? 'vanity_mirror' : 'arched_mirror', width: item.width, depth: item.depth, height: item.height }, itemMat);
+    }
+    // High-Fidelity Botanical & Garden Architecture
+    if (lowerName.includes('palm')) {
+      return buildGardenBotanicalMeshGroup({ type: 'palm', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('cypress') || lowerName.includes('pine') || lowerName.includes('conifer')) {
+      return buildGardenBotanicalMeshGroup({ type: 'cypress', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('hedge')) {
+      return buildGardenBotanicalMeshGroup({ type: 'hedge', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('topiary')) {
+      return buildGardenBotanicalMeshGroup({ type: 'topiary', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('bush') || lowerName.includes('hydrangea') || lowerName.includes('rose') || lowerName.includes('lavender') || lowerName.includes('flower')) {
+      return buildGardenBotanicalMeshGroup({ type: 'flowering_bush', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('fountain')) {
+      return buildGardenBotanicalMeshGroup({ type: 'fountain', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('planter') || lowerName.includes('garden bed') || lowerName.includes('trough')) {
+      return buildGardenBotanicalMeshGroup({ type: 'planter_box', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('snake plant')) {
+      return buildGardenBotanicalMeshGroup({ type: 'potted_snake', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('fig')) {
+      return buildGardenBotanicalMeshGroup({ type: 'potted_fig', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('willow')) {
+      return buildGardenBotanicalMeshGroup({ type: 'weeping_willow', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('bamboo')) {
+      return buildGardenBotanicalMeshGroup({ type: 'bamboo', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('bonsai')) {
+      return buildGardenBotanicalMeshGroup({ type: 'bonsai', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('cactus') || lowerName.includes('saguaro') || lowerName.includes('succulent')) {
+      return buildGardenBotanicalMeshGroup({ type: 'cactus', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('banana')) {
+      return buildGardenBotanicalMeshGroup({ type: 'banana_palm', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('pergola') || lowerName.includes('gazebo') || lowerName.includes('arbor')) {
+      return buildGardenBotanicalMeshGroup({ type: 'pergola', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('fire pit') || lowerName.includes('firepit') || lowerName.includes('fire bowl')) {
+      return buildGardenBotanicalMeshGroup({ type: 'fire_pit', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('tree') || lowerName.includes('maple') || lowerName.includes('oak') || lowerName.includes('birch')) {
+      return buildGardenBotanicalMeshGroup({ type: 'deciduous_tree', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('plant') || lowerCat.includes('plant') || lowerCat.includes('garden') || lowerCat.includes('outdoor')) {
+      return buildGardenBotanicalMeshGroup({ type: 'potted_monstera', width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
+    }
+    if (lowerName.includes('painting') || lowerName.includes('canvas') || lowerName.includes('wall art')) {
+      return buildInteriorDecorMeshGroup({ type: 'wall_art', width: item.width, depth: item.depth, height: item.height }, itemMat);
+    }
+
+    // 7. Desks
     if (lowerName.includes('desk') || lowerCatId.includes('desk')) {
       return buildDeskMeshGroup(item.width, item.depth, item.height, itemMat);
     }
@@ -203,16 +294,32 @@ function buildSmartArchetypeFallback(
     }
 
     // 10. Cabinets & Storage
-    if (lowerCat === 'kitchen' || lowerName.includes('cabinet') || lowerName.includes('wardrobe') || lowerCatId.includes('cabinet') || lowerName.includes('dresser')) {
+    if (lowerCat === 'kitchen' || lowerName.includes('cabinet') || lowerName.includes('wardrobe') || lowerCatId.includes('cabinet') || lowerName.includes('dresser') || lowerName.includes('pantry') || lowerName.includes('credenza')) {
+      const isArched = lowerName.includes('arch') || lowerCatId.includes('arch');
+      const isGlass = lowerName.includes('glass') || lowerCatId.includes('glass');
+      const isNiche = lowerName.includes('niche') || lowerCatId.includes('niche');
+      const isWall = item.elevation && item.elevation > 100 || lowerName.includes('wall') || lowerCatId.includes('wall');
+      const isPantry = lowerName.includes('pantry') || item.height > 160;
+
+      let doorType: 'open_shelf' | 'solid_doors' | 'glass_doors' | 'drawers' | 'arched_panel' | 'arched_glass' | 'arched_niche' = 'solid_doors';
+      if (isArched) {
+        doorType = isNiche ? 'arched_niche' : (isGlass ? 'arched_glass' : 'arched_panel');
+      } else if (isGlass) {
+        doorType = 'glass_doors';
+      }
+
       return buildCabinetMeshGroup(
         {
-          columns: item.width > 90 ? 2 : 1,
-          rows: 2,
-          doorType: 'solid_doors',
+          columns: item.width > 110 ? (item.width > 160 ? 3 : 2) : 1,
+          rows: isPantry ? 4 : (isWall ? 2 : 2),
+          doorType,
           width: item.width,
           depth: item.depth,
           height: item.height,
-          hasLegs: true,
+          hasLegs: !isWall && !isPantry && !lowerName.includes('base') && !lowerName.includes('island'),
+          countertop: !isWall && !isPantry,
+          underLighting: isWall,
+          hasCrown: isPantry || isWall,
         },
         itemMat,
         partMats
@@ -288,6 +395,29 @@ function buildSmartArchetypeFallback(
         itemMat,
         partMats
       );
+    }
+
+    // 14. Vehicles & Automobiles (Sedan, SUV, Sports Car, EV, Pickup Truck, Scooter, Bicycle)
+    if (lowerName.includes('bicycle') || lowerName.includes('bike') || lowerCatId.includes('bicycle') || lowerCatId.includes('bike')) {
+      return buildVehicleMeshGroup({ type: 'bicycle', width: item.width, depth: item.depth, height: item.height, color: item.color }, itemMat, partMats);
+    }
+    if (lowerName.includes('vespa') || lowerName.includes('scooter') || lowerName.includes('moped')) {
+      return buildVehicleMeshGroup({ type: 'vespa', width: item.width, depth: item.depth, height: item.height, color: item.color }, itemMat, partMats);
+    }
+    if (lowerName.includes('truck') || lowerName.includes('pickup')) {
+      return buildVehicleMeshGroup({ type: 'truck', width: item.width, depth: item.depth, height: item.height, color: item.color }, itemMat, partMats);
+    }
+    if (lowerName.includes('suv') || lowerName.includes('jeep') || lowerName.includes('crossover')) {
+      return buildVehicleMeshGroup({ type: 'suv', width: item.width, depth: item.depth, height: item.height, color: item.color }, itemMat, partMats);
+    }
+    if (lowerName.includes('sport') || lowerName.includes('coupe') || lowerName.includes('supercar') || lowerName.includes('gt')) {
+      return buildVehicleMeshGroup({ type: 'sports', width: item.width, depth: item.depth, height: item.height, color: item.color }, itemMat, partMats);
+    }
+    if (lowerName.includes('ev') || lowerName.includes('electric') || lowerName.includes('tesla')) {
+      return buildVehicleMeshGroup({ type: 'ev', width: item.width, depth: item.depth, height: item.height, color: item.color }, itemMat, partMats);
+    }
+    if (lowerCat.includes('vehicle') || lowerCat.includes('garage') || lowerName.includes('car') || lowerCatId.includes('car') || lowerName.includes('sedan') || lowerName.includes('vehicle')) {
+      return buildVehicleMeshGroup({ type: 'sedan', width: item.width, depth: item.depth, height: item.height, color: item.color }, itemMat, partMats);
     }
   } catch (e) {}
 
@@ -401,6 +531,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
   // Top View / Ceiling Toggle: false = removed top (interior cutaway view), true = keep top (enclosed ceiling)
   const [showCeiling, setShowCeiling] = useState<boolean>(false);
+  const [hasWebglError, setHasWebglError] = useState<boolean>(false);
   // Sync external 2D visitor camera position into 3D
   useEffect(() => {
     if (visitorCameraProp && cameraMode === 'visitor') {
@@ -522,12 +653,20 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const camera = new THREE.PerspectiveCamera(55, width / height, 0.02, 1000);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({
+    const renderer = createSafeWebGLRenderer({
       antialias: true,
       alpha: true,
       powerPreference: 'high-performance',
       preserveDrawingBuffer: true,
     });
+
+    if (!renderer) {
+      console.warn('Could not initialize WebGL context in Viewport3D.');
+      setHasWebglError(true);
+      return;
+    }
+    setHasWebglError(false);
+
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
@@ -537,11 +676,15 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     rendererRef.current = renderer;
 
     // Photorealistic PBR Image-Based Lighting & Environmental Reflections
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    pmremGenerator.compileEquirectangularShader();
-    const envScene = new RoomEnvironment();
-    const envMap = pmremGenerator.fromScene(envScene, 0.04);
-    scene.environment = envMap.texture;
+    try {
+      const pmremGenerator = new THREE.PMREMGenerator(renderer);
+      pmremGenerator.compileEquirectangularShader();
+      const envScene = new RoomEnvironment();
+      const envMap = pmremGenerator.fromScene(envScene, 0.04);
+      scene.environment = envMap.texture;
+    } catch (envErr) {
+      console.warn('Could not compile PMREM env map:', envErr);
+    }
 
     mount.innerHTML = '';
     mount.appendChild(renderer.domElement);
@@ -1145,10 +1288,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
-      if (mount && renderer.domElement && mount.contains(renderer.domElement)) {
-        mount.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
+      safelyDisposeRenderer(renderer, mount);
     };
   }, []);
 
@@ -1685,7 +1825,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         group.add(roomLight);
       }
 
-      // --- Sweet Home 3D Architectural Ceiling (Top View Option: Removed vs Kept) ---
+      // --- DecoFrog 3D Architectural Ceiling (Top View Option: Removed vs Kept) ---
       const shouldRenderCeiling = showCeiling || cameraMode === 'visitor';
       if (shouldRenderCeiling) {
         const ceilShape = new THREE.Shape();
@@ -1760,7 +1900,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       });
 
       const wallCapMat = new THREE.MeshStandardMaterial({
-        color: 0x181a1f, // Sweet Home 3D Signature Dark Charcoal Top Rim
+        color: 0x181a1f, // DecoFrog 3D Signature Dark Charcoal Top Rim
         roughness: 0.65,
         metalness: 0.15,
       });
@@ -1955,11 +2095,62 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         effectiveElevation = Math.max(120, floorHeightCm - (item.height || 50));
       }
 
+      let itemPosX = item.x * CM;
+      let itemPosZ = item.y * CM;
+      let itemRotY = -(item.angle || 0);
+
+      const lowerName = (item.name || '').toLowerCase();
+      const lowerCat = (item.category || '').toLowerCase();
+      const lowerCatId = (item.catalogId || '').toLowerCase();
+      const isOpening =
+        lowerCat === 'doors & windows' ||
+        lowerCat.includes('door') ||
+        lowerCat.includes('window') ||
+        lowerName.includes('door') ||
+        lowerName.includes('window') ||
+        lowerCatId.includes('door') ||
+        lowerCatId.includes('window');
+
+      if (isOpening) {
+        // Snap opening position onto nearest wall centerline and align angle
+        const hostWall = plan.walls.find((w) => {
+          if ((w.floorLevel ?? 0) !== (item.floorLevel ?? 0)) return false;
+          const wx1 = w.xStart * CM;
+          const wz1 = w.yStart * CM;
+          const wx2 = w.xEnd * CM;
+          const wz2 = w.yEnd * CM;
+          const wdx = wx2 - wx1;
+          const wdz = wz2 - wz1;
+          const wLen = Math.hypot(wdx, wdz);
+          if (wLen < 0.001) return false;
+          const dist = Math.abs(wdx * (wz1 - itemPosZ) - (wx1 - itemPosX) * wdz) / wLen;
+          if (dist > 0.45) return false;
+          const dot = ((itemPosX - wx1) * wdx + (itemPosZ - wz1) * wdz) / (wLen * wLen);
+          return dot >= -0.05 && dot <= 1.05;
+        });
+
+        if (hostWall) {
+          const wx1 = hostWall.xStart * CM;
+          const wz1 = hostWall.yStart * CM;
+          const wx2 = hostWall.xEnd * CM;
+          const wz2 = hostWall.yEnd * CM;
+          const wdx = wx2 - wx1;
+          const wdz = wz2 - wz1;
+          const wLen = Math.hypot(wdx, wdz);
+          const dot = ((itemPosX - wx1) * wdx + (itemPosZ - wz1) * wdz) / (wLen * wLen);
+          itemPosX = wx1 + Math.max(0, Math.min(1, dot)) * wdx;
+          itemPosZ = wz1 + Math.max(0, Math.min(1, dot)) * wdz;
+          const wallAngle = Math.atan2(wdz, wdx);
+          const isFlipped = Math.abs(Math.abs((item.angle || 0) - wallAngle) - Math.PI) < 0.5;
+          itemRotY = -(wallAngle + (isFlipped ? Math.PI : 0));
+        }
+      }
+
       const itemGroup = new THREE.Group();
       itemGroup.position.set(
-        item.x * CM + offset.x,
+        itemPosX + offset.x,
         offset.y + effectiveElevation * CM,
-        item.y * CM + offset.z
+        itemPosZ + offset.z
       );
 
       // If ceiling fixture and hanging with gap to ceiling, render suspension wire & ceiling mount plate
@@ -1980,7 +2171,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           itemGroup.add(canopyMesh);
         }
       }
-      itemGroup.rotation.y = -(item.angle || 0);
+      itemGroup.rotation.y = itemRotY;
       itemGroup.userData = { id: item.id, type: 'furniture', floorLevel: item.floorLevel ?? 0, isColliding };
 
       let itemMat: THREE.MeshStandardMaterial;
@@ -2040,33 +2231,18 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           const rawParams = parts.slice(2).join(':');
           const parsed = rawParams ? JSON.parse(rawParams) : {};
 
-          let procGroup: THREE.Group | null = null;
-          if (pType === 'table') {
-            procGroup = buildTableMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
-          } else if (pType === 'chair') {
-            procGroup = buildChairMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
-          } else if (pType === 'sofa') {
-            procGroup = buildSofaMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
-          } else if (pType === 'cabinet') {
-            procGroup = buildCabinetMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
-          } else if (pType === 'bed') {
-            procGroup = buildBedMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
-          } else if (pType === 'lamp') {
-            procGroup = buildLampMeshGroup({ ...parsed, shadeWidth: item.width, shadeHeight: item.depth, totalHeight: item.height }, itemMat, partMats);
-          } else if (pType === 'shelf') {
-            procGroup = buildShelfMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
-          } else if (pType === 'door') {
-            procGroup = buildDoorMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat, partMats);
-          } else if (pType === 'window') {
-            procGroup = buildWindowMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
-          } else if (pType === 'wallDesign') {
-            procGroup = buildWallDesignMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
-          } else if (pType === 'decor') {
-            procGroup = buildInteriorDecorMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: item.height }, itemMat);
-          } else if (pType === 'stairs' || pType === 'staircase') {
-            procGroup = buildStairsMeshGroup({ ...parsed, width: item.width, depth: item.depth, height: effectiveHeight }, itemMat, partMats);
-          } else if (pType === 'primitives' && parsed.primitives) {
-            procGroup = buildCustomPrimitivesMeshGroup(parsed.primitives, itemMat);
+          let procGroup: THREE.Group | null = buildProceduralMeshGroup(
+            pType,
+            parsed,
+            item.width,
+            item.depth,
+            effectiveHeight,
+            itemMat,
+            partMats
+          );
+
+          if (!procGroup) {
+            procGroup = buildSmartArchetypeFallback(itemWithEffectiveHeight, itemMat, partMats);
           }
 
           if (procGroup) {
@@ -2079,10 +2255,9 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             itemGroup.add(mesh);
           }
         } catch (e) {
-          const geom = new THREE.BoxGeometry(item.width * CM, effectiveHeight * CM, item.depth * CM);
-          const mesh = new THREE.Mesh(geom, itemMat);
-          mesh.position.y = (effectiveHeight * CM) / 2;
-          itemGroup.add(mesh);
+          const fallback = buildSmartArchetypeFallback(itemWithEffectiveHeight, itemMat, partMats);
+          fallback.userData = { isColliding };
+          itemGroup.add(fallback);
         }
       } else if (item.model && (item.model.endsWith('.glb') || item.model.endsWith('.gltf') || item.model.startsWith('blob_model:') || item.model.includes('.glb?') || item.model.includes('.gltf?'))) {
         const tempFallback = buildSmartArchetypeFallback(itemWithEffectiveHeight, itemMat, partMats);
@@ -2111,6 +2286,19 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         itemGroup.add(tempFallback);
 
         loadObjModel(item.model).then((objModel) => {
+          // If model failed or returned single-box fallback and item is a window or door, retain the rich procedural mesh
+          const isOpeningObj =
+            (item.category || '').toLowerCase().includes('window') ||
+            (item.name || '').toLowerCase().includes('window') ||
+            (item.catalogId || '').toLowerCase().includes('window') ||
+            (item.category || '').toLowerCase().includes('door') ||
+            (item.name || '').toLowerCase().includes('door') ||
+            (item.catalogId || '').toLowerCase().includes('door');
+
+          if (isOpeningObj && objModel.parts.length === 1 && objModel.parts[0].groupName === 'default') {
+            return;
+          }
+
           const targetW = item.width * CM;
           const targetD = item.depth * CM;
           const targetH = effectiveHeight * CM;
@@ -2814,7 +3002,6 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   }, [targetRoomToFocus]);
 
   const handleTeleportToRoom = (room: Room) => {
-    setCameraMode('visitor');
     onSelectId(null);
     if (room.floorLevel !== undefined && onFloorChange && room.floorLevel !== activeFloor) {
       onFloorChange(room.floorLevel);
@@ -2825,19 +3012,25 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       avgX = (room.points.reduce((acc, p) => acc + p.x, 0) / room.points.length) * 0.01;
       avgZ = (room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length) * 0.01;
     }
-    visitorPosRef.current.set(avgX, 1.6, avgZ);
-    visitorYawRef.current = 0;
-    visitorPitchRef.current = 0;
-    lastSentPosRef.current = { x: Math.round(avgX * 100), y: Math.round(avgZ * 100), yaw: 0 };
 
-    if (onVisitorCameraChange) {
-      onVisitorCameraChange({
-        x: Math.round(avgX * 100),
-        y: Math.round(avgZ * 100),
-        yaw: 0,
-        elevation: 160,
-        floorLevel: room.floorLevel ?? activeFloor,
-      });
+    if (cameraMode === 'visitor') {
+      visitorPosRef.current.set(avgX, 1.6, avgZ);
+      visitorYawRef.current = 0;
+      visitorPitchRef.current = 0;
+      lastSentPosRef.current = { x: Math.round(avgX * 100), y: Math.round(avgZ * 100), yaw: 0 };
+
+      if (onVisitorCameraChange) {
+        onVisitorCameraChange({
+          x: Math.round(avgX * 100),
+          y: Math.round(avgZ * 100),
+          yaw: 0,
+          elevation: 160,
+          floorLevel: room.floorLevel ?? activeFloor,
+        });
+      }
+    } else {
+      // In Orbit / Aerial mode, center camera view smoothly on the room
+      targetRef.current.set(avgX, 0.8, avgZ);
     }
   };
 
@@ -3070,6 +3263,26 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       {/* Three.js Canvas Mount - Isolated */}
       <div ref={canvasMountRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
+      {/* WebGL Context Loss / Error Graceful Recovery Screen */}
+      {hasWebglError && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-6 text-center bg-slate-900/95 text-white backdrop-blur-md">
+          <AlertTriangle className="w-12 h-12 text-amber-400 mb-3 animate-pulse" />
+          <h3 className="text-base font-bold mb-1">WebGL 3D Context Paused</h3>
+          <p className="text-xs text-slate-300 max-w-sm mb-4">
+            Your browser reached its GPU context limit. Click below to reclaim the 3D graphics engine.
+          </p>
+          <button
+            onClick={() => {
+              setHasWebglError(false);
+              window.location.reload();
+            }}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-xs font-bold transition shadow-lg cursor-pointer"
+          >
+            Reload 3D Viewport
+          </button>
+        </div>
+      )}
+
       {/* Top 3D Viewport Controls (Hidden in Customer Presentation Tour) */}
       {!isCustomerMode && (
       <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm text-xs font-semibold">
@@ -3113,35 +3326,38 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         ) : (
           /* Full Controls in Orbit Mode */
           <>
-            {/* 3D Tool Mode: Select vs Free Hand Pan */}
-            <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
-              <button
-                onClick={() => setToolMode('select')}
-                className={`px-2 py-1 rounded-md text-[11px] transition flex items-center gap-1 cursor-pointer ${
-                  toolMode === 'select'
-                    ? 'bg-sky-600 text-white font-bold shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 dark:text-slate-300'
-                }`}
-                title="Select & Move 3D Items (V)"
-              >
-                <MousePointer className="w-3 h-3" />
-                <span>Select</span>
-              </button>
-              <button
-                onClick={() => setToolMode('pan')}
-                className={`px-2 py-1 rounded-md text-[11px] transition flex items-center gap-1 cursor-pointer ${
-                  toolMode === 'pan'
-                    ? 'bg-sky-600 text-white font-bold shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 dark:text-slate-300'
-                }`}
-                title="Free Hand / Pan View Tool (H or Hold Space)"
-              >
-                <Hand className="w-3 h-3" />
-                <span>Hand</span>
-              </button>
-            </div>
-
-            <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
+            {/* 3D Tool Mode: Select vs Free Hand Pan (Hidden in Split/SweetHome mode to prevent clutter) */}
+            {!isSplitMode && (
+              <>
+                <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <button
+                    onClick={() => setToolMode('select')}
+                    className={`px-2 py-1 rounded-md text-[11px] transition flex items-center gap-1 cursor-pointer ${
+                      toolMode === 'select'
+                        ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 dark:text-slate-300'
+                    }`}
+                    title="Select & Move 3D Items (V)"
+                  >
+                    <MousePointer className="w-3 h-3" />
+                    <span>Select</span>
+                  </button>
+                  <button
+                    onClick={() => setToolMode('pan')}
+                    className={`px-2 py-1 rounded-md text-[11px] transition flex items-center gap-1 cursor-pointer ${
+                      toolMode === 'pan'
+                        ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 dark:text-slate-300'
+                    }`}
+                    title="Free Hand / Pan View Tool (H or Hold Space)"
+                  >
+                    <Hand className="w-3 h-3" />
+                    <span>Hand</span>
+                  </button>
+                </div>
+                <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
+              </>
+            )}
 
             {/* Camera Mode */}
             <div className="flex items-center gap-0.5">
@@ -3254,28 +3470,32 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
               <Camera className="w-3.5 h-3.5" />
             </button>
 
-            {/* Time of Day */}
-            <div className="flex items-center gap-1 pl-1 pr-1" title={`Sun Time: ${Math.floor(timeOfDay)}:${timeOfDay % 1 !== 0 ? '30' : '00'}`}>
-              <Sun className="w-3 h-3 text-amber-500" />
-              <input
-                type="range"
-                min="6"
-                max="22"
-                step="0.5"
-                value={timeOfDay}
-                onChange={(e) => setTimeOfDay(parseFloat(e.target.value))}
-                className="w-10 accent-sky-600 h-1 bg-slate-200 rounded cursor-pointer"
-              />
-            </div>
+            {/* Time of Day & Reset (Hidden in split/sweethome mode) */}
+            {!isSplitMode && (
+              <>
+                <div className="flex items-center gap-1 pl-1 pr-1" title={`Sun Time: ${Math.floor(timeOfDay)}:${timeOfDay % 1 !== 0 ? '30' : '00'}`}>
+                  <Sun className="w-3 h-3 text-amber-500" />
+                  <input
+                    type="range"
+                    min="6"
+                    max="22"
+                    step="0.5"
+                    value={timeOfDay}
+                    onChange={(e) => setTimeOfDay(parseFloat(e.target.value))}
+                    className="w-10 accent-sky-600 h-1 bg-slate-200 rounded cursor-pointer"
+                  />
+                </div>
 
-            {/* Reset Camera */}
-            <button
-              onClick={handleResetCamera}
-              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 rounded-lg transition cursor-pointer"
-              title="Reset Camera View"
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-            </button>
+                {/* Reset Camera */}
+                <button
+                  onClick={handleResetCamera}
+                  className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 rounded-lg transition cursor-pointer"
+                  title="Reset Camera View"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
           </>
         )}
       </div>
@@ -3405,8 +3625,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         </div>
       )}
 
-      {/* Floating 3D Pick & Drag / Visitor Instructions Banner (Aerial Mode only) */}
-      {!isCustomerMode && cameraMode !== 'visitor' && (
+      {/* Floating 3D Pick & Drag / Visitor Instructions Banner (Aerial Mode only, hidden in split/sweethome mode) */}
+      {!isCustomerMode && cameraMode !== 'visitor' && !isSplitMode && (
         <div className="absolute bottom-4 left-4 z-10 flex items-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 text-[11px] text-slate-600 pointer-events-none shadow-md">
           <Sparkles className="w-3.5 h-3.5 text-sky-600" />
           <span>

@@ -5,9 +5,14 @@ import { Navbar } from '../components/Navbar';
 import { AdminSidebar } from '../components/AdminSidebar';
 import { AdminDashboard } from '../components/AdminDashboard';
 import { FurnitureListPane } from '../components/FurnitureListPane';
-import { PlanCanvas2D } from '../components/PlanCanvas2D';
+import { PlanCanvas2D, ToolMode } from '../components/PlanCanvas2D';
 import { Viewport3D } from '../components/Viewport3D';
 import { InspectorSidebar } from '../components/InspectorSidebar';
+import { SweetHomeRibbon } from '../components/SweetHomeRibbon';
+import { SweetHomeCatalogTree } from '../components/SweetHomeCatalogTree';
+import { SweetHomeFurnitureTable } from '../components/SweetHomeFurnitureTable';
+import { InteriorScopeBar } from '../components/InteriorScopeBar';
+import { MinimizedFloorPlan } from '../components/MinimizedFloorPlan';
 import { CustomerPresentationView } from '../components/CustomerPresentationView';
 import { LoginPage } from '../components/LoginPage';
 import { ShareModal } from '../components/ShareModal';
@@ -16,7 +21,7 @@ import { AddItemModal } from '../components/AddItemModal';
 import { BlueprintImportModal } from '../components/BlueprintImportModal';
 import { PreferencesModal } from '../components/PreferencesModal';
 import { ClientProjectSelectModal } from '../components/ClientProjectSelectModal';
-import { HomePlan, CatalogItem, FurnitureItem, User, UserRole, FloorTemplate, BlueprintImage, ProjectPreferences, VisitorCameraState, FloorLevel } from '../types/plan';
+import { HomePlan, CatalogItem, FurnitureItem, User, UserRole, FloorTemplate, BlueprintImage, ProjectPreferences, VisitorCameraState, FloorLevel, Room } from '../types/plan';
 import { detectCollisions } from '../services/collisionDetector';
 import { isTabletopItem, findNearestSupportingSurface, autoAttachToTabletop } from '../services/tabletopAttachment';
 import {
@@ -69,6 +74,7 @@ import {
   Upload,
   ShieldCheck,
   AlertCircle,
+  Compass,
 } from 'lucide-react';
 import { CostEstimatorModal } from '../components/CostEstimatorModal';
 import { AiStylerModal } from '../components/AiStylerModal';
@@ -76,6 +82,10 @@ import UpgradeModal from '../components/UpgradeModal';
 import { SubscriptionPaywall } from '../components/SubscriptionPaywall';
 import { ProjectManagerModal } from '../components/ProjectManagerModal';
 import { SelectDemoModal } from '../components/SelectDemoModal';
+import { GuidedFloorPlanBuilderModal } from '../components/GuidedFloorPlanBuilderModal';
+import { SmartAlignmentBar } from '../components/SmartAlignmentBar';
+import { CustomerWelcomeGuideModal } from '../components/CustomerWelcomeGuideModal';
+import { RoomQuickStyleCard } from '../components/RoomQuickStyleCard';
 import {
   UserProjectSummary,
   getUserProjects,
@@ -86,7 +96,8 @@ import {
   parseAndValidateProjectJson,
   STARTER_TEMPLATES,
 } from '../services/projectService';
-import { SWEET_HOME_DEMOS } from '../services/demoPlans';
+import { DECOFROG_DEMOS } from '../services/demoPlans';
+import { cleanUnrealisticStairs } from '../services/referencePlans';
 import {
   canAccessFeature,
   getUserSubscriptionTier,
@@ -99,7 +110,7 @@ import {
 } from '../services/subscriptionService';
 
 export default function HomeStudioPage() {
-  const [plan, setPlan] = useState<HomePlan>(sampleDefaultPlan);
+  const [plan, setPlan] = useState<HomePlan>(() => cleanUnrealisticStairs(sampleDefaultPlan));
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [templates, setTemplates] = useState<FloorTemplate[]>([]);
@@ -109,7 +120,7 @@ export default function HomeStudioPage() {
 
   // Load theme preference on mount (default to light)
   useEffect(() => {
-    const savedTheme = localStorage.getItem('sweethome_theme') as 'dark' | 'light' | null;
+    const savedTheme = (localStorage.getItem('decofrog_theme') || localStorage.getItem('sweethome_theme')) as 'dark' | 'light' | null;
     if (savedTheme) {
       setTheme(savedTheme);
       document.documentElement.classList.toggle('dark', savedTheme === 'dark');
@@ -122,7 +133,7 @@ export default function HomeStudioPage() {
   const handleToggleTheme = () => {
     setTheme((prev) => {
       const nextTheme = prev === 'dark' ? 'light' : 'dark';
-      localStorage.setItem('sweethome_theme', nextTheme);
+      localStorage.setItem('decofrog_theme', nextTheme);
       document.documentElement.classList.toggle('dark', nextTheme === 'dark');
       return nextTheme;
     });
@@ -133,12 +144,16 @@ export default function HomeStudioPage() {
   const [isAuthLoaded, setIsAuthLoaded] = useState<boolean>(false);
 
   const [activeView, setActiveView] = useState<'split' | '2d' | '3d' | 'customer' | 'dashboard'>('split');
+  const [studioLayout, setStudioLayout] = useState<'sweethome' | 'split' | '2d' | '3d' | 'tour'>('sweethome');
+  const [cadToolMode, setCadToolMode] = useState<ToolMode>('select');
+  const [targetRoomToFocus, setTargetRoomToFocus] = useState<Room | null>(null);
+  const [catalogCategoryRequest, setCatalogCategoryRequest] = useState<string | undefined>(undefined);
   const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'catalog' | 'floors' | 'payments' | string>('overview');
   const [userRole, setUserRole] = useState<UserRole>('DESIGNER');
   const [activeFloor, setActiveFloor] = useState<number>(0);
   const [floorMode, setFloorMode] = useState<'single' | 'sideBySide' | 'stacked'>('single');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false);
+  const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(true);
   const [cameraMode3D, setCameraMode3D] = useState<'aerial' | 'visitor'>('aerial');
   const [visitorCamera, setVisitorCamera] = useState<VisitorCameraState>({
     x: 0,
@@ -147,6 +162,33 @@ export default function HomeStudioPage() {
     elevation: 160,
     floorLevel: 0,
   });
+
+  const selectedFurniture = useMemo(() => {
+    if (!selectedId) return null;
+    return plan.furniture.find((f) => f.id === selectedId) || null;
+  }, [plan.furniture, selectedId]);
+
+  const selectedRoom = useMemo(() => {
+    if (!selectedId) return null;
+    return plan.rooms.find((r) => r.id === selectedId) || null;
+  }, [plan.rooms, selectedId]);
+
+  const handleWalkInRoom = useCallback((room: Room) => {
+    if (!room.points || room.points.length === 0) return;
+    const avgX = Math.round(room.points.reduce((sum, p) => sum + p.x, 0) / room.points.length);
+    const avgY = Math.round(room.points.reduce((sum, p) => sum + p.y, 0) / room.points.length);
+    setActiveFloor(room.floorLevel ?? 0);
+    setVisitorCamera({
+      x: avgX,
+      y: avgY,
+      yaw: 0,
+      elevation: 160,
+      floorLevel: room.floorLevel ?? 0,
+    });
+    setCameraMode3D('visitor');
+    setActiveView('3d');
+    setStudioLayout('tour');
+  }, []);
 
   const handleUpdateVisitorCamera = useCallback((partial: Partial<VisitorCameraState>) => {
     setVisitorCamera((prev) => {
@@ -219,14 +261,18 @@ export default function HomeStudioPage() {
   const [projectManagerTab, setProjectManagerTab] = useState<'projects' | 'new' | 'import'>('projects');
   const [userProjects, setUserProjects] = useState<UserProjectSummary[]>([]);
   const [isSelectDemoModalOpen, setIsSelectDemoModalOpen] = useState<boolean>(false);
+  const [isGuidedBuilderOpen, setIsGuidedBuilderOpen] = useState<boolean>(false);
+  const [isCustomerGuideOpen, setIsCustomerGuideOpen] = useState<boolean>(false);
   const directImportFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Ask initially with "Select a demo" dialog on first session load
+  // User-friendly onboarding: Tailor your floor plan wizard on first session load
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const alreadyPicked = sessionStorage.getItem('sweethome_initial_demo_selected');
+      const alreadyPicked =
+        sessionStorage.getItem('decofrog_initial_demo_selected') ||
+        sessionStorage.getItem('sweethome_initial_demo_selected');
       if (!alreadyPicked) {
-        setIsSelectDemoModalOpen(true);
+        setIsGuidedBuilderOpen(true);
       }
     }
   }, []);
@@ -279,7 +325,7 @@ export default function HomeStudioPage() {
           hasCompletedTrial,
         };
         setCurrentUser(updatedUser);
-        localStorage.setItem('sweethome_current_user', JSON.stringify(updatedUser));
+        localStorage.setItem('decofrog_current_user', JSON.stringify(updatedUser));
       }
     } catch (e) {
       // Ignored
@@ -395,7 +441,9 @@ export default function HomeStudioPage() {
 
   // Initial Data Fetching & Auth Check
   useEffect(() => {
-    const savedUser = localStorage.getItem('sweethome_current_user');
+    const savedUser =
+      localStorage.getItem('decofrog_current_user') ||
+      localStorage.getItem('sweethome_current_user');
     let loadedUser: User | null = null;
     if (savedUser) {
       try {
@@ -418,7 +466,7 @@ export default function HomeStudioPage() {
         } else {
           setActiveView('split');
           if (projs.length > 0) {
-            setPlan(projs[0].plan);
+            setPlan(cleanUnrealisticStairs(projs[0].plan));
           }
         }
       } catch (e) {}
@@ -435,7 +483,10 @@ export default function HomeStudioPage() {
         setReturnVerificationStatus('verifying');
         setReturnVerificationMsg('Verifying Cashfree payment securely with backend...');
 
-        const planId = localStorage.getItem('sweethome_last_checkout_plan') || 'trial_2days';
+        const planId =
+          localStorage.getItem('decofrog_last_checkout_plan') ||
+          localStorage.getItem('sweethome_last_checkout_plan') ||
+          'trial_2days';
 
         fetch('/api/cashfree/verify-payment', {
           method: 'POST',
@@ -450,7 +501,7 @@ export default function HomeStudioPage() {
           .then((data) => {
             if (data.success) {
               setReturnVerificationStatus('success');
-              setReturnVerificationMsg('Payment verified successfully! Welcome to DecoForge 3D Studio.');
+              setReturnVerificationMsg('Payment verified successfully! Welcome to DecoFrog 3D Studio.');
               if (loadedUser) {
                 const updated = saveSubscriptionLocally(
                   loadedUser,
@@ -517,7 +568,7 @@ export default function HomeStudioPage() {
       : user;
     setCurrentUser(userToSet);
     setUserRole(userToSet.role);
-    localStorage.setItem('sweethome_current_user', JSON.stringify(userToSet));
+    localStorage.setItem('decofrog_current_user', JSON.stringify(userToSet));
     refreshUserPaymentStatus(userToSet);
     const projs = getUserProjects(userToSet.id);
     setUserProjects(projs);
@@ -525,7 +576,7 @@ export default function HomeStudioPage() {
       if (cloudProjs && cloudProjs.length > 0) {
         setUserProjects(cloudProjs);
         if (user.role !== 'ADMIN') {
-          setPlan(cloudProjs[0].plan);
+          setPlan(cleanUnrealisticStairs(cloudProjs[0].plan));
         }
       }
     });
@@ -535,7 +586,7 @@ export default function HomeStudioPage() {
     } else {
       setActiveView('split');
       if (projs.length > 0) {
-        setPlan(projs[0].plan);
+        setPlan(cleanUnrealisticStairs(projs[0].plan));
       } else {
         setProjectManagerTab('new');
         setIsProjectManagerOpen(true);
@@ -545,6 +596,7 @@ export default function HomeStudioPage() {
 
   const handleLogout = () => {
     setCurrentUser(null);
+    localStorage.removeItem('decofrog_current_user');
     localStorage.removeItem('sweethome_current_user');
     setActiveView('split');
   };
@@ -672,7 +724,7 @@ export default function HomeStudioPage() {
         setActiveView('split');
         alert(`✓ Project "${validatedPlan.name}" imported successfully! You can now continue designing.`);
       } catch (err: any) {
-        alert(err.message || 'Failed to parse project file. Please provide a valid .sweethome.json file.');
+        alert(err.message || 'Failed to parse project file. Please provide a valid project CAD .json file.');
       }
     };
     reader.readAsText(file);
@@ -691,8 +743,73 @@ export default function HomeStudioPage() {
     setCanRedo(false);
     setActiveFloor(selectedPlan.currentFloor || 0);
     setActiveView('split');
-    sessionStorage.setItem('sweethome_initial_demo_selected', 'true');
+    sessionStorage.setItem('decofrog_initial_demo_selected', 'true');
     setIsSelectDemoModalOpen(false);
+  };
+
+  const handleCustomPlanCreated = (newPlan: HomePlan) => {
+    if (currentUser) {
+      const updatedList = saveUserProject(currentUser.id, newPlan, currentUser.email);
+      setUserProjects(updatedList);
+    }
+    setPlan(newPlan);
+    historyRef.current = [JSON.parse(JSON.stringify(newPlan))];
+    historyIndexRef.current = 0;
+    setCanUndo(false);
+    setCanRedo(false);
+    setActiveFloor(newPlan.currentFloor || 0);
+    setActiveView('split');
+    setCameraMode3D('aerial');
+    const isSingle = newPlan.floors.length === 1;
+    const livingCamX = isSingle ? 220 : -240;
+    const livingCamY = isSingle ? 180 : 0;
+    setVisitorCamera({
+      x: livingCamX,
+      y: livingCamY,
+      elevation: 120,
+      yaw: 0,
+      floorLevel: 0,
+    });
+    sessionStorage.setItem('decofrog_initial_demo_selected', 'true');
+    setIsGuidedBuilderOpen(false);
+  };
+
+  const handleStartBlankCanvas = () => {
+    const blankPlan: HomePlan = {
+      id: `plan_${currentUser?.id || 'guest'}_${Date.now()}`,
+      name: 'Untitled Custom Floor Plan',
+      version: '1.0',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      currentFloor: 0,
+      floors: [{ level: 0, name: 'Ground Floor', elevation: 0, height: 280 }],
+      walls: [],
+      furniture: [],
+      rooms: [],
+      dimensionLines: [],
+      textNotes: [],
+      preferences: {
+        unitSystem: 'cm',
+        defaultWallThickness: 15,
+        defaultWallHeight: 280,
+        gridSize: 20,
+        magnetismEnabled: true,
+        showRulers: true,
+      },
+    };
+    if (currentUser) {
+      const updatedList = saveUserProject(currentUser.id, blankPlan, currentUser.email);
+      setUserProjects(updatedList);
+    }
+    setPlan(blankPlan);
+    historyRef.current = [JSON.parse(JSON.stringify(blankPlan))];
+    historyIndexRef.current = 0;
+    setCanUndo(false);
+    setCanRedo(false);
+    setActiveFloor(0);
+    setActiveView('split');
+    sessionStorage.setItem('decofrog_initial_demo_selected', 'true');
+    setIsGuidedBuilderOpen(false);
   };
 
   const handleOpenStudioWithTemplate = (tplId: string) => {
@@ -716,8 +833,8 @@ export default function HomeStudioPage() {
       return;
     }
 
-    // 2. Look in SWEET_HOME_DEMOS
-    const demo = SWEET_HOME_DEMOS.find((d) => d.id === tplId);
+    // 2. Look in DECOFROG_DEMOS
+    const demo = DECOFROG_DEMOS.find((d) => d.id === tplId);
     if (demo) {
       const cloned: HomePlan = JSON.parse(JSON.stringify(demo.plan));
       cloned.id = `proj_${currentUser?.id || 'admin'}_${Date.now()}`;
@@ -908,7 +1025,7 @@ export default function HomeStudioPage() {
               </div>
               <h2 className="text-xl font-bold text-white mb-2">Payment Verified!</h2>
               <p className="text-sm text-emerald-300 mb-4">{returnVerificationMsg}</p>
-              <p className="text-xs text-slate-400">Opening DecoForge 3D Studio...</p>
+              <p className="text-xs text-slate-400">Opening DecoFrog 3D Studio...</p>
             </>
           )}
 
@@ -938,7 +1055,7 @@ export default function HomeStudioPage() {
       <div className="h-screen w-screen bg-[#080d19] flex items-center justify-center text-slate-400">
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-          <span>Loading DecoForge 3D Studio...</span>
+          <span>Loading DecoFrog 3D Studio...</span>
         </div>
       </div>
     );
@@ -972,7 +1089,7 @@ export default function HomeStudioPage() {
             setProjectManagerTab('new');
             setIsProjectManagerOpen(true);
           } else {
-            setPlan(projs[0].plan);
+            setPlan(cleanUnrealisticStairs(projs[0].plan));
           }
         }}
         onLogout={handleLogout}
@@ -997,6 +1114,8 @@ export default function HomeStudioPage() {
         plan={plan}
         activeView={activeView}
         setActiveView={setActiveView}
+        studioLayout={studioLayout}
+        setStudioLayout={setStudioLayout}
         adminTab={adminTab}
         setAdminTab={setAdminTab}
         userRole={userRole}
@@ -1006,6 +1125,7 @@ export default function HomeStudioPage() {
         currentUser={currentUser}
         onLogout={handleLogout}
         onOpenUpgradeModal={() => handleOpenUpgrade()}
+        onOpenWelcomeGuide={() => setIsCustomerGuideOpen(true)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
       />
@@ -1115,443 +1235,145 @@ export default function HomeStudioPage() {
         {/* VIEW 3: Interactive Design Studio (Split, 2D Blueprint, 3D WebGL) */}
         {(activeView === 'split' || activeView === '2d' || activeView === '3d') && (
           <div className="flex-1 flex flex-col h-full overflow-hidden">
-            <div
-              className={`flex-shrink-0 px-4 py-1.5 border-b flex items-center justify-between gap-3 select-none z-20 backdrop-blur-md overflow-x-auto whitespace-nowrap no-scrollbar scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
-                isDark ? 'bg-[#0b1222]/95 border-slate-800 text-slate-200' : 'bg-white/95 border-slate-200/90 text-slate-800 shadow-xs'
-              }`}
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
-              {/* Left Group: Viewport Modes + Architecture Floor Levels */}
-              <div className="flex items-center gap-2.5 shrink-0">
-                {/* 1. View Mode Segmented Switcher */}
-                <div className={`flex items-center p-0.5 rounded-xl border ${
-                  isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100/90 border-slate-200/80'
-                }`}>
-                  <button
-                    onClick={() => setActiveView('2d')}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-                      activeView === '2d'
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : isDark
-                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                    }`}
-                    title="2D CAD Architectural Floor Plan"
-                  >
-                    <span>📐</span>
-                    <span className="hidden sm:inline">2D Plan</span>
-                  </button>
+            {/* Sweet Home 3D Authentic Menu & Ribbon Bar */}
+            <SweetHomeRibbon
+              plan={plan}
+              activeToolMode={cadToolMode}
+              onSelectToolMode={(mode) => setCadToolMode(mode)}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+              onDeleteSelected={() => {
+                if (selectedId) handleDeleteItem(selectedId);
+              }}
+              hasSelection={Boolean(selectedId)}
+              onSave={handleSave}
+              isSaving={isSaving}
+              onOpenGuidedBuilder={() => setIsGuidedBuilderOpen(true)}
+              onOpenBlueprintModal={() => setIsBlueprintModalOpen(true)}
+              onExportJson={() => exportPlanAsJson(plan, currentUser)}
+              onImportJson={() => directImportFileInputRef.current?.click()}
+              onOpenAiStyler={() => setIsAiStylerModalOpen(true)}
+              onOpenCostEstimator={() => setIsCostEstimatorModalOpen(true)}
+              studioLayout={studioLayout}
+              onLayoutChange={(newLayout) => {
+                setStudioLayout(newLayout);
+                if (newLayout === '2d') {
+                  setActiveView('2d');
+                } else if (newLayout === '3d') {
+                  setActiveView('3d');
+                  setCameraMode3D('aerial');
+                } else if (newLayout === 'tour') {
+                  setActiveView('split');
+                  setCameraMode3D('visitor');
+                } else {
+                  setActiveView('split');
+                }
+              }}
+              cameraMode3D={cameraMode3D}
+              onToggleCameraMode3D={() => setCameraMode3D((prev) => (prev === 'visitor' ? 'aerial' : 'visitor'))}
+              theme={theme}
+              onOpenWelcomeGuide={() => setIsCustomerGuideOpen(true)}
+            />
 
-                  <button
-                    onClick={() => {
-                      setActiveView('3d');
-                      setCameraMode3D('aerial');
-                    }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-                      activeView === '3d' && cameraMode3D !== 'visitor'
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : isDark
-                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                    }`}
-                    title="3D WebGL Real-time Orbit Viewport"
-                  >
-                    <span>🧊</span>
-                    <span className="hidden sm:inline">3D View</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveView('split')}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-                      activeView === 'split'
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : isDark
-                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                    }`}
-                    title="Simultaneous 2D & 3D Split Screen"
-                  >
-                    <Columns className="w-3.5 h-3.5" />
-                    <span>Split</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setActiveView('3d');
-                      setCameraMode3D('visitor');
-                    }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-                      activeView === '3d' && cameraMode3D === 'visitor'
-                        ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
-                        : isDark
-                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                    }`}
-                    title="Interactive 3D First-Person Tour Walkthrough (PUBG Controls, Interactive Doors & Adding Items)"
-                  >
-                    <span>🚶</span>
-                    <span className="hidden sm:inline">Tour</span>
-                  </button>
-                </div>
-
-                {/* Vertical Divider */}
-                <div className={`w-[1px] h-6 shrink-0 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
-
-                {/* 2. Architecture Multi-Floor & Elevation Navigator */}
-                <div className={`flex items-center p-0.5 rounded-xl border ${
-                  isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100/90 border-slate-200/80'
-                }`}>
-                  <div className="flex items-center gap-1 px-1.5">
-                    <Building className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                    <span className="text-[11px] font-bold text-slate-400 hidden xl:inline">Level:</span>
-                  </div>
-
-                  {(plan.floors || [
-                    { level: 0, name: 'Ground Floor' },
-                    { level: 1, name: '1st Floor' }
-                  ]).map((fl) => (
-                    <button
-                      key={fl.level}
-                      onClick={() => {
-                        setActiveFloor(fl.level);
-                        setFloorMode('single');
-                      }}
-                      className={`px-2 py-1 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
-                        floorMode !== 'sideBySide' && activeFloor === fl.level
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : isDark
-                          ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                      }`}
-                    >
-                      <span>{fl.level === 0 ? 'Ground' : fl.level === 1 ? '1st Fl' : `L${fl.level}`}</span>
-                    </button>
-                  ))}
-
-                  {/* Add New Floor Button */}
-                  <button
-                    onClick={() => {
-                      if (!canAccessFeature(currentUser, 'multi_floor')) {
-                        handleOpenUpgrade('Multi-Floor Architecture & Custom Levels');
-                        return;
-                      }
-                      const currentFloors = plan.floors || [
-                        { level: 0, name: 'Ground Floor', elevation: 0, height: 280 },
-                        { level: 1, name: '1st Floor', elevation: 280, height: 280 },
-                      ];
-                      const nextLevel = Math.max(...currentFloors.map((f) => f.level), 0) + 1;
-                      const nextFloor: FloorLevel = {
-                        level: nextLevel,
-                        name: `Level ${nextLevel}`,
-                        elevation: nextLevel * 280,
-                        height: 280,
-                      };
-                      const updatedPlan = {
-                        ...plan,
-                        floors: [...currentFloors, nextFloor],
-                      };
-                      handleUpdatePlan(updatedPlan);
-                      setActiveFloor(nextLevel);
-                    }}
-                    className={`px-2 py-1 rounded-lg text-xs font-semibold transition border ml-0.5 cursor-pointer flex items-center gap-1 ${
-                      isDark
-                        ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                    }`}
-                    title="Add Architectural Floor Level"
-                  >
-                    <Plus className="w-3 h-3 text-indigo-400" />
-                    <span className="hidden 2xl:inline">Add</span>
-                  </button>
-
-                  {/* 3D Multi-Floor Stacking Modes */}
-                  <div className="flex items-center gap-1 ml-1 pl-1 border-l border-slate-300 dark:border-slate-800">
-                    <button
-                      onClick={() => setFloorMode(floorMode === 'stacked' ? 'single' : 'stacked')}
-                      className={`px-2 py-1 rounded-lg text-xs font-semibold transition border cursor-pointer flex items-center gap-1 ${
-                        floorMode === 'stacked'
-                          ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
-                          : isDark
-                          ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                      }`}
-                      title="Duplex Stacked Mode: Attach next floor directly on top of lower floor with stairwell opening"
-                    >
-                      <Layers className="w-3.5 h-3.5" />
-                      <span>Duplex</span>
-                    </button>
-
-                    <button
-                      onClick={() => setFloorMode(floorMode === 'sideBySide' ? 'single' : 'sideBySide')}
-                      className={`px-2 py-1 rounded-lg text-xs font-semibold transition border cursor-pointer ${
-                        floorMode === 'sideBySide'
-                          ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
-                          : isDark
-                          ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                      }`}
-                      title="Display all floors side-by-side"
-                    >
-                      Side-by-Side
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Group: History, Pro CAD Tools & Cloud Project Actions */}
-              <div className="flex items-center gap-2 shrink-0">
-                {/* 3. History Undo / Redo */}
-                <div className={`flex items-center p-0.5 rounded-xl border ${
-                  isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
-                }`}>
-                  <button
-                    onClick={handleUndo}
-                    disabled={!canUndo}
-                    className={`p-1.5 rounded-lg transition ${
-                      canUndo
-                        ? isDark
-                          ? 'text-slate-200 hover:text-white hover:bg-slate-800 active:scale-95 cursor-pointer'
-                          : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200 active:scale-95 cursor-pointer'
-                        : 'text-slate-500 opacity-40 cursor-not-allowed'
-                    }`}
-                    title="Undo (Ctrl+Z)"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={handleRedo}
-                    disabled={!canRedo}
-                    className={`p-1.5 rounded-lg transition ${
-                      canRedo
-                        ? isDark
-                          ? 'text-slate-200 hover:text-white hover:bg-slate-800 active:scale-95 cursor-pointer'
-                          : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200 active:scale-95 cursor-pointer'
-                        : 'text-slate-500 opacity-40 cursor-not-allowed'
-                    }`}
-                    title="Redo (Ctrl+Y)"
-                  >
-                    <RotateCw className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Vertical Divider */}
-                <div className={`w-[1px] h-6 shrink-0 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
-
-                {/* 4. Pro CAD & Smart Design Tools */}
-                <div className="flex items-center gap-1.5">
-                  {/* 3D Catalog & Inspector Toggle */}
-                  <button
-                    onClick={() => setIsInspectorOpen(!isInspectorOpen)}
-                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
-                      isInspectorOpen
-                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
-                        : isDark
-                        ? 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-800'
-                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-                    }`}
-                    title="Toggle 3D Catalog & Inspector Panel"
-                  >
-                    <Box className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Catalog</span>
-                  </button>
-
-                  {/* Blueprint Scan Importer */}
-                  <button
-                    onClick={() => setIsBlueprintModalOpen(true)}
-                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
-                      isDark
-                        ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
-                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-                    }`}
-                    title="Import Blueprint Scan Overlay"
-                  >
-                    <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
-                    <span className="hidden xl:inline">Blueprint</span>
-                  </button>
-
-                  {/* Cost Estimator & BOM */}
-                  <button
-                    onClick={() => setIsCostEstimatorModalOpen(true)}
-                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
-                      isDark
-                        ? 'bg-slate-900 hover:bg-slate-800 text-emerald-300 border-emerald-500/30'
-                        : 'bg-white hover:bg-slate-100 text-emerald-700 border-emerald-300 shadow-2xs'
-                    }`}
-                    title="Bill of Materials (BOM) & Project Cost Estimator"
-                  >
-                    <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
-                    <span className="hidden xl:inline">Cost / BOM</span>
-                  </button>
-
-                  {/* AI Room Styler */}
-                  <button
-                    onClick={() => setIsAiStylerModalOpen(true)}
-                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
-                      isDark
-                        ? 'bg-slate-900 hover:bg-slate-800 text-fuchsia-300 border-fuchsia-500/30'
-                        : 'bg-white hover:bg-slate-100 text-fuchsia-700 border-fuchsia-300 shadow-2xs'
-                    }`}
-                    title="AI Room Styler & Color Theme Generator"
-                  >
-                    <Wand2 className="w-3.5 h-3.5 text-fuchsia-400" />
-                    <span className="hidden xl:inline">AI Styler</span>
-                  </button>
-
-                  {/* Grid Preferences */}
-                  <button
-                    onClick={() => setIsPreferencesModalOpen(true)}
-                    className={`p-1.5 rounded-xl border transition cursor-pointer ${
-                      isDark
-                        ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
-                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-                    }`}
-                    title="Grid & Unit Preferences"
-                  >
-                    <Sliders className="w-3.5 h-3.5 text-slate-400" />
-                  </button>
-
-                  {/* Collision Warning Badge (Only when detected) */}
-                  {collisionReport.totalCollisions > 0 && (
-                    <span
-                      className="px-2 py-1 rounded-xl text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse flex items-center gap-1"
-                      title={`${collisionReport.totalCollisions} collision(s) detected`}
-                    >
-                      <AlertTriangle className="w-3 h-3 text-rose-400" />
-                      <span>{collisionReport.totalCollisions} Overlap</span>
-                    </span>
-                  )}
-                </div>
-
-                {/* Vertical Divider */}
-                <div className={`w-[1px] h-6 shrink-0 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
-
-                {/* 5. Projects & Cloud Actions */}
-                <div className="flex items-center gap-1.5">
-                  {/* Projects Switcher */}
-                  <button
-                    onClick={() => {
-                      setProjectManagerTab('projects');
-                      setIsProjectManagerOpen(true);
-                    }}
-                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1 text-xs font-semibold cursor-pointer ${
-                      isDark
-                        ? 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-800'
-                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-                    }`}
-                    title="My Saved Projects & Pre-defined Starter Houses"
-                  >
-                    <FolderOpen className="w-3.5 h-3.5 text-indigo-400" />
-                    <span className="hidden sm:inline">Projects ({userProjects.length})</span>
-                  </button>
-
-                  {/* New Starter Project (Sweet Home 3D Demos) */}
-                  <button
-                    onClick={() => setIsSelectDemoModalOpen(true)}
-                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1 text-xs font-semibold cursor-pointer ${
-                      isDark
-                        ? 'bg-slate-900 hover:bg-slate-800 text-emerald-300 border-emerald-500/30'
-                        : 'bg-white hover:bg-slate-100 text-emerald-700 border-emerald-300 shadow-2xs'
-                    }`}
-                    title="Select a Demo (Sweet Home 3D Starter Houses)"
-                  >
-                    <Plus className="w-3.5 h-3.5 text-emerald-500" />
-                    <span className="hidden md:inline">New (Demos)</span>
-                  </button>
-
-                  {/* Export / Download Project JSON */}
-                  <button
-                    onClick={() => exportPlanAsJson(plan, currentUser)}
-                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1 text-xs font-semibold cursor-pointer ${
-                      isDark
-                        ? 'bg-slate-900 hover:bg-slate-800 text-sky-300 border-sky-500/30'
-                        : 'bg-white hover:bg-slate-100 text-sky-700 border-sky-300 shadow-2xs'
-                    }`}
-                    title="Download Project as .sweethome.json file"
-                  >
-                    <Download className="w-3.5 h-3.5 text-sky-400" />
-                    <span className="hidden lg:inline">Download</span>
-                  </button>
-
-                  {/* Import / Upload Project JSON */}
-                  <button
-                    onClick={() => directImportFileInputRef.current?.click()}
-                    className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1 text-xs font-semibold cursor-pointer ${
-                      isDark
-                        ? 'bg-slate-900 hover:bg-slate-800 text-amber-300 border-amber-500/30'
-                        : 'bg-white hover:bg-slate-100 text-amber-700 border-amber-300 shadow-2xs'
-                    }`}
-                    title="Import .sweethome.json and continue designing"
-                  >
-                    <Upload className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="hidden lg:inline">Import</span>
-                  </button>
-                  <input
-                    ref={directImportFileInputRef}
-                    type="file"
-                    accept=".json,.sweethome"
-                    onChange={handleDirectImportFile}
-                    className="hidden"
-                  />
-
-                  {/* Save Button */}
-                  <button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer ${
-                      isDark
-                        ? 'bg-slate-900 hover:bg-slate-800 text-indigo-300 border-indigo-500/30'
-                        : 'bg-white hover:bg-slate-100 text-indigo-700 border-indigo-300 shadow-2xs'
-                    }`}
-                    title="Save plan to cloud and local storage"
-                  >
-                    <Save className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>{isSaving ? 'Saving...' : 'Save'}</span>
-                  </button>
-
-                  {/* Share Presentation Link */}
-                  <button
-                    onClick={() => setIsShareModalOpen(true)}
-                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white text-xs font-bold shadow-sm transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
-                    title="Share 3D Client Presentation Link"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    <span>Share</span>
-                  </button>
-
-                  {/* Pro Status or Upgrade Trigger */}
-                  {isProOrAdmin ? (
-                    <button
-                      onClick={() => handleOpenUpgrade()}
-                      className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                        isDark
-                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
-                          : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
-                      }`}
-                      title="Your Account has Pro / Enterprise Access"
-                    >
-                      <Crown className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="hidden lg:inline">{remainingPassText}</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleOpenUpgrade()}
-                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-sm transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
-                      title="Get Pro Studio Pass"
-                    >
-                      <Crown className="w-3.5 h-3.5 text-amber-300" />
-                      <span>Pass</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+            {/* Hidden File Input for Direct JSON Import */}
+            <input
+              ref={directImportFileInputRef}
+              type="file"
+              accept=".json,.cad,.project"
+              onChange={handleDirectImportFile}
+              className="hidden"
+            />
 
             {/* Design Studio Viewport & Floating Sidebars Area */}
             <div className="flex-1 flex relative overflow-hidden w-full h-full">
               {/* Full Width Center Viewports */}
               <div className="flex-1 flex relative overflow-hidden w-full h-full">
-                {/* Split Mode: 2D Blueprint on Left, 3D Orbit on Right */}
-                {activeView === 'split' && (
+                {/* 1. Classic Sweet Home 3D 4-Pane Studio Layout (Default matching Sweet Home 3D) */}
+                {activeView === 'split' && studioLayout === 'sweethome' && (
+                  <div className="flex-1 flex overflow-hidden w-full h-full">
+                    {/* Left Column (Width ~310px, Split vertically: Top: Catalog Tree, Bottom: Furniture List Table) */}
+                    <div className="w-[300px] xl:w-[320px] h-full flex flex-col shrink-0 border-r border-slate-300 dark:border-slate-800">
+                      <div className="h-[52%] flex flex-col overflow-hidden">
+                        <SweetHomeCatalogTree
+                          catalog={catalog}
+                          onAddItem={handleAddItem}
+                          theme={theme}
+                        />
+                      </div>
+                      <div className="h-[48%] flex flex-col overflow-hidden">
+                        <SweetHomeFurnitureTable
+                          furniture={plan.furniture.filter((f) => (f.floorLevel ?? 0) === activeFloor)}
+                          selectedId={selectedId}
+                          onSelectId={setSelectedId}
+                          onToggleVisibility={handleToggleItemVisibility}
+                          onToggleLock={handleToggleItemLock}
+                          onDeleteItem={handleDeleteItem}
+                          collidingItemIds={collisionReport.collidingItemIds}
+                          theme={theme}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Right Workspace: Split horizontally: Top: 2D Blueprint Canvas, Bottom: 3D Viewport */}
+                    <div className="flex-1 flex flex-col h-full overflow-hidden">
+                      {/* Top: 2D Floor Plan with Architectural Rulers & Floor Tabs */}
+                      <div className="h-1/2 w-full border-b border-slate-300 dark:border-slate-800 relative">
+                        <PlanCanvas2D
+                          plan={plan}
+                          onUpdatePlan={handleUpdatePlan}
+                          selectedId={selectedId}
+                          onSelectId={setSelectedId}
+                          activeFloor={activeFloor}
+                          onFloorChange={setActiveFloor}
+                          floorMode={floorMode}
+                          onFloorModeChange={setFloorMode}
+                          collidingItemIds={collisionReport.collidingItemIds}
+                          collisionReasons={collisionReport.reasons}
+                          onOpenBlueprintModal={() => setIsBlueprintModalOpen(true)}
+                          canUndo={canUndo}
+                          canRedo={canRedo}
+                          onUndo={handleUndo}
+                          onRedo={handleRedo}
+                          visitorCamera={visitorCamera}
+                          onUpdateVisitorCamera={handleUpdateVisitorCamera}
+                          isWalkMode={cameraMode3D === 'visitor'}
+                          onToggleWalkMode={() => setCameraMode3D((prev) => (prev === 'visitor' ? 'aerial' : 'visitor'))}
+                          activeToolModeProp={cadToolMode}
+                          onToolModeChangeProp={setCadToolMode}
+                          hideFloatingToolbar={true}
+                        />
+                      </div>
+
+                      {/* Bottom: Real-time 3D Viewport */}
+                      <div className="h-1/2 w-full relative">
+                        <Viewport3D
+                          plan={plan}
+                          selectedId={selectedId}
+                          onSelectId={setSelectedId}
+                          onUpdatePlan={handleUpdatePlan}
+                          activeFloor={activeFloor}
+                          onFloorChange={setActiveFloor}
+                          floorMode={floorMode}
+                          onFloorModeChange={setFloorMode}
+                          collidingItemIds={collisionReport.collidingItemIds}
+                          isSplitMode={true}
+                          cameraModeProp={cameraMode3D}
+                          onCameraModeChangeProp={setCameraMode3D}
+                          visitorCameraProp={visitorCamera}
+                          onVisitorCameraChange={handleUpdateVisitorCamera}
+                          onUpgradePrompt={handleOpenUpgrade}
+                          isPro={isProOrAdmin}
+                          targetRoomToFocus={targetRoomToFocus}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Side-by-Side Dual View (50% 2D on Left, 50% 3D on Right) */}
+                {activeView === 'split' && studioLayout === 'split' && (
                   <>
                     <div className={`w-1/2 h-full border-r relative ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
                       <PlanCanvas2D
@@ -1574,6 +1396,8 @@ export default function HomeStudioPage() {
                         onUpdateVisitorCamera={handleUpdateVisitorCamera}
                         isWalkMode={cameraMode3D === 'visitor'}
                         onToggleWalkMode={() => setCameraMode3D((prev) => (prev === 'visitor' ? 'aerial' : 'visitor'))}
+                        activeToolModeProp={cadToolMode}
+                        onToolModeChangeProp={setCadToolMode}
                       />
                     </div>
                     <div className="w-1/2 h-full relative">
@@ -1594,12 +1418,63 @@ export default function HomeStudioPage() {
                         onVisitorCameraChange={handleUpdateVisitorCamera}
                         onUpgradePrompt={handleOpenUpgrade}
                         isPro={isProOrAdmin}
+                        targetRoomToFocus={targetRoomToFocus}
                       />
                     </div>
                   </>
                 )}
 
-                {/* Full 2D View Mode */}
+                {/* 3. First-Person Walkthrough Tour */}
+                {activeView === 'split' && studioLayout === 'tour' && (
+                  <div className="w-full h-full relative">
+                    <Viewport3D
+                      plan={plan}
+                      selectedId={selectedId}
+                      onSelectId={setSelectedId}
+                      onUpdatePlan={handleUpdatePlan}
+                      activeFloor={activeFloor}
+                      onFloorChange={setActiveFloor}
+                      floorMode={floorMode}
+                      onFloorModeChange={setFloorMode}
+                      collidingItemIds={collisionReport.collidingItemIds}
+                      isSplitMode={false}
+                      cameraModeProp="visitor"
+                      onCameraModeChangeProp={setCameraMode3D}
+                      visitorCameraProp={visitorCamera}
+                      onVisitorCameraChange={handleUpdateVisitorCamera}
+                      onUpgradePrompt={handleOpenUpgrade}
+                      isPro={isProOrAdmin}
+                      targetRoomToFocus={targetRoomToFocus}
+                    />
+
+                    {/* Minimized Floor Plan Navigator in Tour Mode */}
+                    <MinimizedFloorPlan
+                      plan={plan}
+                      onUpdatePlan={handleUpdatePlan}
+                      selectedId={selectedId}
+                      onSelectId={setSelectedId}
+                      activeFloor={activeFloor}
+                      onFloorChange={setActiveFloor}
+                      floorMode={floorMode}
+                      onFloorModeChange={setFloorMode}
+                      collidingItemIds={collisionReport.collidingItemIds}
+                      collisionReasons={collisionReport.reasons}
+                      onOpenBlueprintModal={() => setIsBlueprintModalOpen(true)}
+                      canUndo={canUndo}
+                      canRedo={canRedo}
+                      onUndo={handleUndo}
+                      onRedo={handleRedo}
+                      visitorCamera={visitorCamera}
+                      onUpdateVisitorCamera={handleUpdateVisitorCamera}
+                      isWalkMode={true}
+                      onToggleWalkMode={() => setCameraMode3D((prev) => (prev === 'visitor' ? 'aerial' : 'visitor'))}
+                      onExpandToSplit={() => setStudioLayout('split')}
+                      isDark={isDark}
+                    />
+                  </div>
+                )}
+
+                {/* 4. Full 2D Drafting Blueprint Mode */}
                 {activeView === '2d' && (
                   <div className="w-full h-full relative">
                     <PlanCanvas2D
@@ -1622,11 +1497,13 @@ export default function HomeStudioPage() {
                       onUpdateVisitorCamera={handleUpdateVisitorCamera}
                       isWalkMode={cameraMode3D === 'visitor'}
                       onToggleWalkMode={() => setCameraMode3D((prev) => (prev === 'visitor' ? 'aerial' : 'visitor'))}
+                      activeToolModeProp={cadToolMode}
+                      onToolModeChangeProp={setCadToolMode}
                     />
                   </div>
                 )}
 
-                {/* Full 3D View Mode */}
+                {/* 5. Full 3D Aerial Orbit View Mode */}
                 {activeView === '3d' && (
                   <div className="w-full h-full relative">
                     <Viewport3D
@@ -1646,6 +1523,7 @@ export default function HomeStudioPage() {
                       onVisitorCameraChange={handleUpdateVisitorCamera}
                       onUpgradePrompt={handleOpenUpgrade}
                       isPro={isProOrAdmin}
+                      targetRoomToFocus={targetRoomToFocus}
                     />
                   </div>
                 )}
@@ -1666,22 +1544,61 @@ export default function HomeStudioPage() {
                 onToggleOpen={() => setIsInspectorOpen(!isInspectorOpen)}
                 isWalkMode={cameraMode3D === 'visitor'}
                 onOpenAddItemModal={() => setIsAddItemModalOpen(true)}
+                externalCategory={catalogCategoryRequest}
+                onOpenAiStyler={() => setIsAiStylerModalOpen(true)}
+                onOpenGuidedBuilder={() => setIsGuidedBuilderOpen(true)}
+                onOpenProjects={() => {
+                  setProjectManagerTab('projects');
+                  setIsProjectManagerOpen(true);
+                }}
+                onOpenBlueprintModal={() => setIsBlueprintModalOpen(true)}
+                onOpenCostEstimator={() => setIsCostEstimatorModalOpen(true)}
+                onOpenPreferences={() => setIsPreferencesModalOpen(true)}
+                onExportJson={() => exportPlanAsJson(plan, currentUser)}
+                onImportJson={() => directImportFileInputRef.current?.click()}
+                onToggleFurnitureList={() => setIsFurnitureListOpen(!isFurnitureListOpen)}
+                isFurnitureListOpen={isFurnitureListOpen}
               />
+
+              {/* Floating Smart Alignment Bar for Beginners (When Furniture Selected in non-sweethome layout) */}
+              {selectedFurniture && cameraMode3D !== 'visitor' && studioLayout !== 'sweethome' && (
+                <SmartAlignmentBar
+                  plan={plan}
+                  selectedFurniture={selectedFurniture}
+                  onUpdatePlan={handleUpdatePlan}
+                  onDeselect={() => setSelectedId(null)}
+                  theme={theme}
+                />
+              )}
+
+              {/* Floating Room Quick-Style Card for Beginners (When Room Selected in non-sweethome layout) */}
+              {selectedRoom && cameraMode3D !== 'visitor' && studioLayout !== 'sweethome' && (
+                <RoomQuickStyleCard
+                  room={selectedRoom}
+                  plan={plan}
+                  onUpdatePlan={handleUpdatePlan}
+                  onClose={() => setSelectedId(null)}
+                  onWalkInRoom={handleWalkInRoom}
+                  theme={theme}
+                />
+              )}
             </div>
 
-            {/* Bottom Expandable Furniture List Pane */}
-            <FurnitureListPane
-              furniture={plan.furniture.filter((f) => (f.floorLevel ?? 0) === activeFloor)}
-              selectedId={selectedId}
-              onSelectId={setSelectedId}
-              onToggleVisibility={handleToggleItemVisibility}
-              onToggleLock={handleToggleItemLock}
-              onDeleteItem={handleDeleteItem}
-              collidingItemIds={collisionReport.collidingItemIds}
-              isOpen={isFurnitureListOpen}
-              setIsOpen={setIsFurnitureListOpen}
-              theme={theme}
-            />
+            {/* Bottom Expandable Furniture List Pane (Shown in standard layouts; SweetHome 4-Pane uses the dedicated left table) */}
+            {studioLayout !== 'sweethome' && (
+              <FurnitureListPane
+                furniture={plan.furniture.filter((f) => (f.floorLevel ?? 0) === activeFloor)}
+                selectedId={selectedId}
+                onSelectId={setSelectedId}
+                onToggleVisibility={handleToggleItemVisibility}
+                onToggleLock={handleToggleItemLock}
+                onDeleteItem={handleDeleteItem}
+                collidingItemIds={collisionReport.collidingItemIds}
+                isOpen={isFurnitureListOpen}
+                setIsOpen={setIsFurnitureListOpen}
+                theme={theme}
+              />
+            )}
           </div>
         )}
       </div>
@@ -1783,7 +1700,19 @@ export default function HomeStudioPage() {
         defaultTab={projectManagerTab}
       />
 
-      {/* Sweet Home 3D "Select a demo" Onboarding Dialog */}
+      {/* Interactive Tailored Floor Plan Builder Modal (Custom Rooms & Floors) */}
+      <GuidedFloorPlanBuilderModal
+        isOpen={isGuidedBuilderOpen}
+        onClose={() => setIsGuidedBuilderOpen(false)}
+        onPlanCreated={handleCustomPlanCreated}
+        onOpenBlankCanvas={handleStartBlankCanvas}
+        onOpenBlueprintImport={() => setIsBlueprintModalOpen(true)}
+        onOpenShowcaseDemos={() => setIsSelectDemoModalOpen(true)}
+        currentUser={currentUser}
+        theme={theme}
+      />
+
+      {/* Pre-built Showcase Inspiration Dialog */}
       <SelectDemoModal
         isOpen={isSelectDemoModalOpen}
         onClose={() => setIsSelectDemoModalOpen(false)}
@@ -1793,6 +1722,25 @@ export default function HomeStudioPage() {
           setIsProjectManagerOpen(true);
         }}
         currentUser={currentUser}
+        theme={theme}
+      />
+
+      {/* Beginner & Customer Quick Guide Modal */}
+      <CustomerWelcomeGuideModal
+        isOpen={isCustomerGuideOpen}
+        onClose={() => setIsCustomerGuideOpen(false)}
+        onOpenTemplates={() => {
+          setProjectManagerTab('new');
+          setIsProjectManagerOpen(true);
+        }}
+        onOpenCatalog={() => {
+          setIsInspectorOpen(true);
+        }}
+        onStartWalkTour={() => {
+          setActiveView('3d');
+          setCameraMode3D('visitor');
+          setStudioLayout('tour');
+        }}
         theme={theme}
       />
     </div>

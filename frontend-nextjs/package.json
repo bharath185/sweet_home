@@ -1,5 +1,5 @@
 {
-  "name": "sweethome3d-nextjs",
+  "name": "visualrendered-3d-studio",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -9,8 +9,11 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@ant-design/icons": "^6.3.4",
+    "@ant-design/nextjs-registry": "^1.3.0",
     "@supabase/supabase-js": "^2.117.3",
     "@types/pg": "^8.23.1",
+    "antd": "^6.6.6",
     "canvas-confetti": "^1.9.4",
     "lucide-react": "^1.16.0",
     "lz-string": "^1.5.0",
