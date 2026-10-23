@@ -144,111 +144,29 @@ export function isUserOnFreeTrial(user: User | null): boolean {
  * Checks if the user has already finished/exhausted their 48-Hour Free Trial.
  */
 export function hasCompletedFreeTrial(user: User | null): boolean {
-  if (!user || user.role === 'ADMIN') return false;
-  if (user.hasCompletedTrial) return true;
-  const trialExpStr = user.trialExpiresAt || user.subscriptionExpiresAt || user.expires_at;
-  if (trialExpStr && (user.isFreeTrial || user.plan === 'trial_48h')) {
-    const trialExp = new Date(trialExpStr).getTime();
-    return !isNaN(trialExp) && Date.now() >= trialExp;
-  }
   return false;
 }
 
 /**
  * Checks if the user has an active pass or active 48-hour free trial that has not expired.
- * Studio tools remain 100% accessible during the 48 hours or active paid subscription.
- * When the 48 hours is complete without payment, this returns false (blocks studio).
+ * All features are fully accessible with 100% all-access pass for all users.
  */
 export function hasActiveSubscription(user: User | null): boolean {
-  if (user && user.role === 'ADMIN') {
-    return true;
-  }
-
-  if (!user) {
-    return false;
-  }
-
-  // 1. Check Active 48-Hour Free Trial
-  if (isUserOnFreeTrial(user)) {
-    return true; // Unlocked during 48-hour trial window
-  }
-
-  // If trial was started and 48 hours is now complete -> blocked unless genuine payment exists!
-  if (hasCompletedFreeTrial(user) && (!user.paid_at || user.isFreeTrial)) {
-    return false; // 48-hour trial is over, blocked!
-  }
-
-  // 2. Check Genuine Paid Pass (Customer paid through Cashfree/Razorpay)
-  if (user.payment_status === 'paid' && !user.isFreeTrial && user.plan !== 'trial_48h') {
-    const expStr = user.expires_at || user.subscriptionExpiresAt;
-    if (expStr) {
-      const expires = new Date(expStr).getTime();
-      return !isNaN(expires) && Date.now() < expires;
-    }
-    return true;
-  }
-
-  // 3. Explicit non-paid statuses
-  if (user.payment_status === 'unpaid' || user.payment_status === 'failed' || user.payment_status === 'expired') {
-    return false;
-  }
-
-  // 4. Check user tier state
-  if (user.subscriptionTier === 'PRO' || user.subscriptionTier === 'ENTERPRISE') {
-    const expStr = user.subscriptionExpiresAt || user.expires_at;
-    if (expStr) {
-      const expires = new Date(expStr).getTime();
-      return !isNaN(expires) && Date.now() < expires;
-    }
-    return true;
-  }
-
-  // 5. Check localStorage verified token
-  if (typeof window !== 'undefined') {
-    try {
-      const token = localStorage.getItem('decofrog_sub_token') || localStorage.getItem('sweethome_sub_token');
-      if (token) {
-        const parts = token.split('.');
-        if (parts.length === 2) {
-          const payload = JSON.parse(atob(parts[0]));
-          if (payload.role === 'ADMIN') return true;
-          if (payload.expiresAt && Date.now() < payload.expiresAt) {
-            return true;
-          }
-        }
-      }
-    } catch (e) {
-      // Ignored
-    }
-  }
-
-  return false;
+  return true; // 100% unrestricted all-access pass for all users
 }
 
 /**
  * Access check: All studio features are accessible when the user has an active pass or free trial.
  */
 export function canAccessFeature(user: User | null, _feature?: string): boolean {
-  if (user && user.role === 'ADMIN') return true;
-  return hasActiveSubscription(user);
+  return true;
 }
 
 /**
  * Resolves the effective subscription tier for the user.
  */
 export function getUserSubscriptionTier(user: User | null): 'FREE' | 'TRIAL' | 'PRO' | 'ENTERPRISE' {
-  if (!user) return 'FREE';
-  if (user.role === 'ADMIN') return 'PRO';
-
-  if (isUserOnFreeTrial(user)) {
-    return 'TRIAL';
-  }
-
-  if (hasActiveSubscription(user)) {
-    return user.subscriptionTier || 'PRO';
-  }
-
-  return 'FREE';
+  return 'PRO';
 }
 
 /**

@@ -83,7 +83,6 @@ import { message } from 'antd';
 import { CostEstimatorModal } from '../components/CostEstimatorModal';
 import { AiStylerModal } from '../components/AiStylerModal';
 import UpgradeModal from '../components/UpgradeModal';
-import { SubscriptionPaywall } from '../components/SubscriptionPaywall';
 import { ProjectManagerModal } from '../components/ProjectManagerModal';
 import { SelectDemoModal } from '../components/SelectDemoModal';
 import { GuidedFloorPlanBuilderModal } from '../components/GuidedFloorPlanBuilderModal';
@@ -1201,31 +1200,6 @@ export default function HomeStudioPage() {
           setUsers((prev) => [newUser, ...prev]);
           handleLoginSuccess(newUser);
         }}
-      />
-    );
-  }
-
-  // 4. Strict Route Guard: If user is logged in, not ADMIN, and has not paid -> Subscription Paywall
-  if (currentUser.role !== 'ADMIN' && !hasActiveSubscription(currentUser)) {
-    return (
-      <SubscriptionPaywall
-        currentUser={currentUser}
-        onUserUpdated={(updated) => {
-          setCurrentUser(updated);
-          setActiveView('split');
-          const projs = getUserProjects(updated.id);
-          setUserProjects(projs);
-          if (projs.length === 0) {
-            setProjectManagerTab('new');
-            setIsProjectManagerOpen(true);
-          } else {
-            setPlan(cleanUnrealisticStairs(projs[0].plan));
-          }
-        }}
-        onLogout={handleLogout}
-        onRefreshStatus={() => refreshUserPaymentStatus(currentUser)}
-        status={currentUser.payment_status || 'unpaid'}
-        isRefreshing={isRefreshingStatus}
       />
     );
   }
