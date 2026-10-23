@@ -15,9 +15,12 @@ import {
   ShieldCheck,
   Sun,
   Moon,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 import { HomePlan, UserRole, User } from '../types/plan';
 import { hasActiveSubscription, getSubscriptionRemainingText, isUserOnFreeTrial } from '../services/subscriptionService';
+import { APP_NAME } from '../constants/app';
 
 interface NavbarProps {
   plan: HomePlan;
@@ -62,21 +65,20 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isAdmin = userRole === 'ADMIN' || currentUser?.role === 'ADMIN';
 
   return (
-    <header className={`h-14 px-4 sm:px-6 flex items-center justify-between select-none z-30 relative transition-colors duration-200 ${
+    <header className={`h-11 px-3 sm:px-4 flex items-center justify-between select-none z-30 relative transition-colors duration-200 ${
       isDark
         ? 'bg-[#0B0F17]/95 backdrop-blur border-b border-slate-800 text-slate-100'
         : 'bg-white/95 backdrop-blur border-b border-slate-200/80 text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.02)]'
     }`}>
       {/* 1. Left: Brand Mark */}
-      <div className="flex items-center gap-3 min-w-[200px]">
-        <div className="w-8 h-8 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 flex items-center justify-center font-bold shadow-xs shrink-0">
-          <Layers className="w-4 h-4" />
+      <div className="flex items-center gap-2.5 min-w-[180px]">
+        <div className="w-7 h-7 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 flex items-center justify-center font-bold shadow-xs shrink-0">
+          <Layers className="w-3.5 h-3.5" />
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-white flex items-center gap-1">
-            <span>DecoFrog</span>
-            <span className="text-emerald-500 font-extrabold text-xs">3D</span>
+          <span className="font-bold text-xs tracking-tight text-slate-900 dark:text-white flex items-center gap-1">
+            <span>{APP_NAME}</span>
           </span>
           <span className={`text-[10px] uppercase font-semibold px-2 py-0.5 rounded-md border tracking-wider ${
             isAdmin
@@ -138,7 +140,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         }`}>
           <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-            <span>DecoFrog 3D Design Studio</span>
+            <span>{APP_NAME} Design Studio</span>
           </span>
           <span className="text-slate-300 dark:text-slate-700">|</span>
           <span className="text-slate-500 dark:text-slate-400 font-medium truncate max-w-[220px]">
@@ -149,29 +151,39 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* 3. Right: Telemetry Dot, Theme Toggle & Profile */}
       <div className="flex items-center gap-2.5">
-        {/* Real-time Telemetry Dot */}
+        {/* Header Save State Indicator */}
         <div
-          className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium px-2 py-1 rounded-lg"
+          className={`hidden sm:flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${
+            cloudSyncStatus === 'saving'
+              ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-300'
+              : cloudSyncStatus === 'offline'
+              ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+              : 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-300'
+          }`}
           title={
             cloudSyncStatus === 'saving'
-              ? 'Saving changes...'
+              ? 'Saving changes to cloud...'
               : cloudSyncStatus === 'offline'
-              ? 'Database offline - using cache'
-              : `Connected to cloud sync${lastSyncedAt ? ' (' + lastSyncedAt + ')' : ''}`
+              ? 'Cloud sync unreachable. All changes saved safely in local storage.'
+              : `All changes saved${lastSyncedAt ? ' (' + lastSyncedAt + ')' : ''}`
           }
         >
-          <span
-            className={`w-2 h-2 rounded-full ${
-              cloudSyncStatus === 'saving'
-                ? 'bg-amber-500 animate-ping'
-                : cloudSyncStatus === 'offline'
-                ? 'bg-slate-400'
-                : 'bg-emerald-500'
-            }`}
-          />
-          <span className="text-[11px] font-medium">
-            {cloudSyncStatus === 'saving' ? 'Saving' : cloudSyncStatus === 'offline' ? 'Offline' : 'Live'}
-          </span>
+          {cloudSyncStatus === 'saving' ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500 shrink-0" />
+              <span className="text-[11px] font-semibold">Saving...</span>
+            </>
+          ) : cloudSyncStatus === 'offline' ? (
+            <>
+              <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
+              <span className="text-[11px] font-semibold">Saved locally</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+              <span className="text-[11px] font-semibold">Saved</span>
+            </>
+          )}
         </div>
 
         {/* Beginner & Customer Quick Guide */}

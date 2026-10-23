@@ -11,6 +11,8 @@ import { InspectorSidebar } from '../components/InspectorSidebar';
 import { SweetHomeRibbon } from '../components/SweetHomeRibbon';
 import { SweetHomeCatalogTree } from '../components/SweetHomeCatalogTree';
 import { SweetHomeFurnitureTable } from '../components/SweetHomeFurnitureTable';
+import { StudioStatusBar } from '../components/StudioStatusBar';
+import { CollapsibleCatalogPanel } from '../components/CollapsibleCatalogPanel';
 import { InteriorScopeBar } from '../components/InteriorScopeBar';
 import { MinimizedFloorPlan } from '../components/MinimizedFloorPlan';
 import { CustomerPresentationView } from '../components/CustomerPresentationView';
@@ -75,7 +77,9 @@ import {
   ShieldCheck,
   AlertCircle,
   Compass,
+  Laptop,
 } from 'lucide-react';
+import { message } from 'antd';
 import { CostEstimatorModal } from '../components/CostEstimatorModal';
 import { AiStylerModal } from '../components/AiStylerModal';
 import UpgradeModal from '../components/UpgradeModal';
@@ -98,6 +102,7 @@ import {
 } from '../services/projectService';
 import { DECOFROG_DEMOS } from '../services/demoPlans';
 import { cleanUnrealisticStairs } from '../services/referencePlans';
+import { APP_NAME } from '../constants/app';
 import {
   canAccessFeature,
   getUserSubscriptionTier,
@@ -118,7 +123,48 @@ export default function HomeStudioPage() {
   // Theme Management (Dark & Light) - Default to Light Mode
   const [theme, setTheme] = useState<'dark' | 'light'>('light');
 
-  // Load theme preference on mount (default to light)
+  // Draggable Split Divider & Layout Persistence
+  const [splitRatio, setSplitRatio] = useState<number>(50);
+  const [isDraggingSplit, setIsDraggingSplit] = useState<boolean>(false);
+  const [isLeftCatalogOpen, setIsLeftCatalogOpen] = useState<boolean>(false);
+  const [fitTrigger, setFitTrigger] = useState<number>(0);
+  const [studioZoomScale, setStudioZoomScale] = useState<number>(0.38);
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleStudioFit = useCallback(() => {
+    setFitTrigger((prev) => prev + 1);
+  }, []);
+
+  const handleSplitDividerMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDraggingSplit(true);
+  };
+
+  useEffect(() => {
+    if (!isDraggingSplit) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!splitContainerRef.current) return;
+      const rect = splitContainerRef.current.getBoundingClientRect();
+      const rawPct = ((e.clientX - rect.left) / rect.width) * 100;
+      const clamped = Math.max(20, Math.min(80, Math.round(rawPct)));
+      setSplitRatio(clamped);
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingSplit(false);
+      localStorage.setItem('decofrog_studio_split_ratio', String(splitRatio));
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingSplit, splitRatio]);
+
+  // Load theme preference and last layout on mount (default to light)
   useEffect(() => {
     const savedTheme = (localStorage.getItem('decofrog_theme') || localStorage.getItem('sweethome_theme')) as 'dark' | 'light' | null;
     if (savedTheme) {
@@ -127,6 +173,30 @@ export default function HomeStudioPage() {
     } else {
       setTheme('light');
       document.documentElement.classList.remove('dark');
+    }
+
+    const savedRatio = localStorage.getItem('decofrog_studio_split_ratio');
+    if (savedRatio) {
+      const parsed = parseFloat(savedRatio);
+      if (!isNaN(parsed) && parsed >= 20 && parsed <= 80) {
+        setSplitRatio(parsed);
+      }
+    }
+
+    const savedLayout = localStorage.getItem('decofrog_last_layout') as 'sweethome' | 'split' | '2d' | '3d' | 'tour' | null;
+    if (savedLayout && ['sweethome', 'split', '2d', '3d', 'tour'].includes(savedLayout)) {
+      setStudioLayout(savedLayout);
+      if (savedLayout === '2d') {
+        setActiveView('2d');
+      } else if (savedLayout === '3d') {
+        setActiveView('3d');
+        setCameraMode3D('aerial');
+      } else if (savedLayout === 'tour') {
+        setActiveView('split');
+        setCameraMode3D('visitor');
+      } else {
+        setActiveView('split');
+      }
     }
   }, []);
 
@@ -142,6 +212,21 @@ export default function HomeStudioPage() {
   // Authentication State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthLoaded, setIsAuthLoaded] = useState<boolean>(false);
+
+  // Screen Width Responsiveness Notice (< 1024px)
+  const [isSmallScreen, setIsSmallScreen] = useState<boolean>(false);
+  const [isMobileNoticeDismissed, setIsMobileNoticeDismissed] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleScreenSize = () => {
+      if (typeof window !== 'undefined') {
+        setIsSmallScreen(window.innerWidth < 1024);
+      }
+    };
+    handleScreenSize();
+    window.addEventListener('resize', handleScreenSize);
+    return () => window.removeEventListener('resize', handleScreenSize);
+  }, []);
 
   const [activeView, setActiveView] = useState<'split' | '2d' | '3d' | 'customer' | 'dashboard'>('split');
   const [studioLayout, setStudioLayout] = useState<'sweethome' | 'split' | '2d' | '3d' | 'tour'>('sweethome');
@@ -265,14 +350,20 @@ export default function HomeStudioPage() {
   const [isCustomerGuideOpen, setIsCustomerGuideOpen] = useState<boolean>(false);
   const directImportFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // User-friendly onboarding: Tailor your floor plan wizard on first session load
+  // First-time onboarding only: Shown once initially, never on every page refresh
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const alreadyPicked =
-        sessionStorage.getItem('decofrog_initial_demo_selected') ||
-        sessionStorage.getItem('sweethome_initial_demo_selected');
-      if (!alreadyPicked) {
-        setIsGuidedBuilderOpen(true);
+      const hasSeenTour =
+        localStorage.getItem('decofrog_tour_completed') ||
+        localStorage.getItem('decofrog_welcome_dismissed') ||
+        localStorage.getItem('decofrog_has_visited');
+
+      if (!hasSeenTour) {
+        localStorage.setItem('decofrog_has_visited', 'true');
+        const timer = setTimeout(() => {
+          setIsCustomerGuideOpen(true);
+        }, 800);
+        return () => clearTimeout(timer);
       }
     }
   }, []);
@@ -439,39 +530,54 @@ export default function HomeStudioPage() {
     }
   }, []);
 
+  // Fallback to prevent app hanging on loading screen under any circumstance
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsAuthLoaded(true);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Initial Data Fetching & Auth Check
   useEffect(() => {
-    const savedUser =
-      localStorage.getItem('decofrog_current_user') ||
-      localStorage.getItem('sweethome_current_user');
     let loadedUser: User | null = null;
-    if (savedUser) {
-      try {
+    try {
+      const savedUser =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('decofrog_current_user') || localStorage.getItem('sweethome_current_user')
+          : null;
+
+      if (savedUser) {
         let u = JSON.parse(savedUser);
-        if (u.role !== 'ADMIN' && !u.paid_at && !u.trialExpiresAt) {
+        if (u && u.role !== 'ADMIN' && !u.paid_at && !u.trialExpiresAt) {
           u = start48HourFreeTrialLocally(u);
         }
         loadedUser = u;
         setCurrentUser(u);
-        setUserRole(u.role);
-        const projs = getUserProjects(u.id);
-        setUserProjects(projs);
-        syncUserProjectsWithCloud(u.id, u.email).then((cloudProjs) => {
-          if (cloudProjs && cloudProjs.length > 0) {
-            setUserProjects(cloudProjs);
-          }
-        });
-        if (u.role === 'ADMIN') {
-          setActiveView('dashboard');
-        } else {
-          setActiveView('split');
-          if (projs.length > 0) {
-            setPlan(cleanUnrealisticStairs(projs[0].plan));
+        if (u?.role) setUserRole(u.role);
+        if (u?.id) {
+          const projs = getUserProjects(u.id);
+          setUserProjects(projs);
+          syncUserProjectsWithCloud(u.id, u.email).then((cloudProjs) => {
+            if (cloudProjs && cloudProjs.length > 0) {
+              setUserProjects(cloudProjs);
+            }
+          });
+          if (u.role === 'ADMIN') {
+            setActiveView('dashboard');
+          } else {
+            setActiveView('split');
+            if (projs.length > 0 && projs[0]?.plan) {
+              setPlan(cleanUnrealisticStairs(projs[0].plan));
+            }
           }
         }
-      } catch (e) {}
+      }
+    } catch (e) {
+      console.warn('Initial auth loading error:', e);
+    } finally {
+      setIsAuthLoaded(true);
     }
-    setIsAuthLoaded(true);
 
     // Return URL verification for Cashfree payment callbacks
     if (typeof window !== 'undefined') {
@@ -629,6 +735,7 @@ export default function HomeStudioPage() {
     };
     handleUpdatePlan(updated);
     setSelectedId(newItem.id);
+    message.success(`Added ${catalogItem.name} to plan`);
   };
 
   const handleToggleItemVisibility = (id: string) => {
@@ -648,6 +755,15 @@ export default function HomeStudioPage() {
   };
 
   const handleDeleteItem = (id: string) => {
+    const furniture = plan.furniture.find((f) => f.id === id);
+    const room = plan.rooms.find((r) => r.id === id);
+    const wall = plan.walls.find((w) => w.id === id);
+    const label = furniture ? `item "${furniture.name}"` : room ? `room "${room.name}"` : wall ? 'wall segment' : 'selected object';
+
+    if (!confirm(`Are you sure you want to remove this ${label}?`)) {
+      return;
+    }
+
     const updated = {
       ...plan,
       furniture: plan.furniture.filter((f) => f.id !== id),
@@ -658,6 +774,7 @@ export default function HomeStudioPage() {
     };
     handleUpdatePlan(updated);
     if (selectedId === id) setSelectedId(null);
+    message.success(`Deleted ${label}`);
   };
 
   const handleSave = async () => {
@@ -670,8 +787,10 @@ export default function HomeStudioPage() {
       await savePlanToBackend(plan);
       setCloudSyncStatus('synced');
       setLastSyncedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      message.success('Project blueprint saved successfully');
     } catch (e) {
       setCloudSyncStatus('offline');
+      message.info('Saved locally to your browser storage');
     } finally {
       setIsSaving(false);
     }
@@ -684,6 +803,7 @@ export default function HomeStudioPage() {
     setCanUndo(false);
     setCanRedo(false);
     setActiveView('split');
+    setFitTrigger((prev) => prev + 1);
   };
 
   const handleSaveNewUserProject = (newPlan: HomePlan) => {
@@ -697,12 +817,14 @@ export default function HomeStudioPage() {
     setCanUndo(false);
     setCanRedo(false);
     setActiveView('split');
+    setFitTrigger((prev) => prev + 1);
   };
 
   const handleDeleteUserProject = (projectId: string) => {
     if (currentUser) {
       const updatedList = deleteUserProject(currentUser.id, projectId);
       setUserProjects(updatedList);
+      message.success('Project deleted');
     }
   };
 
@@ -722,6 +844,7 @@ export default function HomeStudioPage() {
         setPlan(validatedPlan);
         commitSnapshot(validatedPlan);
         setActiveView('split');
+        setFitTrigger((prev) => prev + 1);
         alert(`✓ Project "${validatedPlan.name}" imported successfully! You can now continue designing.`);
       } catch (err: any) {
         alert(err.message || 'Failed to parse project file. Please provide a valid project CAD .json file.');
@@ -743,6 +866,7 @@ export default function HomeStudioPage() {
     setCanRedo(false);
     setActiveFloor(selectedPlan.currentFloor || 0);
     setActiveView('split');
+    setFitTrigger((prev) => prev + 1);
     sessionStorage.setItem('decofrog_initial_demo_selected', 'true');
     setIsSelectDemoModalOpen(false);
   };
@@ -759,6 +883,7 @@ export default function HomeStudioPage() {
     setCanRedo(false);
     setActiveFloor(newPlan.currentFloor || 0);
     setActiveView('split');
+    setFitTrigger((prev) => prev + 1);
     setCameraMode3D('aerial');
     const isSingle = newPlan.floors.length === 1;
     const livingCamX = isSingle ? 220 : -240;
@@ -808,6 +933,7 @@ export default function HomeStudioPage() {
     setCanRedo(false);
     setActiveFloor(0);
     setActiveView('split');
+    setFitTrigger((prev) => prev + 1);
     sessionStorage.setItem('decofrog_initial_demo_selected', 'true');
     setIsGuidedBuilderOpen(false);
   };
@@ -830,6 +956,7 @@ export default function HomeStudioPage() {
       setCanRedo(false);
       setActiveFloor(planToLoad.currentFloor || 0);
       setActiveView('split');
+      setFitTrigger((prev) => prev + 1);
       return;
     }
 
@@ -850,6 +977,7 @@ export default function HomeStudioPage() {
       setCanRedo(false);
       setActiveFloor(cloned.currentFloor || 0);
       setActiveView('split');
+      setFitTrigger((prev) => prev + 1);
       return;
     }
 
@@ -870,10 +998,12 @@ export default function HomeStudioPage() {
       setCanRedo(false);
       setActiveFloor(cloned.currentFloor || 0);
       setActiveView('split');
+      setFitTrigger((prev) => prev + 1);
       return;
     }
 
     setActiveView('split');
+    setFitTrigger((prev) => prev + 1);
   };
 
   const handleAddCustomItem = async (newItem: CatalogItem, autoPlaceInScene?: boolean) => {
@@ -1055,7 +1185,7 @@ export default function HomeStudioPage() {
       <div className="h-screen w-screen bg-[#080d19] flex items-center justify-center text-slate-400">
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-          <span>Loading DecoFrog 3D Studio...</span>
+          <span>Loading {APP_NAME}...</span>
         </div>
       </div>
     );
@@ -1129,6 +1259,24 @@ export default function HomeStudioPage() {
         theme={theme}
         onToggleTheme={handleToggleTheme}
       />
+
+      {/* Polite notice for screens narrower than 1024px */}
+      {isSmallScreen && !isMobileNoticeDismissed && (
+        <div className="bg-gradient-to-r from-sky-900 via-indigo-900 to-slate-900 border-b border-indigo-500/30 text-white px-4 py-2 text-xs flex items-center justify-between z-40 shrink-0 select-none shadow-md">
+          <div className="flex items-center gap-2">
+            <Laptop className="w-4 h-4 text-sky-400 shrink-0" />
+            <span>
+              This app works best on a desktop or laptop with a minimum width of 1024px.
+            </span>
+          </div>
+          <button
+            onClick={() => setIsMobileNoticeDismissed(true)}
+            className="ml-4 px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white font-semibold text-[11px] transition shrink-0 cursor-pointer"
+          >
+            Continue anyway
+          </button>
+        </div>
+      )}
 
       {/* 48-Hour Free Trial Active Banner with Upgrade Button */}
       {currentUser.role !== 'ADMIN' && isUserOnFreeTrial(currentUser) && (
@@ -1259,6 +1407,7 @@ export default function HomeStudioPage() {
               studioLayout={studioLayout}
               onLayoutChange={(newLayout) => {
                 setStudioLayout(newLayout);
+                localStorage.setItem('decofrog_last_layout', newLayout);
                 if (newLayout === '2d') {
                   setActiveView('2d');
                 } else if (newLayout === '3d') {
@@ -1271,6 +1420,8 @@ export default function HomeStudioPage() {
                   setActiveView('split');
                 }
               }}
+              activeFloor={activeFloor}
+              onFloorChange={setActiveFloor}
               cameraMode3D={cameraMode3D}
               onToggleCameraMode3D={() => setCameraMode3D((prev) => (prev === 'visitor' ? 'aerial' : 'visitor'))}
               theme={theme}
@@ -1343,6 +1494,13 @@ export default function HomeStudioPage() {
                           activeToolModeProp={cadToolMode}
                           onToolModeChangeProp={setCadToolMode}
                           hideFloatingToolbar={true}
+                          zoomScale={studioZoomScale}
+                          onZoomChange={setStudioZoomScale}
+                          fitTrigger={fitTrigger}
+                          onOpenTemplates={() => {
+                            setProjectManagerTab('new');
+                            setIsProjectManagerOpen(true);
+                          }}
                         />
                       </div>
 
@@ -1366,16 +1524,30 @@ export default function HomeStudioPage() {
                           onUpgradePrompt={handleOpenUpgrade}
                           isPro={isProOrAdmin}
                           targetRoomToFocus={targetRoomToFocus}
+                          fitTrigger={fitTrigger}
                         />
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* 2. Side-by-Side Dual View (50% 2D on Left, 50% 3D on Right) */}
+                {/* 2. Side-by-Side Dual View (Resizable 2D & 3D) */}
                 {activeView === 'split' && studioLayout === 'split' && (
-                  <>
-                    <div className={`w-1/2 h-full border-r relative ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+                  <div ref={splitContainerRef} className="flex-1 flex w-full h-full relative select-none overflow-hidden">
+                    {/* Collapsible Left Furniture Catalog Drawer */}
+                    <CollapsibleCatalogPanel
+                      isOpen={isLeftCatalogOpen}
+                      onToggle={() => setIsLeftCatalogOpen(!isLeftCatalogOpen)}
+                      catalog={catalog}
+                      onAddItem={handleAddItem}
+                      theme={theme}
+                    />
+
+                    {/* 2D Plan Container */}
+                    <div
+                      style={{ width: `${splitRatio}%` }}
+                      className={`h-full border-r relative flex-shrink-0 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}
+                    >
                       <PlanCanvas2D
                         plan={plan}
                         onUpdatePlan={handleUpdatePlan}
@@ -1398,9 +1570,29 @@ export default function HomeStudioPage() {
                         onToggleWalkMode={() => setCameraMode3D((prev) => (prev === 'visitor' ? 'aerial' : 'visitor'))}
                         activeToolModeProp={cadToolMode}
                         onToolModeChangeProp={setCadToolMode}
+                        zoomScale={studioZoomScale}
+                        onZoomChange={setStudioZoomScale}
+                        fitTrigger={fitTrigger}
+                        onOpenTemplates={() => {
+                          setProjectManagerTab('new');
+                          setIsProjectManagerOpen(true);
+                        }}
                       />
                     </div>
-                    <div className="w-1/2 h-full relative">
+
+                    {/* Draggable Divider Bar */}
+                    <div
+                      onMouseDown={handleSplitDividerMouseDown}
+                      className={`w-2.5 -ml-1 -mr-1 z-20 cursor-col-resize flex items-center justify-center transition-colors group select-none shrink-0 ${
+                        isDraggingSplit ? 'bg-indigo-500' : isDark ? 'hover:bg-indigo-600/60 bg-transparent' : 'hover:bg-indigo-500/50 bg-transparent'
+                      }`}
+                      title="Drag to resize 2D / 3D split"
+                    >
+                      <div className={`w-1 h-8 rounded-full ${isDraggingSplit ? 'bg-white' : isDark ? 'bg-slate-600 group-hover:bg-white' : 'bg-slate-400 group-hover:bg-white'}`} />
+                    </div>
+
+                    {/* 3D Viewport Container */}
+                    <div style={{ width: `${100 - splitRatio}%` }} className="h-full relative flex-1 overflow-hidden">
                       <Viewport3D
                         plan={plan}
                         selectedId={selectedId}
@@ -1419,9 +1611,10 @@ export default function HomeStudioPage() {
                         onUpgradePrompt={handleOpenUpgrade}
                         isPro={isProOrAdmin}
                         targetRoomToFocus={targetRoomToFocus}
+                        fitTrigger={fitTrigger}
                       />
                     </div>
-                  </>
+                  </div>
                 )}
 
                 {/* 3. First-Person Walkthrough Tour */}
@@ -1445,6 +1638,7 @@ export default function HomeStudioPage() {
                       onUpgradePrompt={handleOpenUpgrade}
                       isPro={isProOrAdmin}
                       targetRoomToFocus={targetRoomToFocus}
+                      fitTrigger={fitTrigger}
                     />
 
                     {/* Minimized Floor Plan Navigator in Tour Mode */}
@@ -1476,30 +1670,46 @@ export default function HomeStudioPage() {
 
                 {/* 4. Full 2D Drafting Blueprint Mode */}
                 {activeView === '2d' && (
-                  <div className="w-full h-full relative">
-                    <PlanCanvas2D
-                      plan={plan}
-                      onUpdatePlan={handleUpdatePlan}
-                      selectedId={selectedId}
-                      onSelectId={setSelectedId}
-                      activeFloor={activeFloor}
-                      onFloorChange={setActiveFloor}
-                      floorMode={floorMode}
-                      onFloorModeChange={setFloorMode}
-                      collidingItemIds={collisionReport.collidingItemIds}
-                      collisionReasons={collisionReport.reasons}
-                      onOpenBlueprintModal={() => setIsBlueprintModalOpen(true)}
-                      canUndo={canUndo}
-                      canRedo={canRedo}
-                      onUndo={handleUndo}
-                      onRedo={handleRedo}
-                      visitorCamera={visitorCamera}
-                      onUpdateVisitorCamera={handleUpdateVisitorCamera}
-                      isWalkMode={cameraMode3D === 'visitor'}
-                      onToggleWalkMode={() => setCameraMode3D((prev) => (prev === 'visitor' ? 'aerial' : 'visitor'))}
-                      activeToolModeProp={cadToolMode}
-                      onToolModeChangeProp={setCadToolMode}
+                  <div className="w-full h-full relative flex">
+                    <CollapsibleCatalogPanel
+                      isOpen={isLeftCatalogOpen}
+                      onToggle={() => setIsLeftCatalogOpen(!isLeftCatalogOpen)}
+                      catalog={catalog}
+                      onAddItem={handleAddItem}
+                      theme={theme}
                     />
+                    <div className="flex-1 h-full relative">
+                      <PlanCanvas2D
+                        plan={plan}
+                        onUpdatePlan={handleUpdatePlan}
+                        selectedId={selectedId}
+                        onSelectId={setSelectedId}
+                        activeFloor={activeFloor}
+                        onFloorChange={setActiveFloor}
+                        floorMode={floorMode}
+                        onFloorModeChange={setFloorMode}
+                        collidingItemIds={collisionReport.collidingItemIds}
+                        collisionReasons={collisionReport.reasons}
+                        onOpenBlueprintModal={() => setIsBlueprintModalOpen(true)}
+                        canUndo={canUndo}
+                        canRedo={canRedo}
+                        onUndo={handleUndo}
+                        onRedo={handleRedo}
+                        visitorCamera={visitorCamera}
+                        onUpdateVisitorCamera={handleUpdateVisitorCamera}
+                        isWalkMode={cameraMode3D === 'visitor'}
+                        onToggleWalkMode={() => setCameraMode3D((prev) => (prev === 'visitor' ? 'aerial' : 'visitor'))}
+                        activeToolModeProp={cadToolMode}
+                        onToolModeChangeProp={setCadToolMode}
+                        zoomScale={studioZoomScale}
+                        onZoomChange={setStudioZoomScale}
+                        fitTrigger={fitTrigger}
+                        onOpenTemplates={() => {
+                          setProjectManagerTab('new');
+                          setIsProjectManagerOpen(true);
+                        }}
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -1524,6 +1734,7 @@ export default function HomeStudioPage() {
                       onUpgradePrompt={handleOpenUpgrade}
                       isPro={isProOrAdmin}
                       targetRoomToFocus={targetRoomToFocus}
+                      fitTrigger={fitTrigger}
                     />
                   </div>
                 )}
@@ -1584,8 +1795,8 @@ export default function HomeStudioPage() {
               )}
             </div>
 
-            {/* Bottom Expandable Furniture List Pane (Shown in standard layouts; SweetHome 4-Pane uses the dedicated left table) */}
-            {studioLayout !== 'sweethome' && (
+            {/* Bottom Expandable Furniture List Pane (Shown in standard layouts when toggled open) */}
+            {studioLayout !== 'sweethome' && isFurnitureListOpen && (
               <FurnitureListPane
                 furniture={plan.furniture.filter((f) => (f.floorLevel ?? 0) === activeFloor)}
                 selectedId={selectedId}
@@ -1599,6 +1810,25 @@ export default function HomeStudioPage() {
                 theme={theme}
               />
             )}
+
+            {/* Unified Studio Bottom Status Bar */}
+            <StudioStatusBar
+              plan={plan}
+              activeFloor={activeFloor}
+              collidingItemIds={collisionReport.collidingItemIds}
+              collisionReasons={collisionReport.reasons}
+              selectedId={selectedId}
+              onSelectId={(id) => {
+                setSelectedId(id);
+                if (id) setFitTrigger((prev) => prev + 1);
+              }}
+              zoomScale={studioZoomScale}
+              onZoomIn={() => setStudioZoomScale((prev) => Math.min(prev * 1.25, 4.0))}
+              onZoomOut={() => setStudioZoomScale((prev) => Math.max(prev / 1.25, 0.25))}
+              onFit={handleStudioFit}
+              onToggleFurnitureList={() => setIsFurnitureListOpen(!isFurnitureListOpen)}
+              theme={theme}
+            />
           </div>
         )}
       </div>
@@ -1684,6 +1914,7 @@ export default function HomeStudioPage() {
           setCurrentUser(updated);
         }}
         initialFeatureHighlight={upgradeHighlight}
+        theme={theme}
       />
 
       {/* Project Center Modal: User Saved Projects, Pre-defined Starter Houses & JSON Import/Export */}

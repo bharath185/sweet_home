@@ -53,6 +53,10 @@ interface PlanCanvas2DProps {
   onToolModeChangeProp?: (mode: ToolMode) => void;
   hideFloatingToolbar?: boolean;
   showRulers?: boolean;
+  zoomScale?: number;
+  onZoomChange?: (scale: number) => void;
+  fitTrigger?: number;
+  onOpenTemplates?: () => void;
 }
 
 export type ToolMode =
@@ -70,6 +74,8 @@ export interface CADLayers {
   walls: boolean;
   openings: boolean;
   furniture: boolean;
+  furnitureLabels?: boolean;
+  wallDimensions?: boolean;
   dimensions: boolean;
   rooms: boolean;
   structure: boolean;
@@ -77,6 +83,20 @@ export interface CADLayers {
   grid: boolean;
   blueprint: boolean;
 }
+
+const LAYER_LABELS: Record<string, string> = {
+  walls: 'Walls',
+  openings: 'Doors & Windows',
+  furniture: 'Furniture Icons',
+  furnitureLabels: 'Furniture Names',
+  wallDimensions: 'Wall Lengths',
+  dimensions: 'Dimension Lines',
+  rooms: 'Room Tags',
+  structure: 'Structure',
+  notes: 'Text Notes',
+  grid: 'Background Grid',
+  blueprint: 'Blueprint Underlay',
+};
 
 type FurnitureHandle = 'nw' | 'ne' | 'se' | 'sw' | 'n' | 's' | 'e' | 'w' | 'rotate' | 'body' | null;
 type WallHandle = 'start' | 'end' | 'body' | null;
@@ -105,6 +125,10 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   onToolModeChangeProp,
   hideFloatingToolbar = false,
   showRulers = true,
+  zoomScale,
+  onZoomChange,
+  fitTrigger,
+  onOpenTemplates,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const blueprintImgRef = useRef<HTMLImageElement | null>(null);
@@ -132,6 +156,8 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     walls: true,
     openings: true,
     furniture: true,
+    furnitureLabels: false,
+    wallDimensions: false,
     dimensions: true,
     rooms: true,
     structure: true,
@@ -230,10 +256,11 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   // Coordinate Conversion: Plan (cm) -> Screen (px)
   const planToScreen = useCallback(
     (x: number, y: number, floorLvl?: number) => {
-      if (!canvasRef.current) return { x: 0, y: 0 };
-      const rect = canvasRef.current.getBoundingClientRect();
-      const centerX = rect.width / 2 + panOffset.x;
-      const centerY = rect.height / 2 + panOffset.y;
+      const canvas = canvasRef.current;
+      const width = canvas ? canvas.width : 800;
+      const height = canvas ? canvas.height : 600;
+      const centerX = width / 2 + panOffset.x;
+      const centerY = height / 2 + panOffset.y;
       const offset = floorLvl !== undefined ? getFloorOffset(floorLvl) : { x: 0, y: 0 };
 
       return {
@@ -280,9 +307,9 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   const lastFittedPlanIdRef = useRef<string | null>(null);
 
   const fitToPlan = useCallback(() => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current) return false;
     const rect = canvasRef.current.getBoundingClientRect();
-    if (rect.width <= 20 || rect.height <= 20) return;
+    if (rect.width <= 50 || rect.height <= 50) return false;
 
     const relevantWalls = plan.walls.filter(
       (w) => canvasFloorMode !== 'single' || (w.floorLevel ?? 0) === activeFloor
@@ -328,8 +355,8 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     const planCenterX = (minX + maxX) / 2;
     const planCenterY = (minY + maxY) / 2;
 
-    const availableW = rect.width * 0.84;
-    const availableH = rect.height * 0.82;
+    const availableW = rect.width * 0.86;
+    const availableH = rect.height * 0.84;
 
     const targetScale = Math.min(availableW / planWidth, availableH / planHeight);
     const clampedScale = Math.max(0.2, Math.min(1.8, Number(targetScale.toFixed(3))));
@@ -339,18 +366,54 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       x: -planCenterX * clampedScale,
       y: -planCenterY * clampedScale,
     });
+    lastFittedPlanIdRef.current = plan.id;
+    return true;
   }, [plan, activeFloor, canvasFloorMode]);
 
-  // Automatically fit on plan change or canvas load
+  // Automatically fit on plan change or canvas load with retry loop
   useEffect(() => {
-    if (plan.id !== lastFittedPlanIdRef.current) {
-      lastFittedPlanIdRef.current = plan.id;
-      const timer = setTimeout(() => {
-        fitToPlan();
-      }, 60);
-      return () => clearTimeout(timer);
-    }
+    if (lastFittedPlanIdRef.current === plan.id) return;
+    let attempts = 0;
+    let timer: NodeJS.Timeout;
+
+    const tryFit = () => {
+      if (lastFittedPlanIdRef.current === plan.id) return;
+      attempts++;
+      const ok = fitToPlan();
+      if (!ok && attempts < 15) {
+        timer = setTimeout(tryFit, 80);
+      }
+    };
+
+    timer = setTimeout(tryFit, 50);
+    return () => clearTimeout(timer);
   }, [plan.id, fitToPlan]);
+
+  // Also fit when parent container layout finishes or resizes
+  useEffect(() => {
+    const parent = canvasRef.current?.parentElement;
+    if (!parent) return;
+
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 50 && height > 50 && lastFittedPlanIdRef.current !== plan.id) {
+          fitToPlan();
+        }
+      }
+    });
+
+    ro.observe(parent);
+    return () => ro.disconnect();
+  }, [plan.id, fitToPlan]);
+
+  const lastFitTriggerRef = useRef<number>(0);
+  useEffect(() => {
+    if (fitTrigger && fitTrigger !== lastFitTriggerRef.current) {
+      lastFitTriggerRef.current = fitTrigger;
+      fitToPlan();
+    }
+  }, [fitTrigger, fitToPlan]);
 
   // Helper to determine floor under screen cursor
   const getFloorAtScreen = useCallback(
@@ -871,23 +934,40 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       const avgY = room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length;
       const roomCenter = toHDScreen(avgX, avgY);
 
+      let expPrimary = room.name.toUpperCase();
+      let expDim = '';
+      const expMatch = room.name.match(/^(.*?)\s*\(([^)]+)\)$/);
+      if (expMatch) {
+        expPrimary = expMatch[1].trim().toUpperCase();
+        expDim = expMatch[2].trim();
+      }
+      const expSub = expDim ? `${expDim}  •  ${formatArea(room.areaSquareMeters || 12.5, unit)}` : formatArea(room.areaSquareMeters || 12.5, unit);
+
       ectx.save();
-      ectx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+      ectx.font = 'bold 18px system-ui';
+      const ew1 = ectx.measureText(expPrimary).width;
+      ectx.font = '15px monospace';
+      const ew2 = ectx.measureText(expSub).width;
+      const expBadgeW = Math.max(ew1, ew2) + 32;
+      const expBadgeH = 50;
+
+      ectx.fillStyle = 'rgba(255, 255, 255, 0.94)';
       ectx.strokeStyle = '#cbd5e1';
       ectx.lineWidth = 2;
       ectx.beginPath();
-      ectx.roundRect(roomCenter.x - 120, roomCenter.y - 28, 240, 56, 10);
+      ectx.roundRect(roomCenter.x - expBadgeW / 2, roomCenter.y - expBadgeH / 2, expBadgeW, expBadgeH, 8);
       ectx.fill();
       ectx.stroke();
 
       ectx.fillStyle = '#0f172a';
-      ectx.font = 'bold 20px system-ui';
+      ectx.font = 'bold 18px system-ui';
       ectx.textAlign = 'center';
       ectx.textBaseline = 'middle';
-      ectx.fillText(room.name.toUpperCase(), roomCenter.x, roomCenter.y - 12);
+      ectx.fillText(expPrimary, roomCenter.x, roomCenter.y - 11);
+
       ectx.fillStyle = '#0284c7';
-      ectx.font = 'bold 17px monospace';
-      ectx.fillText(formatArea(room.areaSquareMeters || 12.5, unit), roomCenter.x, roomCenter.y + 14);
+      ectx.font = 'bold 15px monospace';
+      ectx.fillText(expSub, roomCenter.x, roomCenter.y + 12);
       ectx.restore();
     });
 
@@ -943,11 +1023,15 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         ectx.fill();
         ectx.stroke();
 
-        ectx.fillStyle = '#0f172a';
-        ectx.font = 'bold 15px system-ui';
-        ectx.textAlign = 'center';
-        ectx.textBaseline = 'middle';
-        ectx.fillText(item.name, 0, 0);
+        // Only draw label in HD export if furniture is large enough
+        if (w >= 75 && d >= 40) {
+          ectx.fillStyle = '#475569';
+          ectx.font = 'bold 12px system-ui';
+          ectx.textAlign = 'center';
+          ectx.textBaseline = 'middle';
+          const hdName = item.name.length > 20 ? item.name.slice(0, 18) + '…' : item.name;
+          ectx.fillText(hdName, 0, 0);
+        }
       }
       ectx.restore();
     });
@@ -1005,8 +1089,14 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     if (!ctx) return;
 
     let animFrame: number;
-    const width = (canvas.width = canvas.parentElement?.clientWidth || 800);
-    const height = (canvas.height = canvas.parentElement?.clientHeight || 600);
+    const parentW = Math.round(canvas.parentElement?.clientWidth || 800);
+    const parentH = Math.round(canvas.parentElement?.clientHeight || 600);
+    if (canvas.width !== parentW || canvas.height !== parentH) {
+      canvas.width = parentW;
+      canvas.height = parentH;
+    }
+    const width = canvas.width;
+    const height = canvas.height;
 
     const render = () => {
       ctx.clearRect(0, 0, width, height);
@@ -1395,12 +1485,29 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
                   }
                 }
 
-                // Name label
-                ctx.fillStyle = '#0f172a';
-                ctx.font = 'bold 9px system-ui';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(item.name, 0, 0);
+                // Name label - only render when selected or explicitly toggled in CAD layers
+                if (isSelected || layers.furnitureLabels) {
+                  const labelText = item.name.length > 22 ? item.name.slice(0, 20) + '…' : item.name;
+                  ctx.font = 'bold 8.5px system-ui';
+                  const textMetrics = ctx.measureText(labelText);
+                  const tagW = Math.max(textMetrics.width + 10, 32);
+                  const tagH = 15;
+
+                  ctx.save();
+                  ctx.fillStyle = isSelected ? 'rgba(79, 70, 229, 0.95)' : 'rgba(255, 255, 255, 0.92)';
+                  ctx.strokeStyle = isSelected ? '#4338ca' : '#cbd5e1';
+                  ctx.lineWidth = 1;
+                  ctx.beginPath();
+                  ctx.roundRect(-tagW / 2, -tagH / 2, tagW, tagH, 3);
+                  ctx.fill();
+                  ctx.stroke();
+
+                  ctx.fillStyle = isSelected ? '#ffffff' : '#0f172a';
+                  ctx.textAlign = 'center';
+                  ctx.textBaseline = 'middle';
+                  ctx.fillText(labelText, 0, 0);
+                  ctx.restore();
+                }
                 ctx.restore();
               }
 
@@ -1481,21 +1588,22 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             const lengthCm = Math.round(Math.hypot(wall.xEnd - wall.xStart, wall.yEnd - wall.yStart));
             const dimStr = formatDistance(lengthCm, unit);
 
-            if (len > 60) {
+            // Wall Length Dimension Callout (clean CAD view: show when selected, in wall tool, or when toggled)
+            if (len > 60 && (isSelected || layers.wallDimensions || toolMode === 'drawWall')) {
               ctx.save();
               ctx.translate(len / 2, 0);
               if (Math.abs(angle) > Math.PI / 2) ctx.rotate(Math.PI);
 
-              ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-              ctx.strokeStyle = '#94a3b8';
+              ctx.fillStyle = isSelected ? '#4f46e5' : 'rgba(255, 255, 255, 0.95)';
+              ctx.strokeStyle = isSelected ? '#4338ca' : '#94a3b8';
               ctx.lineWidth = 0.8;
               ctx.beginPath();
-              ctx.roundRect(-30, -8, 60, 16, 4);
+              ctx.roundRect(-28, -8, 56, 16, 4);
               ctx.fill();
               ctx.stroke();
 
-              ctx.fillStyle = '#0f172a';
-              ctx.font = 'bold 9.5px monospace';
+              ctx.fillStyle = isSelected ? '#ffffff' : '#0f172a';
+              ctx.font = 'bold 9px monospace';
               ctx.textAlign = 'center';
               ctx.textBaseline = 'middle';
               ctx.fillText(dimStr, 0, 0);
@@ -1705,32 +1813,43 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             const avgY = room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length;
             const screenAvg = planToScreen(avgX, avgY, flLevel);
 
-            const roomTitle = room.name.toUpperCase();
+            // Extract clean primary room name and optional dimension string
+            let primaryName = room.name.toUpperCase();
+            let dimensionPart = '';
+            const match = room.name.match(/^(.*?)\s*\(([^)]+)\)$/);
+            if (match) {
+              primaryName = match[1].trim().toUpperCase();
+              dimensionPart = match[2].trim();
+            }
+
             const areaStr = formatArea(room.areaSquareMeters || 12.5, unit);
+            const subtitle = dimensionPart ? `${dimensionPart}  •  ${areaStr}` : areaStr;
 
             ctx.save();
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
-            ctx.shadowColor = 'rgba(15, 23, 42, 0.15)';
-            ctx.shadowBlur = 8;
-            ctx.shadowOffsetY = 2;
-            ctx.beginPath();
-            ctx.roundRect(screenAvg.x - 70, screenAvg.y - 17, 140, 34, 6);
-            ctx.fill();
+            ctx.font = 'bold 9.5px system-ui';
+            const w1 = ctx.measureText(primaryName).width;
+            ctx.font = '8.5px monospace';
+            const w2 = ctx.measureText(subtitle).width;
+            const badgeW = Math.max(w1, w2) + 16;
+            const badgeH = 26;
 
-            ctx.shadowColor = 'transparent';
-            ctx.strokeStyle = isSelected ? '#0284c7' : '#cbd5e1';
+            ctx.fillStyle = isSelected ? 'rgba(238, 242, 255, 0.95)' : 'rgba(255, 255, 255, 0.92)';
+            ctx.strokeStyle = isSelected ? '#4f46e5' : 'rgba(203, 213, 225, 0.8)';
             ctx.lineWidth = isSelected ? 2 : 1;
+            ctx.beginPath();
+            ctx.roundRect(screenAvg.x - badgeW / 2, screenAvg.y - badgeH / 2, badgeW, badgeH, 5);
+            ctx.fill();
             ctx.stroke();
 
-            ctx.fillStyle = '#0f172a';
-            ctx.font = 'bold 11px system-ui';
+            ctx.fillStyle = isSelected ? '#4338ca' : '#0f172a';
+            ctx.font = 'bold 9.5px system-ui';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(roomTitle, screenAvg.x, screenAvg.y - 6);
+            ctx.fillText(primaryName, screenAvg.x, screenAvg.y - 5);
 
-            ctx.fillStyle = '#0284c7';
-            ctx.font = 'bold 10px monospace';
-            ctx.fillText(areaStr, screenAvg.x, screenAvg.y + 7);
+            ctx.fillStyle = isSelected ? '#4f46e5' : '#0284c7';
+            ctx.font = 'bold 8.5px monospace';
+            ctx.fillText(subtitle, screenAvg.x, screenAvg.y + 5.5);
             ctx.restore();
           });
         }
@@ -2663,14 +2782,14 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between gap-2 pointer-events-none select-none">
           {/* Left: Complete Architectural & CAD Drafting Tools */}
           <div
-            className="flex items-center gap-1 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200/90 shadow-sm pointer-events-auto overflow-x-auto no-scrollbar scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden shrink-0 max-w-[calc(100%-110px)]"
+            className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-300 dark:border-slate-800 shadow-md pointer-events-auto overflow-x-auto no-scrollbar scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden shrink-0"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {/* Select Tool */}
             <button
               onClick={() => { setToolMode('select'); setWallStart(null); setDimStart(null); setRoomVertices([]); }}
-              className={'p-1.5 rounded-lg text-xs font-semibold transition ' + (toolMode === 'select' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
-              title="Select & Move (V)"
+              className={'p-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ' + (toolMode === 'select' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800')}
+              title="Select & Move (V / Esc)"
             >
               <MousePointer className="w-3.5 h-3.5" />
             </button>
@@ -2678,7 +2797,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             {/* Draw Wall */}
             <button
               onClick={() => { setToolMode('drawWall'); setWallStart(null); }}
-              className={'p-1.5 rounded-lg text-xs font-semibold transition ' + (toolMode === 'drawWall' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+              className={'p-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ' + (toolMode === 'drawWall' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800')}
               title="Draw Multi-Segment Walls (W)"
             >
               <Square className="w-3.5 h-3.5" />
@@ -2687,49 +2806,45 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             {/* Room Polygon Builder */}
             <button
               onClick={() => { setToolMode('drawRoom'); setRoomVertices([]); }}
-              className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'drawRoom' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+              className={'p-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ' + (toolMode === 'drawRoom' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800')}
               title="Room Polygon Builder (R) - Click vertices & press Enter"
             >
               <Maximize2 className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline text-[11px]">Room</span>
             </button>
 
             {/* Door Inserter */}
             <button
               onClick={() => setToolMode('door')}
-              className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'door' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+              className={'p-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ' + (toolMode === 'door' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800')}
               title="Insert Architectural Door (Click on wall, press F to flip swing)"
             >
               <DoorOpen className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline text-[11px]">Door</span>
             </button>
 
             {/* Window Inserter */}
             <button
               onClick={() => setToolMode('window')}
-              className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'window' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+              className={'p-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ' + (toolMode === 'window' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800')}
               title="Insert Double-Glazed Window (Click on wall)"
             >
               <Split className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline text-[11px]">Window</span>
             </button>
 
             {/* Staircase Inserter */}
             <button
               onClick={() => setToolMode('stairs')}
-              className={'p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ' + (toolMode === 'stairs' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
-              title="Insert Architectural Staircase Flight (Click anywhere on floor)"
+              className={'p-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ' + (toolMode === 'stairs' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800')}
+              title="Insert Flight Staircase (Click on floor)"
             >
               <Compass className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline text-[11px]">Stairs</span>
             </button>
 
-            <div className="w-[1px] h-4 bg-slate-200 mx-0.5 shrink-0" />
+            <div className="w-[1px] h-4 bg-slate-300 dark:bg-slate-700 mx-0.5 shrink-0" />
 
             {/* Aligned Dimension */}
             <button
               onClick={() => { setToolMode('dimension'); setDimStart(null); }}
-              className={'p-1.5 rounded-lg text-xs font-semibold transition ' + (toolMode === 'dimension' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+              className={'p-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ' + (toolMode === 'dimension' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800')}
               title="Aligned Dimension Line (D)"
             >
               <Ruler className="w-3.5 h-3.5" />
@@ -2739,10 +2854,10 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             <button
               onClick={handleAutoDimension}
               className={
-                'p-1.5 rounded-lg text-xs font-semibold transition border ' +
+                'p-1.5 rounded-lg text-xs font-semibold transition border cursor-pointer ' +
                 (floorDimensionLines.length > 0
                   ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
-                  : 'text-sky-700 bg-sky-50 hover:bg-sky-100 border-sky-200')
+                  : 'text-sky-700 bg-sky-50 hover:bg-sky-100 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800')
               }
               title={
                 floorDimensionLines.length > 0
@@ -2753,12 +2868,12 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
               <Sparkles className="w-3.5 h-3.5" />
             </button>
 
-            <div className="w-[1px] h-4 bg-slate-200 mx-0.5 shrink-0" />
+            <div className="w-[1px] h-4 bg-slate-300 dark:bg-slate-700 mx-0.5 shrink-0" />
 
             {/* Ortho Lock Toggle */}
             <button
               onClick={() => setOrthoLock(!orthoLock)}
-              className={'px-2 py-1 rounded-lg text-[11px] font-bold transition border ' + (orthoLock ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50')}
+              className={'px-1.5 py-0.5 rounded text-[10px] font-bold transition border cursor-pointer ' + (orthoLock ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-transparent text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800')}
               title="Ortho Mode (Hold Shift or toggle for 90° angle lock)"
             >
               ORTHO
@@ -2767,7 +2882,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             {/* Snap Toggle */}
             <button
               onClick={() => setSnapToGrid(!snapToGrid)}
-              className={'p-1.5 rounded-lg text-xs transition ' + (snapToGrid ? 'text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold' : 'text-slate-500 hover:bg-slate-100')}
+              className={'p-1.5 rounded-lg text-xs transition cursor-pointer ' + (snapToGrid ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 font-bold' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800')}
               title={'Grid Snap: ' + (snapToGrid ? 'ON' : 'OFF') + ' (' + GRID_SIZE_CM + 'cm)'}
             >
               <Magnet className="w-3.5 h-3.5" />
@@ -2776,24 +2891,24 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             {/* Pan Tool */}
             <button
               onClick={() => { setToolMode('pan'); onSelectId(null); }}
-              className={'p-1.5 rounded-lg text-xs transition ' + (toolMode === 'pan' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100')}
+              className={'p-1.5 rounded-lg text-xs transition cursor-pointer ' + (toolMode === 'pan' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800')}
               title="Pan Hand Tool (H or Hold Space)"
             >
               <Hand className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {/* Right: Layers & Professional Export Actions */}
-          <div className="flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-xl border border-slate-200/90 shadow-md pointer-events-auto">
+          {/* Right: Layers Dropdown */}
+          <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-300 dark:border-slate-800 shadow-md pointer-events-auto">
             {/* CAD Layers Dropdown */}
             <div className="relative" ref={layersMenuRef}>
               <button
                 onClick={() => setIsLayersMenuOpen(!isLayersMenuOpen)}
                 className={
-                  'px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 border ' +
+                  'px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 border cursor-pointer ' +
                   (isLayersMenuOpen
                     ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                    : 'text-slate-700 bg-white hover:bg-slate-100 border-slate-200')
+                    : 'text-slate-700 dark:text-slate-300 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-300 dark:border-slate-700')
                 }
                 title="CAD Layer Visibility Manager"
               >
@@ -2802,8 +2917,8 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
               </button>
 
               {isLayersMenuOpen && (
-                <div className="absolute right-0 top-10 w-56 bg-white border border-slate-200 rounded-2xl shadow-2xl p-2.5 z-50 flex flex-col gap-1 text-xs select-none animate-in fade-in zoom-in-95 duration-100 ring-1 ring-black/10">
-                  <div className="flex items-center justify-between px-2 py-1 border-b border-slate-100">
+                <div className="absolute right-0 top-10 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2.5 z-50 flex flex-col gap-1 text-xs select-none animate-in fade-in zoom-in-95 duration-100 ring-1 ring-black/10">
+                  <div className="flex items-center justify-between px-2 py-1 border-b border-slate-100 dark:border-slate-800">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CAD Layers</span>
                     <span className="text-[10px] font-semibold text-indigo-600">Visibility</span>
                   </div>
@@ -2818,15 +2933,15 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
                           className={
                             'flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ' +
                             (isActive
-                              ? 'text-slate-800 hover:bg-slate-100'
-                              : 'text-slate-400 hover:bg-slate-50 bg-slate-50/50')
+                              ? 'text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50')
                           }
                         >
-                          <span className="capitalize">{k}</span>
+                          <span>{LAYER_LABELS[k] || k}</span>
                           {isActive ? (
                             <Eye className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                           ) : (
-                            <EyeOff className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                            <EyeOff className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           )}
                         </button>
                       );
@@ -2835,36 +2950,6 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
                 </div>
               )}
             </div>
-
-            {/* Export SVG */}
-            <button
-              onClick={handleExportSVG}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition flex items-center gap-1 shadow-2xs cursor-pointer"
-              title="Export Scalable Vector SVG CAD File"
-            >
-              <FileCode2 className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="hidden sm:inline">SVG</span>
-            </button>
-
-            {/* Export 4K HD Blueprint */}
-            <button
-              onClick={handleExportHDImage}
-              className="px-3 py-1 rounded-lg text-xs font-bold bg-sky-600 text-white hover:bg-sky-500 transition flex items-center gap-1.5 shadow-sm cursor-pointer"
-              title="Export Ultra HD 4K Architectural Blueprint (PNG)"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export 4K HD</span>
-            </button>
-
-            {/* Print Architectural Sheet */}
-            <button
-              onClick={handlePrintPlanSheet}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
-              title="Print Architectural Blueprint Sheet"
-            >
-              <Printer className="w-3.5 h-3.5 text-slate-600" />
-              <span className="hidden sm:inline">Print</span>
-            </button>
           </div>
         </div>
       )}
@@ -2879,7 +2964,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
       {/* Collision Alert Banner */}
       {collidingItemIds.size > 0 && (
-        <div className="absolute bottom-3 left-3 z-10 flex items-center gap-1.5 bg-rose-600 text-white backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-rose-500 text-xs font-bold animate-pulse">
+        <div className="absolute bottom-3 left-3 z-10 flex items-center gap-1.5 bg-rose-600 text-white px-3 py-1.5 rounded-xl shadow-md border border-rose-500 text-xs font-bold animate-pulse">
           <AlertTriangle className="w-3.5 h-3.5" />
           <span>{collidingItemIds.size} {collidingItemIds.size === 1 ? 'Item' : 'Items'} Overlapping</span>
         </div>
@@ -2887,7 +2972,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
       {/* Floating Multi-Selection Action Badge */}
       {selectedIds.length > 1 && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 bg-slate-900/95 backdrop-blur-md text-white px-3.5 py-1.5 rounded-xl shadow-2xl border border-slate-700 pointer-events-auto text-xs animate-in fade-in slide-in-from-top-2">
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 bg-slate-900 text-white px-3.5 py-1.5 rounded-xl shadow-2xl border border-slate-700 pointer-events-auto text-xs animate-in fade-in slide-in-from-top-2">
           <span className="font-semibold text-slate-200">
             {selectedIds.length} Items Selected
           </span>
@@ -2948,33 +3033,33 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       )}
 
       {/* Zoom Controls Overlay */}
-      <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1 bg-white/95 backdrop-blur-md p-1 rounded-lg border border-slate-200 shadow-md text-xs text-slate-700 select-none">
+      <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1 bg-white/95 dark:bg-slate-900/95 p-1 rounded-lg border border-slate-200 dark:border-slate-800 shadow-md text-xs text-slate-700 dark:text-slate-300 select-none">
         <button
           onClick={() => setScale((s) => Math.max(s * 0.8, 0.05))}
-          className="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900 transition cursor-pointer"
+          className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 transition cursor-pointer"
           title="Zoom Out (-)"
         >
           <ZoomOut className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={fitToPlan}
-          className="px-2 py-0.5 font-mono text-[11px] min-w-[50px] text-center font-bold text-slate-800 hover:bg-slate-100 rounded transition cursor-pointer"
-          title="Click to Auto-Fit to Screen"
+          className="px-2 py-0.5 font-mono text-[11px] min-w-[50px] text-center font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition cursor-pointer"
+          title="Click to Auto-Fit to Screen (F)"
         >
           {Math.round(scale * 100)}%
         </button>
         <button
           onClick={() => setScale((s) => Math.min(s * 1.25, 12.0))}
-          className="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900 transition cursor-pointer"
+          className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 transition cursor-pointer"
           title="Zoom In (+)"
         >
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
-        <div className="w-[1px] h-3.5 bg-slate-200 mx-0.5" />
+        <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
         <button
           onClick={fitToPlan}
-          className="flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-amber-100 hover:text-amber-800 text-slate-700 rounded text-[11px] font-semibold transition cursor-pointer shadow-2xs"
-          title="Zoom to Fit (Frames Entire House Perfectly)"
+          className="flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-amber-950/60 hover:text-amber-800 dark:hover:text-amber-300 text-slate-700 dark:text-slate-200 rounded text-[11px] font-semibold transition cursor-pointer shadow-2xs"
+          title="Zoom to Fit (F)"
         >
           <Maximize2 className="w-3 h-3 text-amber-600" />
           <span>Fit</span>

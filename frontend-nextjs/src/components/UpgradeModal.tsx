@@ -1,8 +1,22 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  X,
+  Modal,
+  ConfigProvider,
+  theme as antdTheme,
+  Typography,
+  Card,
+  Badge,
+  Button,
+  Row,
+  Col,
+  Space,
+  Tag,
+  Alert,
+  Descriptions,
+} from 'antd';
+import {
   Check,
   Zap,
   ShieldCheck,
@@ -13,7 +27,6 @@ import {
   Camera,
   FileSpreadsheet,
   Box,
-  AlertCircle,
   Clock,
   Calendar,
   CheckCircle2,
@@ -32,12 +45,15 @@ import {
 import { initiateCashfreeCheckout } from '../services/cashfreeClient';
 import { initiateSubscriptionCheckout as initiateRazorpayCheckout } from '../services/razorpayClient';
 
+const { Title, Text, Paragraph } = Typography;
+
 interface UpgradeModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentUser: User | null;
   onUserUpdated?: (updatedUser: User) => void;
   initialFeatureHighlight?: string;
+  theme?: 'dark' | 'light';
 }
 
 export default function UpgradeModal({
@@ -46,14 +62,29 @@ export default function UpgradeModal({
   currentUser,
   onUserUpdated,
   initialFeatureHighlight,
+  theme = 'light',
 }: UpgradeModalProps) {
+  // Sync with application theme or document classList
+  const [effectiveTheme, setEffectiveTheme] = useState<'dark' | 'light'>(theme || 'light');
+
+  useEffect(() => {
+    if (theme) {
+      setEffectiveTheme(theme);
+    } else if (typeof document !== 'undefined') {
+      const isDocDark = document.documentElement.classList.contains('dark');
+      setEffectiveTheme(isDocDark ? 'dark' : 'light');
+    }
+  }, [theme, isOpen]);
+
+  const isDark = effectiveTheme === 'dark';
+
   const [isLoadingPlan, setIsLoadingPlan] = useState<PlanId | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pricingPlans, setPricingPlans] = useState<Record<string, PlanDetail>>(PRICING_PLANS);
   const [gatewayEnv, setGatewayEnv] = useState<'PRODUCTION' | 'SANDBOX'>('PRODUCTION');
   const [activeGateway, setActiveGateway] = useState<'cashfree' | 'razorpay'>('cashfree');
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       fetchActivePricingPlans().then((live) => {
         if (live) setPricingPlans({ ...live });
@@ -188,381 +219,494 @@ export default function UpgradeModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-5xl max-h-[94vh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl text-slate-100 flex flex-col">
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 z-10 p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-full transition-colors cursor-pointer"
-          aria-label="Close pass modal"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
+    <ConfigProvider
+      theme={{
+        algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+        token: {
+          colorPrimary: '#4f46e5',
+          borderRadius: 16,
+          fontFamily: 'inherit',
+          colorBgContainer: isDark ? '#141824' : '#ffffff',
+          colorBgElevated: isDark ? '#1a1f2e' : '#ffffff',
+        },
+      }}
+    >
+      <Modal
+        open={isOpen}
+        onCancel={onClose}
+        width={980}
+        centered
+        footer={null}
+        destroyOnClose
+        className="upgrade-access-modal"
+        styles={{
+          body: {
+            maxHeight: 'calc(90vh - 30px)',
+            overflowY: 'auto',
+            padding: '20px 24px',
+          },
+        }}
+      >
         {successInfo ? (
           /* SUCCESS STATE */
-          <div className="p-8 sm:p-12 text-center flex flex-col items-center justify-center my-auto">
-            <div className="w-20 h-20 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full flex items-center justify-center mb-6 animate-bounce">
+          <div className="py-8 text-center flex flex-col items-center justify-center">
+            <div className="w-20 h-20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 rounded-full flex items-center justify-center mb-5 shadow-lg shadow-emerald-500/10">
               <Crown className="w-10 h-10" />
             </div>
-            <h2 className="text-3xl font-extrabold text-white tracking-tight">
+            <Title level={2} style={{ marginBottom: 8, fontWeight: 800 }}>
               Pass Activated Successfully! 🎉
-            </h2>
-            <p className="mt-3 text-slate-300 max-w-md text-base leading-relaxed">
+            </Title>
+            <Paragraph type="secondary" className="max-w-md text-sm leading-relaxed" style={{ marginBottom: 24 }}>
               Your <strong>{successInfo.planName}</strong> is now active for the next{' '}
-              <strong className="text-emerald-400">{successInfo.durationDays} days</strong>. All studio features,
+              <strong className="text-emerald-600 dark:text-emerald-400">{successInfo.durationDays} days</strong>. All studio features,
               multi-floor architecture, 4K raytracing, and BOM exports are 100% unlocked!
-            </p>
+            </Paragraph>
 
-            <div className="mt-6 p-4 bg-slate-800/80 border border-slate-700 rounded-2xl text-left text-xs font-mono text-slate-300 space-y-1.5 w-full max-w-md">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Payment ID:</span>
-                <span className="text-emerald-400 font-semibold">{successInfo.paymentId}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Gateway:</span>
-                <span className="text-sky-400 font-semibold uppercase">{successInfo.gateway} Payments</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Pass Duration:</span>
-                <span className="text-blue-400 font-semibold">{successInfo.durationDays} Days Full Access</span>
-              </div>
-              {successInfo.paymentMethod && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Method:</span>
-                  <span className="text-amber-400 font-semibold">{successInfo.paymentMethod}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-slate-400">Currency:</span>
-                <span>INR (₹)</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Security:</span>
-                <span>HMAC-SHA256 Cryptographically Verified</span>
-              </div>
-            </div>
+            <Card
+              size="small"
+              className={`w-full max-w-md text-left mb-6 font-mono text-xs ${
+                isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'
+              }`}
+              styles={{ body: { padding: '16px' } }}
+            >
+              <Descriptions
+                column={1}
+                size="small"
+                items={[
+                  {
+                    key: 'pid',
+                    label: <span className="font-sans text-slate-500">Payment ID</span>,
+                    children: <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{successInfo.paymentId}</span>,
+                  },
+                  {
+                    key: 'gw',
+                    label: <span className="font-sans text-slate-500">Gateway</span>,
+                    children: <Tag color="blue" bordered={false}>{successInfo.gateway.toUpperCase()}</Tag>,
+                  },
+                  {
+                    key: 'dur',
+                    label: <span className="font-sans text-slate-500">Duration</span>,
+                    children: <span className="font-semibold">{successInfo.durationDays} Days Full Access</span>,
+                  },
+                  {
+                    key: 'curr',
+                    label: <span className="font-sans text-slate-500">Currency</span>,
+                    children: 'INR (₹)',
+                  },
+                  {
+                    key: 'sec',
+                    label: <span className="font-sans text-slate-500">Security</span>,
+                    children: 'HMAC-SHA256 Cryptographically Verified',
+                  },
+                ]}
+              />
+            </Card>
 
-            <button
+            <Button
+              type="primary"
+              size="large"
               onClick={() => {
                 setSuccessInfo(null);
                 onClose();
               }}
-              className="mt-8 px-8 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all hover:scale-[1.02] cursor-pointer"
+              className="px-8 font-semibold shadow-md shadow-indigo-500/25"
             >
               Continue Designing in 3D Studio
-            </button>
+            </Button>
           </div>
         ) : (
           /* PASS PRICING VIEW */
-          <div className="p-6 sm:p-8">
-            {/* Header */}
-            <div className="text-center max-w-2xl mx-auto mb-6">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-full text-xs font-semibold uppercase tracking-wider mb-3">
-                <Sparkles className="w-3.5 h-3.5" />
-                VisualRendered 3D Studio Access
-              </div>
-              <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+          <div className="space-y-4">
+            {/* Compact, Sleek Header */}
+            <div className="text-center max-w-xl mx-auto">
+              <Title
+                level={3}
+                style={{
+                  margin: '0 0 3px 0',
+                  fontWeight: 800,
+                  letterSpacing: '-0.02em',
+                }}
+              >
                 Select Your Access Pass
-              </h2>
-              <p className="mt-2 text-sm sm:text-base text-slate-300">
-                {initialFeatureHighlight
-                  ? `To access ${initialFeatureHighlight}, activate a flexible pass below.`
-                  : 'All passes include 100% full access to every tool and capability. No locked features.'}
-              </p>
+              </Title>
+              <Text type="secondary" className="text-xs block">
+                All features 100% unlocked on every pass • Choose your access duration
+              </Text>
 
-              {/* Universal Inclusion Banner */}
-              <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 font-medium">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Multi-Floor CAD • 4K Raytracing • BOM Quotation Export • Custom 3D Models in all passes</span>
-              </div>
-
-              {isActive && (
-                <div className="mt-3 text-xs text-blue-300 font-medium">
-                  Current Status: <span className="font-bold text-white">{remainingText}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Exclusive Payment Gateway Badge: Cashfree */}
-            <div className="flex items-center justify-center gap-2 mb-8">
-              <div className="px-4 py-2 rounded-2xl bg-[#0f172a] border border-purple-500/40 text-purple-200 text-xs font-bold flex items-center gap-2.5 shadow-md shadow-purple-500/10">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50" />
-                <span>Cashfree Payments</span>
-                <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide border ${
-                  gatewayEnv === 'PRODUCTION'
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                    : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                }`}>
-                  {gatewayEnv === 'PRODUCTION' ? 'Live Production' : 'Developer Sandbox'}
-                </span>
-                <span className="text-[11px] text-slate-400">
-                  • Instant UPI, Cards & NetBanking
-                </span>
+              <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2">
+                <Tag
+                  color="success"
+                  bordered={false}
+                  className="font-semibold text-xs py-0.5 inline-flex items-center gap-1"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>All Features Included</span>
+                </Tag>
+                {isActive && (
+                  <Tag color="processing" bordered={false} className="font-semibold text-xs py-0.5">
+                    {remainingText}
+                  </Tag>
+                )}
+                <Tag
+                  bordered={false}
+                  className={`text-[11px] py-0.5 font-medium ${
+                    isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block mr-1.5 animate-pulse" />
+                  {activeGateway === 'razorpay' ? 'Razorpay Secure' : 'Cashfree'}
+                </Tag>
               </div>
             </div>
 
             {/* Error Message if any */}
             {errorMessage && (
-              <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center gap-3 text-rose-300 text-sm">
-                <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                <span>{errorMessage}</span>
-              </div>
+              <Alert
+                type="error"
+                showIcon
+                message={errorMessage}
+                closable
+                onClose={() => setErrorMessage(null)}
+              />
             )}
 
-            {/* Dynamic Pricing Cards Grid (All amounts synchronized with Admin Config) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+            {/* Dynamic Pricing Cards Grid */}
+            <Row gutter={[16, 16]} align="stretch">
               {/* CARD 1: TRIAL PASS */}
-              <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-600 transition-all">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-amber-400" />
-                      {pricingPlans.trial_2days?.name || '2-Day Trial Pass'}
-                    </h3>
-                    <span className="px-2.5 py-0.5 text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-md">
-                      {pricingPlans.trial_2days?.badge || 'Quick Test'}
-                    </span>
-                  </div>
-
-                  <div className="mb-4">
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold text-white">
-                        ₹{pricingPlans.trial_2days?.priceINR?.toLocaleString('en-IN') ?? 2}
-                      </span>
-                      <span className="text-slate-400 text-xs">
-                        {pricingPlans.trial_2days?.periodLabel || '/ 2 days (48 Hours)'}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-amber-400/90 mt-1 font-medium">
-                      One-time payment • No auto-recurring charges
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-300 mb-6">
-                    {pricingPlans.trial_2days?.description || 'Perfect for a quick walkthrough, exploring all features, or rapid project creation.'}
-                  </p>
-
-                  <div className="space-y-3 mb-6">
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span><strong>{pricingPlans.trial_2days?.durationDays || 2} Days Full Access</strong> to all features</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Multi-Floor Architecture Drafting</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>4K Ultra Raytracing Snapshots</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>BOM Quotation & Cost Export in INR (₹)</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Custom 3D Models & Part Color Finishing</span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  disabled={isLoadingPlan !== null}
-                  onClick={() => handleCheckout('trial_2days')}
-                  className="w-full py-3 px-4 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl text-sm transition-all hover:scale-[1.01] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              <Col xs={24} md={8}>
+                <Card
+                  hoverable
+                  className={`h-full flex flex-col justify-between transition-all duration-200 rounded-2xl ${
+                    isDark
+                      ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                      : 'bg-white border-slate-200 shadow-sm hover:shadow-md'
+                  }`}
+                  styles={{
+                    body: {
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'between',
+                      height: '100%',
+                      padding: '22px 20px',
+                    },
+                  }}
                 >
-                  {isLoadingPlan === 'trial_2days' ? (
-                    <span className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Connecting to {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}...
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <Text strong className="text-base flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 text-amber-500" />
+                        {pricingPlans.trial_2days?.name || '2-Day All-Access Pass'}
+                      </Text>
+                      <Tag color="gold" bordered={false} className="font-bold text-[10px]">
+                        {pricingPlans.trial_2days?.badge || 'Quick Test'}
+                      </Tag>
+                    </div>
+
+                    <div className="mb-3">
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-extrabold tracking-tight">
+                          ₹{pricingPlans.trial_2days?.priceINR?.toLocaleString('en-IN') ?? 51}
+                        </span>
+                        <Text type="secondary" className="text-xs">
+                          {pricingPlans.trial_2days?.periodLabel || 'for 2 days (48 Hours)'}
+                        </Text>
+                      </div>
+                      <Text className="text-[11px] text-amber-600 dark:text-amber-400 block mt-0.5 font-semibold">
+                        One-time payment • No auto-recurring charges
+                      </Text>
+                    </div>
+
+                    <Text type="secondary" className="text-xs block mb-5 leading-relaxed">
+                      100% unrestricted studio access to all drafting, raytracing, and BOM quotation tools for 48 hours.
+                    </Text>
+
+                    <div className="space-y-2.5 mb-6 text-xs">
+                      <div className="flex items-start gap-2">
+                        <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>
+                          <strong>{pricingPlans.trial_2days?.durationDays || 2} Days All-Access</strong> to 100% of features
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>Unlimited Multi-Floor Architecture Drafting</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>4K Ultra Raytracing & High-Res Snapshots</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>Bill of Materials (BOM) Excel/CSV Cost Quotes</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>Custom 3D Model Uploads (.OBJ / .GLTF)</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>Cloud Project Save & Sync Across Devices</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>Commercial Client Presentation License</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Button
+                    size="large"
+                    block
+                    loading={isLoadingPlan === 'trial_2days'}
+                    disabled={isLoadingPlan !== null}
+                    onClick={() => handleCheckout('trial_2days')}
+                    icon={<Zap className="w-4 h-4 text-amber-500 fill-current" />}
+                    className={`font-bold text-xs mt-auto rounded-xl ${
+                      isDark
+                        ? 'bg-slate-800 hover:bg-slate-700 text-white border-slate-700'
+                        : 'bg-slate-900 hover:bg-slate-800 text-white border-none shadow-sm'
+                    }`}
+                  >
+                    Pay ₹{pricingPlans.trial_2days?.priceINR?.toLocaleString('en-IN') ?? 51}
+                  </Button>
+                </Card>
+              </Col>
+
+              {/* CARD 2: MONTHLY PRO PASS (MOST POPULAR) */}
+              <Col xs={24} md={8}>
+                <Badge.Ribbon
+                  text={
+                    <span className="flex items-center gap-1 font-bold text-[11px]">
+                      <Crown className="w-3 h-3" />
+                      {pricingPlans.monthly?.badge || 'Most Popular'}
                     </span>
-                  ) : (
-                    <>
-                      <Zap className="w-4 h-4 text-amber-400 fill-current" />
-                      Pay ₹{pricingPlans.trial_2days?.priceINR?.toLocaleString('en-IN') ?? 2} with {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* CARD 2: MONTHLY PRO PASS */}
-              <div className="relative bg-gradient-to-b from-blue-900/40 via-slate-800/90 to-slate-800/95 border-2 border-blue-500 rounded-2xl p-6 flex flex-col justify-between shadow-xl shadow-blue-500/15 hover:border-blue-400 transition-all scale-[1.02]">
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[11px] font-bold rounded-full uppercase tracking-wider shadow-md flex items-center gap-1.5">
-                  <Crown className="w-3.5 h-3.5" />
-                  {pricingPlans.monthly?.badge || 'Most Popular'}
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-4 mt-1">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-blue-400" />
-                      {pricingPlans.monthly?.name || 'Monthly Pass'}
-                    </h3>
-                    <span className="px-2.5 py-0.5 text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-md">
-                      {pricingPlans.monthly?.durationDays || 30} Days
-                    </span>
-                  </div>
-
-                  <div className="mb-4">
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold text-white">
-                        ₹{pricingPlans.monthly?.priceINR?.toLocaleString('en-IN') ?? 3}
-                      </span>
-                      <span className="text-slate-400 text-xs">
-                        {pricingPlans.monthly?.periodLabel || '/ month (30 Days)'}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-emerald-400 mt-1 font-medium">
-                      All inclusive • UPI, Cards, NetBanking
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-300 mb-6">
-                    {pricingPlans.monthly?.description || 'Full architectural power for independent designers, interior experts, and builders.'}
-                  </p>
-
-                  <div className="space-y-3 mb-6">
-                    <div className="flex items-start gap-2.5 text-xs text-slate-100 font-medium">
-                      <Layers className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                      <span><strong>{pricingPlans.monthly?.durationDays || 30} Days Full Access</strong> to all features</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Unlimited Multi-Floor Architecture Drafting</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Camera className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                      <span>4K Ultra Raytracing & Master Snapshot Engine</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <FileSpreadsheet className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                      <span>BOM Excel & CSV Export with client quotes</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Box className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                      <span>Custom 3D Model Uploads (.OBJ / .GLTF)</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Sparkles className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                      <span>Cloud Project Save & Sync Across Devices</span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  disabled={isLoadingPlan !== null}
-                  onClick={() => handleCheckout('monthly')}
-                  className="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-blue-500/25 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  }
+                  color="#4f46e5"
                 >
-                  {isLoadingPlan === 'monthly' ? (
-                    <span className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Connecting to {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}...
-                    </span>
-                  ) : (
-                    <>
-                      <Zap className="w-4 h-4 fill-current" />
-                      Pay ₹{pricingPlans.monthly?.priceINR?.toLocaleString('en-IN') ?? 3} with {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}
-                    </>
-                  )}
-                </button>
-              </div>
+                  <Card
+                    hoverable
+                    className={`h-full flex flex-col justify-between transition-all duration-200 rounded-2xl border-2 border-indigo-500 shadow-lg shadow-indigo-500/10 ${
+                      isDark ? 'bg-gradient-to-b from-indigo-950/30 to-slate-900/60' : 'bg-gradient-to-b from-indigo-50/60 to-white'
+                    }`}
+                    styles={{
+                      body: {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'between',
+                        height: '100%',
+                        padding: '22px 20px',
+                      },
+                    }}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-3 mt-1">
+                        <Text strong className="text-base flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
+                          <Calendar className="w-4 h-4" />
+                          {pricingPlans.monthly?.name || 'Monthly All-Access Pass'}
+                        </Text>
+                        <Tag color="indigo" bordered={false} className="font-bold text-[10px]">
+                          {pricingPlans.monthly?.durationDays || 30} Days
+                        </Tag>
+                      </div>
+
+                      <div className="mb-3">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-extrabold tracking-tight text-indigo-600 dark:text-indigo-400">
+                            ₹{pricingPlans.monthly?.priceINR?.toLocaleString('en-IN') ?? 199}
+                          </span>
+                          <Text type="secondary" className="text-xs">
+                            {pricingPlans.monthly?.periodLabel || 'per month (30 Days)'}
+                          </Text>
+                        </div>
+                        <Text className="text-[11px] text-emerald-600 dark:text-emerald-400 block mt-0.5 font-semibold">
+                          All inclusive • UPI, Cards, NetBanking
+                        </Text>
+                      </div>
+
+                      <Text type="secondary" className="text-xs block mb-5 leading-relaxed">
+                        100% unrestricted studio access to all drafting, raytracing, and BOM quotation tools for 30 days.
+                      </Text>
+
+                      <div className="space-y-2.5 mb-6 text-xs">
+                        <div className="flex items-start gap-2">
+                          <Layers className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+                          <span>
+                            <strong>{pricingPlans.monthly?.durationDays || 30} Days All-Access</strong> to 100% of features
+                          </span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>Unlimited Multi-Floor Architecture Drafting</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>4K Ultra Raytracing & High-Res Snapshots</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>Bill of Materials (BOM) Excel/CSV Cost Quotes</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>Custom 3D Model Uploads (.OBJ / .GLTF)</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>Cloud Project Save & Sync Across Devices</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>Commercial Client Presentation License</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="primary"
+                      size="large"
+                      block
+                      loading={isLoadingPlan === 'monthly'}
+                      disabled={isLoadingPlan !== null}
+                      onClick={() => handleCheckout('monthly')}
+                      icon={<Zap className="w-4 h-4 fill-current" />}
+                      className="font-bold text-xs mt-auto rounded-xl shadow-md shadow-indigo-500/25 bg-indigo-600 hover:bg-indigo-500 border-none"
+                    >
+                      Pay ₹{pricingPlans.monthly?.priceINR?.toLocaleString('en-IN') ?? 199} with {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}
+                    </Button>
+                  </Card>
+                </Badge.Ribbon>
+              </Col>
 
               {/* CARD 3: ANNUAL PRO PASS */}
-              <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-600 transition-all">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                      <Crown className="w-4 h-4 text-emerald-400" />
-                      {pricingPlans.yearly?.name || 'Annual Pass'}
-                    </h3>
-                    <span className="px-2.5 py-0.5 text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-md">
-                      {pricingPlans.yearly?.badge || 'Save 20%'}
+              <Col xs={24} md={8}>
+                <Badge.Ribbon
+                  text={
+                    <span className="font-bold text-[11px]">
+                      {pricingPlans.yearly?.badge || 'Best Value • Save 20%'}
                     </span>
-                  </div>
-
-                  <div className="mb-4">
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold text-white">
-                        ₹{pricingPlans.yearly?.priceINR?.toLocaleString('en-IN') ?? 4}
-                      </span>
-                      <span className="text-slate-400 text-xs">
-                        {pricingPlans.yearly?.periodLabel || '/ year (365 Days)'}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-emerald-400 mt-1 font-semibold">
-                      Best value • Continuous 365-day access
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-300 mb-6">
-                    {pricingPlans.yearly?.description || 'Best value for design practices and full-time professionals needing 365 days of continuous access.'}
-                  </p>
-
-                  <div className="space-y-3 mb-6">
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span><strong>{pricingPlans.yearly?.durationDays || 365} Days</strong> Unrestricted Access</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Priority 4K Cloud Raytrace Queuing</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Unlimited Multi-Floor Blueprints & Projects</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Full Commercial Client Presentation License</span>
-                    </div>
-                    <div className="flex items-start gap-2.5 text-xs text-slate-200">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <span>Dedicated Technical & Email Support</span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  disabled={isLoadingPlan !== null}
-                  onClick={() => handleCheckout('yearly')}
-                  className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-sm shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.01] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  }
+                  color="#059669"
                 >
-                  {isLoadingPlan === 'yearly' ? (
-                    <span className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Connecting to {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}...
-                    </span>
-                  ) : (
-                    <>
-                      <Crown className="w-4 h-4" />
-                      Pay ₹{pricingPlans.yearly?.priceINR?.toLocaleString('en-IN') ?? 4} with {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
+                  <Card
+                    hoverable
+                    className={`h-full flex flex-col justify-between transition-all duration-200 rounded-2xl ${
+                      isDark
+                        ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                        : 'bg-white border-slate-200 shadow-sm hover:shadow-md'
+                    }`}
+                    styles={{
+                      body: {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'between',
+                        height: '100%',
+                        padding: '22px 20px',
+                      },
+                    }}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-3 mt-1">
+                        <Text strong className="text-base flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                          <Crown className="w-4 h-4" />
+                          {pricingPlans.yearly?.name || 'Annual All-Access Pass'}
+                        </Text>
+                        <Tag color="success" bordered={false} className="font-bold text-[10px]">
+                          365 Days
+                        </Tag>
+                      </div>
+
+                      <div className="mb-3">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-extrabold tracking-tight">
+                            ₹{pricingPlans.yearly?.priceINR?.toLocaleString('en-IN') ?? 1999}
+                          </span>
+                          <Text type="secondary" className="text-xs">
+                            {pricingPlans.yearly?.periodLabel || 'per year (365 Days)'}
+                          </Text>
+                        </div>
+                        <Text className="text-[11px] text-emerald-600 dark:text-emerald-400 block mt-0.5 font-semibold">
+                          Best value • Continuous 365-day access
+                        </Text>
+                      </div>
+
+                      <Text type="secondary" className="text-xs block mb-5 leading-relaxed">
+                        100% unrestricted studio access to all drafting, raytracing, and BOM quotation tools for 365 days.
+                      </Text>
+
+                      <div className="space-y-2.5 mb-6 text-xs">
+                        <div className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>
+                            <strong>{pricingPlans.yearly?.durationDays || 365} Days All-Access</strong> to 100% of features
+                          </span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>Unlimited Multi-Floor Architecture Drafting</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>4K Ultra Raytracing & High-Res Snapshots</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>Bill of Materials (BOM) Excel/CSV Cost Quotes</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>Custom 3D Model Uploads (.OBJ / .GLTF)</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>Cloud Project Save & Sync Across Devices</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>Commercial Client Presentation License</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="primary"
+                      size="large"
+                      block
+                      loading={isLoadingPlan === 'yearly'}
+                      disabled={isLoadingPlan !== null}
+                      onClick={() => handleCheckout('yearly')}
+                      icon={<Crown className="w-4 h-4" />}
+                      className="font-bold text-xs mt-auto rounded-xl bg-emerald-600 hover:bg-emerald-500 border-none shadow-md shadow-emerald-600/20"
+                    >
+                      Pay ₹{pricingPlans.yearly?.priceINR?.toLocaleString('en-IN') ?? 1999}
+                    </Button>
+                  </Card>
+                </Badge.Ribbon>
+              </Col>
+            </Row>
 
             {/* Payment Trust Footer */}
-            <div className="mt-8 pt-6 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
+            <div
+              className={`pt-4 border-t flex flex-wrap items-center justify-between gap-4 text-xs ${
+                isDark ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'
+              }`}
+            >
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
                 <span>Bank-Grade 256-Bit SSL Encryption • HMAC-SHA256 Cryptographic Verification</span>
               </div>
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1.5">
-                  <CreditCard className="w-4 h-4 text-blue-400" />
+                  <CreditCard className="w-4 h-4 text-indigo-500" />
                   UPI (GPay, PhonePe, Paytm), Cards, NetBanking
                 </span>
-                <span className="font-semibold text-slate-300 flex items-center gap-1">
-                  Powered by <span className="text-sky-400 font-bold">{activeGateway === 'razorpay' ? 'Razorpay Secure' : 'Cashfree Payments'}</span>
+                <span className="font-semibold">
+                  Secure Checkout
                 </span>
               </div>
             </div>
           </div>
         )}
-      </div>
-    </div>
+      </Modal>
+    </ConfigProvider>
   );
 }

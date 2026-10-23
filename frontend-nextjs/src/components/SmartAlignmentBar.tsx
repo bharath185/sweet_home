@@ -112,12 +112,12 @@ export const SmartAlignmentBar: React.FC<SmartAlignmentBarProps> = ({
   };
 
   return (
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto select-none animate-in fade-in slide-in-from-bottom-3 duration-200">
+    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto select-none">
       <div
-        className={`px-3 py-2 rounded-2xl border shadow-2xl backdrop-blur-xl flex items-center gap-2 max-w-full overflow-x-auto ${
+        className={`px-3 py-2 rounded-2xl border shadow-2xl flex items-center gap-2 max-w-full overflow-x-auto ${
           isDark
-            ? 'bg-slate-900/95 border-slate-700/80 text-white shadow-black/70'
-            : 'bg-white/95 border-slate-200/90 text-slate-800 shadow-slate-900/20'
+            ? 'bg-slate-900 border-slate-700 text-white shadow-black/70'
+            : 'bg-white border-slate-300 text-slate-800 shadow-slate-900/20'
         }`}
       >
         {/* Selected Item Label */}

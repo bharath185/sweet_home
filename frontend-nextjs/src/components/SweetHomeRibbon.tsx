@@ -52,14 +52,21 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
+  Download,
+  Printer,
+  FileCode,
 } from 'lucide-react';
 import { HomePlan } from '../types/plan';
-import { ToolMode } from './PlanCanvas2D';
+import { ToolMode, CADLayers } from './PlanCanvas2D';
+import { APP_NAME } from '../constants/app';
+import { exportPlanSvg, exportPlan4kPng, printPlanSheet } from '../services/planExporter';
 
 const { Text } = Typography;
 
 interface SweetHomeRibbonProps {
   plan: HomePlan;
+  activeFloor?: number;
+  onFloorChange?: (floor: number) => void;
   activeToolMode: ToolMode;
   onSelectToolMode: (mode: ToolMode) => void;
   canUndo: boolean;
@@ -74,6 +81,11 @@ interface SweetHomeRibbonProps {
   onOpenBlueprintModal: () => void;
   onExportJson: () => void;
   onImportJson: () => void;
+  onExportSvg?: () => void;
+  onExportHdImage?: () => void;
+  onPrintPlanSheet?: () => void;
+  layers?: CADLayers;
+  onToggleLayer?: (layerKey: keyof CADLayers) => void;
   onOpenAiStyler: () => void;
   onOpenCostEstimator: () => void;
   studioLayout: 'sweethome' | 'split' | '2d' | '3d' | 'tour';
@@ -88,6 +100,8 @@ interface SweetHomeRibbonProps {
 
 export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
   plan,
+  activeFloor = 0,
+  onFloorChange,
   activeToolMode,
   onSelectToolMode,
   canUndo,
@@ -102,6 +116,11 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
   onOpenBlueprintModal,
   onExportJson,
   onImportJson,
+  onExportSvg,
+  onExportHdImage,
+  onPrintPlanSheet,
+  layers,
+  onToggleLayer,
   onOpenAiStyler,
   onOpenCostEstimator,
   studioLayout,
@@ -113,7 +132,8 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
   theme = 'light',
   onOpenWelcomeGuide,
 }) => {
-  const [isRibbonCollapsed, setIsRibbonCollapsed] = useState(false);
+  // Default to compact ribbon to maximize viewport area for design
+  const [isRibbonCollapsed, setIsRibbonCollapsed] = useState(true);
   const isDark = theme === 'dark';
 
   // Ant Design Dropdown Menus for Sweet Home 3D
@@ -242,12 +262,62 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
     },
     {
       key: 'toggle_walk',
-      label: cameraMode3D === 'visitor' ? 'Current: First-Person Walk' : 'Switch to PUBG Walk Tour',
+      label: cameraMode3D === 'visitor' ? 'Current: First-Person Walk' : 'Switch to Walk Tour',
       icon: <CompassOutlined />,
       onClick: () => {
         if (cameraMode3D !== 'visitor') onToggleCameraMode3D();
       },
     },
+  ];
+
+  const exportMenuItems: MenuProps['items'] = [
+    {
+      key: 'export_hd',
+      label: 'Export 4K HD Blueprint (PNG)',
+      icon: <CameraOutlined style={{ color: '#0284c7' }} />,
+      onClick: () => {
+        if (onExportHdImage) onExportHdImage();
+        else exportPlan4kPng(plan, activeFloor);
+      },
+    },
+    {
+      key: 'export_svg',
+      label: 'Export Scalable Vector (SVG)',
+      icon: <FileImageOutlined style={{ color: '#6366f1' }} />,
+      onClick: () => {
+        if (onExportSvg) onExportSvg();
+        else exportPlanSvg(plan, activeFloor);
+      },
+    },
+    {
+      key: 'print_sheet',
+      label: 'Print Architectural Sheet',
+      icon: <Printer className="w-3.5 h-3.5 text-emerald-600 inline mr-1.5" />,
+      onClick: () => {
+        if (onPrintPlanSheet) onPrintPlanSheet();
+        else printPlanSheet(plan, activeFloor);
+      },
+    },
+    {
+      key: 'export_cad_json',
+      label: 'Export Plan as CAD JSON',
+      icon: <FileTextOutlined />,
+      onClick: onExportJson,
+    },
+    ...(layers && onToggleLayer
+      ? [
+          { type: 'divider' as const },
+          {
+            key: 'layers_group',
+            label: 'CAD Layers Visibility',
+            children: (Object.keys(layers) as (keyof CADLayers)[]).map((k) => ({
+              key: `layer_${k}`,
+              label: `${layers[k] ? '✓ ' : '✕ '} ${k.charAt(0).toUpperCase() + k.slice(1)}`,
+              onClick: () => onToggleLayer(k),
+            })),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -282,7 +352,7 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
                 {plan.name || 'My house.sh3d'}
               </span>
               <span className="text-[10px] text-slate-400 font-normal hidden xl:inline">
-                - Sweet Home 3D Studio
+                - {APP_NAME} Studio
               </span>
             </div>
 
@@ -317,6 +387,12 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
               <Dropdown menu={{ items: view3dMenuItems }} trigger={['click']}>
                 <Button type="text" size="small" className="text-[11px] h-6 px-2 text-slate-700 dark:text-slate-300">
                   3D view
+                </Button>
+              </Dropdown>
+
+              <Dropdown menu={{ items: exportMenuItems }} trigger={['click']}>
+                <Button type="text" size="small" className="text-[11px] h-6 px-2 text-slate-700 dark:text-slate-300 font-medium">
+                  Export
                 </Button>
               </Dropdown>
 
@@ -645,41 +721,42 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
               <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">ANNOTATE</span>
             </div>
 
-            {/* GROUP 6: RENDER & 3D */}
+            {/* GROUP 6: EXPORT & LAYERS */}
             <div
               className={`flex flex-col items-center justify-between px-2 py-1 rounded border shrink-0 ${
                 isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-2xs'
               }`}
             >
               <div className="flex items-center gap-1">
-                <Tooltip title="Toggle First-Person PUBG Walkthrough Tour">
+                <Dropdown menu={{ items: exportMenuItems }} trigger={['click']}>
                   <Button
-                    type={cameraMode3D === 'visitor' ? 'primary' : 'text'}
+                    type="text"
                     size="small"
-                    onClick={onToggleCameraMode3D}
-                    className="flex flex-col items-center justify-center h-10 px-2 leading-none"
-                    style={cameraMode3D === 'visitor' ? { backgroundColor: '#f59e0b' } : undefined}
+                    className="flex flex-col items-center justify-center h-10 px-2.5 leading-none cursor-pointer"
                   >
-                    <Gamepad2 className="w-3.5 h-3.5" />
-                    <span className="text-[9px] font-semibold mt-1">PUBG Tour</span>
+                    <Download className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+                    <span className="text-[9px] font-semibold mt-1 flex items-center gap-0.5">
+                      Export <DownOutlined style={{ fontSize: 7 }} />
+                    </span>
                   </Button>
-                </Tooltip>
+                </Dropdown>
 
-                <Tooltip title="Switch to Aerial Orbit View">
+                <Tooltip title="Print Architectural Blueprint Sheet">
                   <Button
-                    type={cameraMode3D === 'aerial' ? 'dashed' : 'text'}
+                    type="text"
                     size="small"
                     onClick={() => {
-                      if (cameraMode3D !== 'aerial') onToggleCameraMode3D();
+                      if (onPrintPlanSheet) onPrintPlanSheet();
+                      else printPlanSheet(plan, activeFloor);
                     }}
-                    className="flex flex-col items-center justify-center h-10 px-2 leading-none"
+                    className="flex flex-col items-center justify-center h-10 px-2 leading-none cursor-pointer"
                   >
-                    <EyeOutlined style={{ fontSize: 13, color: '#0284c7' }} />
-                    <span className="text-[9px] font-semibold mt-1">Orbit</span>
+                    <Printer className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
+                    <span className="text-[9px] font-semibold mt-1">Print</span>
                   </Button>
                 </Tooltip>
               </div>
-              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">3D VIEW</span>
+              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">EXPORT</span>
             </div>
 
             {/* GROUP 7: STUDIO AI */}

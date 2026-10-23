@@ -28,7 +28,14 @@ export type PBRTextureId =
   | 'royale_play_green'
   | 'royale_play_ochre'
   | 'royale_play_salmon'
-  | 'royale_play_yellow';
+  | 'royale_play_yellow'
+  | 'royal_ply'
+  | 'royal_ply_teak'
+  | 'royal_ply_walnut'
+  | 'royal_ply_oak'
+  | 'royal_ply_charcoal'
+  | 'royal_ply_rosewood'
+  | 'royal_ply_ash';
 
 export const ROYALE_PLAY_WALL_PRESETS = [
   { id: 'royale_play_blue', name: 'Cobalt Sponge (Royale Play)', color: '#1e3a8a', url: '/textures/dark-blue-sponge-wallpaint.jpg' },
@@ -46,6 +53,26 @@ export const BRICK_WALL_PRESETS = [
   { id: 'brick_rustic', name: 'Terracotta Rustic Brick', color: '#9a3412' },
   { id: 'stone_slate', name: 'Stacked Slate Stone', color: '#475569' },
   { id: 'wood_slat', name: 'Vertical Timber Slats', color: '#d4a373' },
+];
+
+export const ROYAL_PLY_WALL_PRESETS = [
+  { id: 'royal_ply_teak', name: 'Royal Ply Teak Wood', color: '#a05a2c' },
+  { id: 'royal_ply_walnut', name: 'Royal Ply American Walnut', color: '#4a2c1d' },
+  { id: 'royal_ply_oak', name: 'Royal Ply Natural Oak', color: '#c89666' },
+  { id: 'royal_ply_charcoal', name: 'Royal Ply Fluted Charcoal', color: '#2b2b2e' },
+  { id: 'royal_ply_rosewood', name: 'Royal Ply Indian Rosewood', color: '#541f1f' },
+  { id: 'royal_ply_ash', name: 'Royal Ply Scandinavian Ash', color: '#dfc4a2' },
+];
+
+export const DESIGNER_PAINT_PRESETS = [
+  { name: 'Crisp White', color: '#ffffff' },
+  { name: 'Warm Alabaster', color: '#f7f4ee' },
+  { name: 'Modern Greige', color: '#d8cfc4' },
+  { name: 'Nordic Slate', color: '#64748b' },
+  { name: 'Sage Mist', color: '#a3b19b' },
+  { name: 'Navy Accent', color: '#1e293b' },
+  { name: 'Blush Terracotta', color: '#d97757' },
+  { name: 'Muted Clay', color: '#c28e79' },
 ];
 
 /**
@@ -404,6 +431,68 @@ export function getProceduralTexture(textureType: string, tintHex?: string): THR
         ctx.beginPath();
         ctx.arc(sx, sy, radius, 0, Math.PI * 2);
         ctx.fill();
+      }
+      break;
+    }
+
+    case 'royal_ply':
+    case 'royal_ply_teak':
+    case 'royal_ply_walnut':
+    case 'royal_ply_oak':
+    case 'royal_ply_charcoal':
+    case 'royal_ply_rosewood':
+    case 'royal_ply_ash': {
+      const plyBaseColors: Record<string, string> = {
+        royal_ply_teak: '#a05a2c',
+        royal_ply_walnut: '#4a2c1d',
+        royal_ply_oak: '#c89666',
+        royal_ply_charcoal: '#2b2b2e',
+        royal_ply_rosewood: '#541f1f',
+        royal_ply_ash: '#dfc4a2',
+        royal_ply: '#a05a2c',
+      };
+      const baseTone = tintHex || plyBaseColors[textureType] || '#a05a2c';
+      ctx.fillStyle = baseTone;
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      // Luxury architectural veneer panel sheets (256px wide vertical planks)
+      const sheetWidth = 256;
+      for (let x = 0; x < 1024; x += sheetWidth) {
+        // Vertical architectural V-groove seam
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillRect(x, 0, 3, 1024);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+        ctx.fillRect(x + 3, 0, 1.5, 1024);
+
+        // Subtle veneer sheet gradient for rich surface dimension
+        const sheetGrad = ctx.createLinearGradient(x, 0, x + sheetWidth, 0);
+        sheetGrad.addColorStop(0, 'rgba(0, 0, 0, 0.08)');
+        sheetGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.04)');
+        sheetGrad.addColorStop(1, 'rgba(0, 0, 0, 0.12)');
+        ctx.fillStyle = sheetGrad;
+        ctx.fillRect(x + 3, 0, sheetWidth - 3, 1024);
+
+        // Natural wood grain flow along vertical panels
+        for (let g = 0; g < 18; g++) {
+          const gx = x + 12 + g * 13;
+          ctx.strokeStyle = g % 2 === 0 ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.05)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(gx, 0);
+          for (let y = 0; y <= 1024; y += 64) {
+            const wave = Math.sin((y + gx) * 0.015) * 5;
+            ctx.lineTo(gx + wave, y);
+          }
+          ctx.stroke();
+        }
+      }
+
+      // Satin wood pore stipples
+      for (let i = 0; i < 15000; i++) {
+        const px = Math.random() * 1024;
+        const py = Math.random() * 1024;
+        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 255, 255, 0.04)';
+        ctx.fillRect(px, py, 1.5, 3);
       }
       break;
     }

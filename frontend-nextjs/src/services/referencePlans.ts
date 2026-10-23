@@ -823,7 +823,7 @@ export const referenceLuxuryPlan: HomePlan = {
     { id: 'dim_liv_w', xStart: -95, yStart: 375, xEnd: 455, yEnd: 375, offset: 15, text: '15\'-0"' },
   ],
   textNotes: [
-    { id: 'txt_title', text: '30\'-0" × 42\'-0" LUXURY RESIDENCE (2 BHK + VERANDA + PARKING)', x: 0, y: 580, color: '#0f172a', fontSize: 16 },
+    { id: 'txt_title', text: '30\'-0" × 42\'-0" LUXURY RESIDENCE (2 BHK + VERANDA + PARKING)', x: 0, y: 720, color: '#0f172a', fontSize: 16 },
     { id: 'txt_parking', text: 'PARKING', x: 600, y: 110, color: '#475569', fontSize: 14 },
   ],
   preferences: {

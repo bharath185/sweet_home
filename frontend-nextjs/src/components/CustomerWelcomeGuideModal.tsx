@@ -1,20 +1,21 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  X,
-  Sparkles,
-  Magnet,
-  Maximize2,
-  Eye,
-  Box,
-  Compass,
-  ArrowRight,
-  CheckCircle2,
-  Home,
-  Layers,
-  Wand2,
-} from 'lucide-react';
+  Modal,
+  ConfigProvider,
+  theme as antdTheme,
+  Typography,
+  Card,
+  Button,
+  Row,
+  Col,
+  Tag,
+  Alert,
+  Checkbox,
+} from 'antd';
+
+const { Title, Text, Paragraph } = Typography;
 
 interface CustomerWelcomeGuideModalProps {
   isOpen: boolean;
@@ -33,178 +34,219 @@ export const CustomerWelcomeGuideModal: React.FC<CustomerWelcomeGuideModalProps>
   onStartWalkTour,
   theme = 'light',
 }) => {
-  if (!isOpen) return null;
-
   const isDark = theme === 'dark';
+  const [dontShowAgain, setDontShowAgain] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('decofrog_tour_completed');
+      if (stored === 'false') {
+        setDontShowAgain(false);
+      } else {
+        setDontShowAgain(true);
+      }
+    }
+  }, [isOpen]);
+
+  const handleDismiss = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('decofrog_tour_completed', 'true');
+      localStorage.setItem('decofrog_welcome_dismissed', 'true');
+      localStorage.setItem('decofrog_has_visited', 'true');
+    }
+    onClose();
+  };
+
+  const handleCheckboxChange = (checked: boolean) => {
+    setDontShowAgain(checked);
+    if (typeof window !== 'undefined') {
+      if (checked) {
+        localStorage.setItem('decofrog_tour_completed', 'true');
+        localStorage.setItem('decofrog_welcome_dismissed', 'true');
+      } else {
+        localStorage.removeItem('decofrog_tour_completed');
+        localStorage.removeItem('decofrog_welcome_dismissed');
+      }
+    }
+  };
 
   const STEPS = [
     {
-      num: '1',
-      title: 'Pick a Layout or Room',
-      desc: 'Start with a ready-to-design template (1-Bedroom, 2-Bedroom, Studio, or Villa), or work with your existing walls.',
-      icon: Home,
+      num: 'Step 1',
+      title: 'Draw 2D Walls & Rooms',
+      desc: 'Use the Wall tool to draw perimeter walls. Closing the loop automatically detects room boundaries and calculates square meters.',
       actionText: 'Choose Template',
       action: () => {
-        onClose();
+        handleDismiss();
         onOpenTemplates();
       },
     },
     {
-      num: '2',
-      title: 'Add Furniture & Snap to Walls',
-      desc: 'Browse 3D items from the catalog. Click any item, then click 🧲 "Snap to Wall" — it instantly aligns flush against the wall and faces into the room!',
-      icon: Magnet,
-      actionText: 'Open 3D Catalog',
+      num: 'Step 2',
+      title: 'Add & Snap Furniture',
+      desc: 'Browse architectural fixtures. Drag items into rooms, customize dimensions, and snap flush to walls.',
+      actionText: 'Browse 3D Catalog',
       action: () => {
-        onClose();
+        handleDismiss();
         onOpenCatalog();
       },
     },
     {
-      num: '3',
-      title: 'Customize Luxury Arched Finishes',
-      desc: 'Select any arched cabinet or island to change wood stains, Calacatta Gold marble countertops, and knurled brass hardware with 1 click.',
-      icon: Sparkles,
-      actionText: 'Browse Arched Details',
-      action: () => {
-        onClose();
-        onOpenCatalog();
-      },
-    },
-    {
-      num: '4',
-      title: 'Take an Interactive 3D Walk Tour',
-      desc: 'Switch to first-person walk mode to walk through your home, open cabinet doors and windows, and experience your realistic spaces.',
-      icon: Eye,
+      num: 'Step 3',
+      title: 'Switch to Real-Time 3D',
+      desc: 'Toggle between Split (2D + 3D) or full 3D Orbit. Walk through your project in first-person view.',
       actionText: 'Start 3D Tour',
       action: () => {
-        onClose();
+        handleDismiss();
         onStartWalkTour();
       },
+    },
+    {
+      num: 'Step 4',
+      title: 'Save & Export Blueprints',
+      desc: 'Your project auto-saves locally. Export high-resolution 2D floor plans with dimension stamps or save project backups to JSON anytime.',
+      actionText: 'Start Designing',
+      action: handleDismiss,
     },
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div
-        className={`w-full max-w-2xl rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${
-          isDark
-            ? 'bg-[#0f172a] border-slate-800 text-slate-100 shadow-black/80'
-            : 'bg-white border-slate-200 text-slate-900 shadow-slate-900/30'
-        }`}
+    <ConfigProvider
+      theme={{
+        algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+        token: {
+          colorPrimary: '#4f46e5',
+          borderRadius: 12,
+          fontFamily: 'inherit',
+        },
+      }}
+    >
+      <Modal
+        open={isOpen}
+        onCancel={handleDismiss}
+        footer={null}
+        width={680}
+        centered
+        destroyOnClose
+        className="customer-welcome-guide-modal"
+        styles={{
+          body: {
+            padding: 0,
+            overflow: 'hidden',
+          },
+        }}
       >
-        {/* Modal Header */}
+        {/* Simple, Icon-Free Header */}
         <div
-          className={`p-6 border-b flex items-center justify-between relative overflow-hidden ${
-            isDark ? 'border-slate-800 bg-slate-950/60' : 'border-slate-100 bg-slate-50/80'
+          className={`px-6 py-4 border-b ${
+            isDark ? 'border-slate-800 bg-[#0d1527]' : 'border-slate-100 bg-slate-50/70'
           }`}
         >
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-emerald-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
-                  Beginner Friendly
-                </span>
-                <span className="text-[10px] text-slate-400">Zero CAD Experience Required</span>
-              </div>
-              <h2 className="text-xl font-bold tracking-tight mt-0.5">
-                How to Design Your Dream Home
-              </h2>
-            </div>
-          </div>
-
-          <button
-            onClick={onClose}
-            className={`p-2 rounded-xl transition cursor-pointer ${
-              isDark
-                ? 'text-slate-400 hover:text-white hover:bg-slate-800'
-                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'
-            }`}
-            title="Close Guide"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <Title level={4} style={{ margin: '0 0 2px 0', fontWeight: 700 }}>
+            How to Design Your Dream Home
+          </Title>
+          <Text type="secondary" className="text-xs">
+            Quick 4-step beginner guide • Zero CAD experience required
+          </Text>
         </div>
 
-        {/* Steps Content */}
-        <div className="p-6 overflow-y-auto custom-scrollbar space-y-4">
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Welcome to <strong className="text-slate-800 dark:text-slate-200">DecoFrog 3D Studio</strong>. You don’t need any architectural knowledge or complex CAD tools — here is how to design your home in 4 easy steps:
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {STEPS.map((step) => {
-              const Icon = step.icon;
-              return (
-                <div
-                  key={step.num}
-                  className={`p-4 rounded-2xl border transition-all duration-200 flex flex-col justify-between ${
+        {/* Content Body */}
+        <div className={`p-5 space-y-3.5 ${isDark ? 'bg-[#0a101f]' : 'bg-white'}`}>
+          <Row gutter={[12, 12]}>
+            {STEPS.map((step, idx) => (
+              <Col xs={24} sm={12} key={step.num}>
+                <Card
+                  hoverable
+                  size="small"
+                  className={`h-full border transition-all duration-200 flex flex-col justify-between ${
                     isDark
-                      ? 'bg-slate-900/60 border-slate-800/90 hover:border-indigo-500/50'
-                      : 'bg-slate-50/70 border-slate-200/90 hover:border-indigo-400 hover:shadow-md'
+                      ? 'bg-[#10192d] border-slate-800 hover:border-indigo-500/50'
+                      : 'bg-slate-50/60 border-slate-200/80 hover:border-indigo-400 hover:shadow-xs'
                   }`}
+                  styles={{
+                    body: {
+                      padding: '14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      height: '100%',
+                      justifyContent: 'space-between',
+                    },
+                  }}
                 >
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="w-8 h-8 rounded-xl bg-indigo-600/10 text-indigo-500 dark:text-indigo-400 flex items-center justify-center font-bold text-xs">
-                        {step.num}
-                      </div>
-                      <Icon className="w-4 h-4 text-slate-400" />
-                    </div>
-                    <h3 className="text-sm font-bold leading-tight mb-1">{step.title}</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
+                    <Tag
+                      color="indigo"
+                      bordered={false}
+                      className="font-bold text-[10px] uppercase mb-2 px-2 py-0.5"
+                    >
+                      {step.num}
+                    </Tag>
+                    <Title level={5} style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: 600 }}>
+                      {step.title}
+                    </Title>
+                    <Paragraph
+                      type="secondary"
+                      style={{ fontSize: '11px', lineHeight: 1.5, marginBottom: '12px' }}
+                    >
                       {step.desc}
-                    </p>
+                    </Paragraph>
                   </div>
 
-                  <button
+                  <Button
+                    type={idx === 0 || idx === 3 ? 'primary' : 'default'}
+                    block
                     onClick={step.action}
-                    className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
+                    className="font-medium text-xs h-8 flex items-center justify-center cursor-pointer"
                   >
-                    <span>{step.actionText}</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+                    {step.actionText}
+                  </Button>
+                </Card>
+              </Col>
+            ))}
+          </Row>
 
-          {/* Golden Pro Tip Box */}
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-3">
-            <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-500 shrink-0 mt-0.5">
-              <Magnet className="w-4 h-4" />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-amber-500 dark:text-amber-400">
-                Quick Alignment Tip:
-              </h4>
-              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">
-                Whenever you click on any furniture in your room, look at the floating bar at the bottom: click <strong>🧲 "Snap to Wall"</strong> to immediately align it flush with the wall, or <strong>🎯 "Center"</strong> to center it in the room!
-              </p>
-            </div>
-          </div>
+          {/* Simple, Icon-Free Quick Alignment Tip Box */}
+          <Alert
+            type="info"
+            showIcon={false}
+            className={`border rounded-xl p-3 text-xs ${
+              isDark ? 'bg-indigo-950/20 border-indigo-900/40 text-indigo-200' : 'bg-indigo-50/60 border-indigo-200 text-slate-700'
+            }`}
+            message={
+              <div>
+                <strong className="text-indigo-600 dark:text-indigo-400 mr-1.5">Quick Tip:</strong>
+                <span>
+                  Select any furniture item to instantly align it flush to a wall or center it in the room using the bottom bar.
+                </span>
+              </div>
+            }
+          />
         </div>
 
-        {/* Modal Footer */}
+        {/* Footer */}
         <div
-          className={`p-4 border-t flex items-center justify-between ${
-            isDark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-100 bg-slate-50/50'
+          className={`px-6 py-3 border-t flex items-center justify-between gap-4 ${
+            isDark ? 'border-slate-800 bg-[#0d1527]' : 'border-slate-100 bg-slate-50/80'
           }`}
         >
-          <span className="text-[11px] text-slate-400">
-            Press anytime from the top bar: <strong>💡 How to Design</strong>
-          </span>
-          <button
-            onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer"
+          <Checkbox
+            checked={dontShowAgain}
+            onChange={(e) => handleCheckboxChange(e.target.checked)}
+            className="text-xs select-none"
           >
-            Start Designing Now
-          </button>
+            Don&apos;t show on startup (Replay anytime via Help)
+          </Checkbox>
+
+          <Button
+            type="primary"
+            size="middle"
+            onClick={handleDismiss}
+            className="font-semibold text-xs px-5 h-8.5 shadow-sm shadow-indigo-600/20 cursor-pointer"
+          >
+            Start Designing
+          </Button>
         </div>
-      </div>
-    </div>
+      </Modal>
+    </ConfigProvider>
   );
 };

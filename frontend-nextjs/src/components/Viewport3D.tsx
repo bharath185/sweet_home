@@ -91,6 +91,7 @@ interface Viewport3DProps {
   onVisitorCameraChange?: (state: VisitorCameraState) => void;
   onUpgradePrompt?: (featureName: string) => void;
   isPro?: boolean;
+  fitTrigger?: number;
 }
 
 const CM = 0.01;
@@ -450,6 +451,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   onVisitorCameraChange,
   onUpgradePrompt,
   isPro = true,
+  fitTrigger,
 }) => {
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -1892,29 +1894,36 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         wallTex.repeat.set(Math.max(1.5, length * 1.5), Math.max(1.5, height * 1.5));
       }
 
+      const isWallTexture = Boolean(wall.texture);
+      const isRoyale = wall.texture?.includes('royale');
+      const isRoyalPly = wall.texture?.includes('royal_ply');
+      const isBrick = wall.texture?.includes('brick') || wall.texture?.includes('stone');
+
       const mat = new THREE.MeshStandardMaterial({
-        color: isSelected ? 0x38bdf8 : wall.color ? new THREE.Color(wall.color) : 0xf8fafc,
-        roughness: wall.texture?.includes('royale') ? 0.45 : 0.88,
-        metalness: wall.texture?.includes('royale') ? 0.12 : 0.02,
+        color: isSelected
+          ? 0x38bdf8
+          : isWallTexture
+          ? 0xffffff
+          : wall.color
+          ? new THREE.Color(wall.color)
+          : 0xf8fafc,
+        roughness: isRoyale ? 0.45 : isRoyalPly ? 0.38 : isBrick ? 0.92 : 0.88,
+        metalness: isRoyale ? 0.12 : isRoyalPly ? 0.04 : 0.01,
         map: wallTex || undefined,
       });
 
-      const wallCapMat = new THREE.MeshStandardMaterial({
-        color: 0x181a1f, // DecoFrog 3D Signature Dark Charcoal Top Rim
-        roughness: 0.65,
-        metalness: 0.15,
-      });
-      // BoxGeometry 6 faces: [+X, -X, +Y (TOP), -Y (BTM), +Z, -Z]
-      const wallMaterials = isSelected ? mat : [mat, mat, wallCapMat, mat, mat, mat];
+      // BoxGeometry receives uniform material across all faces (top, sides, ends)
+      const wallMaterials = mat;
 
-      // Helper to attach clean crisp architectural edge lines to wall box meshes
+      // Selection edge highlight only (removes dark cage lines on unselected walls)
       const attachWallEdges = (targetMesh: THREE.Mesh) => {
+        if (!isSelected) return;
         const edgesGeom = new THREE.EdgesGeometry(targetMesh.geometry, 15);
         const edgeMat = new THREE.LineBasicMaterial({
-          color: isSelected ? 0x0284c7 : 0x0f172a,
-          linewidth: isSelected ? 2 : 1,
+          color: 0x0284c7,
+          linewidth: 2,
           transparent: true,
-          opacity: isSelected ? 0.95 : 0.75,
+          opacity: 0.95,
         });
         const edgeLines = new THREE.LineSegments(edgesGeom, edgeMat);
         targetMesh.add(edgeLines);
@@ -2033,6 +2042,86 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         }
 
         group.add(wallGroup);
+      }
+    });
+
+    // 2.1 Seamless Architectural Corner Junctions
+    // Where 2 or more walls intersect at a corner, fill the outer corner notch seamlessly
+    const visibleWallsForCorners = plan.walls.filter((w) => isFloorVisible(w.floorLevel ?? 0));
+    interface CornerVertex {
+      x: number;
+      z: number;
+      floorLevel: number;
+      walls: typeof visibleWallsForCorners;
+    }
+    const cornerVertices: CornerVertex[] = [];
+    const registerCornerEndpoint = (
+      wx: number,
+      wz: number,
+      floorLevel: number,
+      wallRef: (typeof visibleWallsForCorners)[0]
+    ) => {
+      const TOLERANCE = 0.08; // 8cm
+      let found = cornerVertices.find(
+        (cv) => cv.floorLevel === floorLevel && Math.hypot(cv.x - wx, cv.z - wz) < TOLERANCE
+      );
+      if (!found) {
+        found = { x: wx, z: wz, floorLevel, walls: [] };
+        cornerVertices.push(found);
+      }
+      if (!found.walls.some((w) => w.id === wallRef.id)) {
+        found.walls.push(wallRef);
+      }
+    };
+
+    visibleWallsForCorners.forEach((w) => {
+      const fl = w.floorLevel ?? 0;
+      registerCornerEndpoint(w.xStart * CM, w.yStart * CM, fl, w);
+      registerCornerEndpoint(w.xEnd * CM, w.yEnd * CM, fl, w);
+    });
+
+    cornerVertices.forEach((cv) => {
+      if (cv.walls.length >= 2) {
+        const maxThickness = Math.max(...cv.walls.map((w) => (w.thickness || 15) * CM));
+        const maxHeight = Math.max(...cv.walls.map((w) => (w.height || 280) * CM));
+        const hasSelected = cv.walls.some((w) => w.id === selectedId);
+        const primary = cv.walls.find((w) => w.id === selectedId) || cv.walls[0];
+        const offset = getFloor3DOffset(cv.floorLevel);
+
+        const cornerTex = primary.texture
+          ? getProceduralTexture(primary.texture, primary.color)
+          : getProceduralTexture('matte_wall_paint', primary.color || '#f8fafc');
+
+        const cornerMat = new THREE.MeshStandardMaterial({
+          color: hasSelected
+            ? 0x38bdf8
+            : primary.texture
+            ? 0xffffff
+            : primary.color
+            ? new THREE.Color(primary.color)
+            : 0xf8fafc,
+          roughness: primary.texture?.includes('royale')
+            ? 0.45
+            : primary.texture?.includes('royal_ply')
+            ? 0.38
+            : primary.texture?.includes('brick') || primary.texture?.includes('stone')
+            ? 0.92
+            : 0.88,
+          metalness: primary.texture?.includes('royale')
+            ? 0.12
+            : primary.texture?.includes('royal_ply')
+            ? 0.04
+            : 0.01,
+          map: cornerTex || undefined,
+        });
+
+        const cornerGeom = new THREE.BoxGeometry(maxThickness, maxHeight, maxThickness);
+        const cornerMesh = new THREE.Mesh(cornerGeom, cornerMat);
+        cornerMesh.position.set(cv.x + offset.x, offset.y + maxHeight / 2, cv.z + offset.z);
+        cornerMesh.castShadow = true;
+        cornerMesh.receiveShadow = true;
+        cornerMesh.userData = { id: primary.id, type: 'wall', floorLevel: cv.floorLevel };
+        group.add(cornerMesh);
       }
     });
 
@@ -3112,6 +3201,14 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     }
   }, [plan.id, fit3DCameraToPlan, cameraMode]);
 
+  const lastFitTrigger3DRef = useRef<number>(0);
+  useEffect(() => {
+    if (fitTrigger && fitTrigger !== lastFitTrigger3DRef.current && cameraMode !== 'visitor') {
+      lastFitTrigger3DRef.current = fitTrigger;
+      fit3DCameraToPlan();
+    }
+  }, [fitTrigger, cameraMode]);
+
   const handleResetCamera = () => {
     if (cameraMode === 'visitor') {
       handleSwitchToVisitor();
@@ -3374,10 +3471,10 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
               <button
                 onClick={handleSwitchToVisitor}
                 className="px-2.5 py-1 rounded-lg text-[11px] transition flex items-center gap-1.5 font-bold cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300"
-                title="PUBG Game Tour (WASD Walk, Shift Sprint, Mouse-Look)"
+                title="Walk Tour (WASD Walk, Shift Sprint, Mouse-Look)"
               >
                 <Gamepad2 className="w-3.5 h-3.5 text-slate-950" />
-                <span>PUBG Tour</span>
+                <span>Walk Tour</span>
               </button>
             </div>
 
@@ -3527,13 +3624,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         </div>
       )}
 
-      {/* Collision Alert Banner (Non-overlapping at Bottom Left) */}
-      {collidingItemIds.size > 0 && (
-        <div className="absolute bottom-12 left-3 z-10 flex items-center gap-1.5 bg-rose-600 text-white backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-rose-500 text-xs font-bold animate-pulse">
-          <AlertTriangle className="w-3.5 h-3.5" />
-          <span>{collidingItemIds.size} Colliding (Red)</span>
-        </div>
-      )}
+
 
 
       {/* PUBG Game HUD Overlay (Top Compass Ribbon, Crosshair, Stance, Keybinds, Floor Badge) */}

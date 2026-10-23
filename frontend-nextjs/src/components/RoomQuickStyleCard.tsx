@@ -59,12 +59,12 @@ export const RoomQuickStyleCard: React.FC<RoomQuickStyleCardProps> = ({
   };
 
   return (
-    <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 pointer-events-auto select-none animate-in fade-in slide-in-from-top-3 duration-200">
+    <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 pointer-events-auto select-none">
       <div
-        className={`p-3 rounded-2xl border shadow-2xl backdrop-blur-xl flex flex-col gap-2 max-w-sm ${
+        className={`p-3 rounded-2xl border shadow-2xl flex flex-col gap-2 max-w-sm ${
           isDark
-            ? 'bg-slate-900/95 border-slate-700/80 text-white shadow-black/70'
-            : 'bg-white/95 border-slate-200/90 text-slate-800 shadow-slate-900/20'
+            ? 'bg-slate-900 border-slate-700 text-white shadow-black/70'
+            : 'bg-white border-slate-300 text-slate-800 shadow-slate-900/20'
         }`}
       >
         <div className="flex items-center justify-between gap-3">

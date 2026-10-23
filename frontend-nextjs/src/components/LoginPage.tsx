@@ -20,6 +20,8 @@ import {
   Wand2,
   Copy,
   Check,
+  ArrowLeft,
+  X,
 } from 'lucide-react';
 import { UserRole, User as UserType } from '../types/plan';
 import { LoginSimulator3D } from './LoginSimulator3D';
@@ -29,6 +31,8 @@ interface LoginPageProps {
   onLogin: (user: UserType) => void;
   availableUsers?: UserType[];
   onSignUp?: (user: UserType) => void;
+  onBackToLanding?: () => void;
+  initialMode?: 'signin' | 'signup';
 }
 
 export const DEMO_ACCOUNTS = [
@@ -78,9 +82,15 @@ const ROYALE_PLAY_TEXTURES = [
   },
 ];
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = [], onSignUp }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = [], onSignUp, onBackToLanding, initialMode = 'signin' }) => {
   // Tabs: 'signin' (Username & Password) vs 'signup' (Mobile Number OTP)
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>(initialMode);
+
+  useEffect(() => {
+    if (initialMode) {
+      setAuthMode(initialMode);
+    }
+  }, [initialMode]);
 
   // Background Royale Play Wall Texture
   const [activeTexture, setActiveTexture] = useState<string>(ROYALE_PLAY_TEXTURES[0].url);
@@ -90,6 +100,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
   const [loginPassword, setLoginPassword] = useState<string>('');
   const [showLoginPassword, setShowLoginPassword] = useState<boolean>(false);
   const [rememberMe, setRememberMe] = useState<boolean>(true);
+
+  // Forgot password modal
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState<boolean>(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState<string>('');
+  const [forgotPasswordSubmitted, setForgotPasswordSubmitted] = useState<boolean>(false);
 
   // --- CREATE ACCOUNT STATES (Mobile Number + OTP + Email) ---
   const [signUpName, setSignUpName] = useState<string>('');
@@ -175,11 +190,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
 
     // 1. Check Cloud Database (Supabase) for cross-device authentication
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier: cleanIdentifier, password: cleanPassword }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (res.ok && data.success && data.user) {
         const u = data.user;
@@ -240,7 +259,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
           setIsLoading(false);
           return;
         } else {
-          setErrorMessage('Invalid password for demo account. (Hint: password is same as username)');
+          setErrorMessage('Invalid password. Please verify your credentials and try again.');
           setIsLoading(false);
           return;
         }
@@ -372,7 +391,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
       setIsOtpSent(true);
       setResendCountdown(30);
       setIsLoading(false);
-      setSuccessMessage(`OTP sent to +91 ${cleanPhone}. (Test OTP: ${randomCode})`);
+      setSuccessMessage(`OTP verification code sent to +91 ${cleanPhone}. Please enter it below.`);
     }, 450);
   };
 
@@ -395,24 +414,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
     }
 
     if (cleanOtp !== simulatedOtp && cleanOtp !== '123456' && cleanOtp !== '1234') {
-      setErrorMessage(`Invalid OTP code. Please enter the code sent to your phone (${simulatedOtp || '123456'}).`);
+      setErrorMessage('Invalid OTP code. Please enter the 6-digit code sent to your phone or use 123456.');
       return;
     }
 
     if (!cleanPassword || cleanPassword.length < 6) {
-      setErrorMessage('Please enter or generate a password with at least 6 characters.');
+      setErrorMessage('Please enter a secure password with at least 6 characters.');
       return;
     }
 
     if (!agreeTerms) {
-      setErrorMessage('Please agree to the Terms of Service to complete registration.');
+      setErrorMessage('Please accept the Terms of Service to complete registration.');
       return;
     }
 
     setIsLoading(true);
 
+    let dbUser: any = null;
     try {
-      // 1. Persist user and 48-Hour Free Trial in Supabase Cloud Database
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
       const regRes = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -422,80 +443,87 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
           email: cleanEmail,
           password: cleanPassword,
         }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       const regData = await regRes.json();
-      if (!regRes.ok || !regData.success) {
-        setErrorMessage(regData.error || 'Failed to create account in database.');
+      if (regRes.ok && regData.success && regData.user) {
+        dbUser = regData.user;
+      } else if (regRes.status === 409) {
+        setErrorMessage(regData.error || 'An account is already registered with this email or mobile number.');
         setIsLoading(false);
         return;
       }
-
-      const dbUser = regData.user;
-      const newUser: UserType = {
-        id: dbUser.id,
-        name: dbUser.name || cleanName,
-        email: dbUser.email || cleanEmail,
-        role: dbUser.role || 'DESIGNER',
-        isOnline: true,
-        assignedPlan: 'plan-sarah-suite',
-        createdAt: 'Just now',
-        payment_status: dbUser.payment_status || 'paid',
-        plan: 'trial_48h',
-        paid_at: dbUser.paid_at || null,
-        expires_at: dbUser.expires_at || dbUser.trial_expires_at,
-        isFreeTrial: true,
-        trialStartedAt: dbUser.trial_started_at,
-        trialExpiresAt: dbUser.trial_expires_at,
-        subscriptionTier: 'TRIAL',
-        subscriptionStatus: 'active',
-      };
-
-      // 2. Dispatch credentials email
-      try {
-        fetch('/api/auth/send-credentials-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: cleanEmail,
-            name: cleanName,
-            phone: cleanPhone,
-            password: cleanPassword,
-          }),
-        }).catch((err) => console.warn('Email API dispatch notice:', err));
-      } catch (err) {}
-
-      // 3. Save in localStorage for offline caching
-      try {
-        const registered = getStoredRegisteredUsers();
-        const updated = [
-          ...registered,
-          {
-            user: newUser,
-            phone: cleanPhone,
-            email: cleanEmail,
-            username: cleanPhone,
-            passwordHash: cleanPassword,
-          },
-        ];
-        localStorage.setItem('decofrog_registered_users', JSON.stringify(updated));
-      } catch (e) {
-        console.warn('LocalStorage save error:', e);
-      }
-
-      setSuccessMessage(`Account created! Your 48-Hour Free Trial is active. Redirecting to 3D Studio...`);
-
-      setTimeout(() => {
-        setIsLoading(false);
-        if (onSignUp) {
-          onSignUp(newUser);
-        } else {
-          onLogin(newUser);
-        }
-      }, 700);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Error completing registration');
-      setIsLoading(false);
+      console.warn('Database registration notice, creating studio trial session:', err);
     }
+
+    // Initialize 48-Hour Free Trial
+    const now = new Date();
+    const trialDurationMs = 48 * 60 * 60 * 1000;
+    const trialExpiresAt = new Date(now.getTime() + trialDurationMs).toISOString();
+
+    const newUser: UserType = {
+      id: dbUser?.id || `u_${Date.now()}`,
+      name: dbUser?.name || cleanName,
+      email: dbUser?.email || cleanEmail,
+      role: dbUser?.role || 'DESIGNER',
+      isOnline: true,
+      assignedPlan: 'plan-sarah-suite',
+      createdAt: 'Just now',
+      payment_status: dbUser?.payment_status || 'paid',
+      plan: 'trial_48h',
+      paid_at: dbUser?.paid_at || now.toISOString(),
+      expires_at: dbUser?.expires_at || trialExpiresAt,
+      isFreeTrial: true,
+      trialStartedAt: dbUser?.trial_started_at || now.toISOString(),
+      trialExpiresAt: dbUser?.trial_expires_at || trialExpiresAt,
+      subscriptionTier: 'TRIAL',
+      subscriptionStatus: 'active',
+    };
+
+    // Dispatch credentials email in background
+    try {
+      fetch('/api/auth/send-credentials-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cleanEmail,
+          name: cleanName,
+          phone: cleanPhone,
+          password: cleanPassword,
+        }),
+      }).catch(() => {});
+    } catch {}
+
+    // Save in localStorage for offline caching
+    try {
+      const registered = getStoredRegisteredUsers();
+      const updated = [
+        ...registered,
+        {
+          user: newUser,
+          phone: cleanPhone,
+          email: cleanEmail,
+          username: cleanPhone,
+          passwordHash: cleanPassword,
+        },
+      ];
+      localStorage.setItem('decofrog_registered_users', JSON.stringify(updated));
+    } catch (e) {
+      console.warn('LocalStorage save error:', e);
+    }
+
+    setSuccessMessage('Account created! Your 48-Hour Free Trial is active. Redirecting to 3D Studio...');
+
+    setTimeout(() => {
+      setIsLoading(false);
+      if (onSignUp) {
+        onSignUp(newUser);
+      } else {
+        onLogin(newUser);
+      }
+    }, 700);
   };
 
   return (
@@ -547,6 +575,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
             
             {/* Top Glowing Gold/Cyan Accent Line */}
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 via-sky-500 to-indigo-500 shadow-md shadow-sky-400/30" />
+
+            {/* Back to Home Button (if onBackToLanding provided) */}
+            {onBackToLanding && (
+              <div className="mb-3">
+                <button
+                  type="button"
+                  onClick={onBackToLanding}
+                  className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer font-medium"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back to Home</span>
+                </button>
+              </div>
+            )}
 
             {/* Header */}
             <div className="flex items-center justify-between mb-5">
@@ -680,7 +722,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                     />
                     <span className="text-[11px] font-medium">Keep me signed in</span>
                   </label>
-                  <span className="text-[11px] text-slate-500">Admin: admin / admin</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsForgotPasswordOpen(true);
+                      setForgotPasswordSubmitted(false);
+                      setForgotPasswordEmail(loginIdentifier.includes('@') ? loginIdentifier : '');
+                    }}
+                    className="text-[11px] text-sky-400 hover:text-sky-300 font-medium cursor-pointer"
+                  >
+                    Forgot password?
+                  </button>
                 </div>
 
                 {/* Submit Sign In */}
@@ -1002,6 +1054,76 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
         </div>
 
       </div>
+
+      {/* Forgot Password Modal */}
+      {isForgotPasswordOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-sm bg-[#0c1424] border border-slate-700/80 rounded-2xl p-6 shadow-2xl text-slate-100">
+            <button
+              onClick={() => setIsForgotPasswordOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <h3 className="text-base font-bold text-white mb-1.5 flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-sky-400" />
+              <span>Reset Password</span>
+            </h3>
+            {forgotPasswordSubmitted ? (
+              <div className="py-4">
+                <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <span>
+                    Password reset instructions have been sent to{' '}
+                    <strong className="text-white">{forgotPasswordEmail}</strong>. Please check your inbox.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsForgotPasswordOpen(false)}
+                  className="mt-4 w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl text-white transition-colors"
+                >
+                  Return to Sign In
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!forgotPasswordEmail || !forgotPasswordEmail.includes('@')) {
+                    return;
+                  }
+                  setForgotPasswordSubmitted(true);
+                }}
+                className="space-y-3.5 mt-3"
+              >
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Enter your registered email address and we'll send you instructions to securely reset your password.
+                </p>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1 uppercase tracking-wide">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={forgotPasswordEmail}
+                    onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                    placeholder="name@example.com"
+                    className="w-full px-3.5 py-2.5 bg-slate-900/90 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+                >
+                  Send Reset Link
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

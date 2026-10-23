@@ -12,9 +12,9 @@ export function formatDistance(cm: number, unit: UnitSystem = 'cm'): string {
     case 'mm':
       return `${Math.round(cm * 10)} mm`;
     case 'ft_in': {
-      const totalInches = cm / 2.54;
-      const feet = Math.floor(totalInches / 12);
-      const inches = Math.round(totalInches % 12);
+      const roundedTotalInches = Math.round(cm / 2.54);
+      const feet = Math.floor(roundedTotalInches / 12);
+      const inches = roundedTotalInches % 12;
       return `${feet}' ${inches}"`;
     }
     case 'cm':

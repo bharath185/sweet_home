@@ -283,14 +283,14 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
         {status === 'unpaid' && (
           <div className="text-center max-w-xl mb-8">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-3">
-              <Lock className="w-3.5 h-3.5" />
-              Subscription Required
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              100% All-Access Passes • Zero Feature Restrictions
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Unlock Full Access to VisualRendered 3D Studio
+              Select Your All-Access Studio Pass
             </h1>
-            <p className="text-sm text-slate-400 mt-2">
-              Choose an access pass to start creating multi-floor blueprints, 4K raytrace renders, and custom architectural layouts.
+            <p className="text-sm text-slate-300 mt-2">
+              We do not restrict any features! Every single pass unlocks 100% of the studio tools, multi-floor drafting, 4K raytrace, and BOM quotations.
             </p>
           </div>
         )}

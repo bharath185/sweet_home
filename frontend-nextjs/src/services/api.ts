@@ -69,7 +69,7 @@ export const sarahPlan: HomePlan = {
 
     // Outdoor Flight of Stairs & Deck (Left Exterior on Green Lawn)
     { id: 'sf_porch_deck', catalogId: 'squareTable', name: 'Outdoor Porch Deck', category: 'Stairs & Structural', x: -640, y: 70, elevation: 0, angle: 0, width: 150, depth: 220, height: 15, model: 'procedural:table:{"shape":"rectangular","topThickness":15,"legThickness":0}', icon: '/models/squareTable.png', color: '#334155', floorLevel: 0 },
-    { id: 'sf_porch_stairs', catalogId: 'staircaseOutdoorDeck', name: 'Outdoor Porch & Timber Deck Flight', category: 'Stairs & Structural', x: -640, y: 260, elevation: 0, angle: 0, width: 110, depth: 200, height: 150, model: 'procedural:stairs:{"type":"outdoor_deck","stepsCount":8,"hasHandrail":true}', icon: '/models/staircase.png', color: '#92400e', floorLevel: 0 },
+    { id: 'sf_porch_stairs', catalogId: 'staircaseOutdoorDeck', name: 'Outdoor Porch & Timber Deck Flight', category: 'Stairs & Structural', x: -640, y: 280, elevation: 0, angle: 0, width: 110, depth: 200, height: 150, model: 'procedural:stairs:{"type":"outdoor_deck","stepsCount":8,"hasHandrail":true}', icon: '/models/staircase.png', color: '#92400e', floorLevel: 0 },
 
     // --- 2. CORRIDOR (Center Hallway: Slate Blue Walls, Teal Floor, ~12.2m²) ---
     { id: 'sf_front_door', catalogId: 'doorModernFlush', name: 'Entrance Front Door', category: 'Doors & Windows', x: -30, y: -380, elevation: 0, angle: 0, width: 90, depth: 12, height: 210, model: 'procedural:door:{"type":"modern_flush"}', icon: '/models/door.png', color: '#3b82f6', floorLevel: 0 },
