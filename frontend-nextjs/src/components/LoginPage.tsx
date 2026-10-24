@@ -114,7 +114,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
   const [signUpPassword, setSignUpPassword] = useState<string>('');
   const [showSignUpPassword, setShowSignUpPassword] = useState<boolean>(false);
   const [isOtpSent, setIsOtpSent] = useState<boolean>(false);
-  const [simulatedOtp, setSimulatedOtp] = useState<string>('');
   const [resendCountdown, setResendCountdown] = useState<number>(0);
   const [agreeTerms, setAgreeTerms] = useState<boolean>(true);
   const [isPasswordCopied, setIsPasswordCopied] = useState<boolean>(false);
@@ -337,9 +336,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
   };
 
   // ==========================================
-  // 2. CREATE ACCOUNT: STEP 1 - SEND MOBILE OTP
+  // 2. CREATE ACCOUNT: STEP 1 - SEND REAL-TIME EMAIL OTP
   // ==========================================
-  const handleSendSignUpOtp = (e: React.FormEvent) => {
+  const handleSendSignUpOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -360,11 +359,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!cleanEmail || !emailRegex.test(cleanEmail)) {
-      setErrorMessage('Please enter a valid email address to receive your password and login credentials.');
+      setErrorMessage('Please enter a valid email address to receive your 6-digit verification code.');
       return;
     }
 
-    // Check if phone or email is already registered
+    // Check if phone or email is already registered locally
     const registered = getStoredRegisteredUsers();
     const existingPhone = registered.find(
       (r) => r.phone === cleanPhone || r.user.email?.includes(cleanPhone)
@@ -384,15 +383,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      // Generate simulated 6-digit OTP code for testing
-      const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
-      setSimulatedOtp(randomCode);
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: cleanName,
+          phone: cleanPhone,
+          email: cleanEmail,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setErrorMessage(data.error || 'Failed to dispatch verification code. Please check your email.');
+        return;
+      }
+
       setIsOtpSent(true);
       setResendCountdown(30);
+      setSuccessMessage(`A 6-digit verification code has been dispatched to ${cleanEmail}. Please check your inbox.`);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Network error while dispatching verification code.');
+    } finally {
       setIsLoading(false);
-      setSuccessMessage(`OTP verification code sent to +91 ${cleanPhone}. Please enter it below.`);
-    }, 450);
+    }
   };
 
   // ==========================================
@@ -403,18 +417,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
     setErrorMessage(null);
 
     const cleanPhone = signUpPhone.replace(/\D/g, '');
-    const cleanOtp = signUpOtp.trim();
+    const cleanOtp = signUpOtp.trim().replace(/\s/g, '');
     const cleanPassword = signUpPassword.trim();
     const cleanName = signUpName.trim();
     const cleanEmail = signUpEmail.trim().toLowerCase();
 
-    if (!cleanOtp) {
-      setErrorMessage('Please enter the 6-digit OTP verification code.');
-      return;
-    }
-
-    if (cleanOtp !== simulatedOtp && cleanOtp !== '123456' && cleanOtp !== '1234') {
-      setErrorMessage('Invalid OTP code. Please enter the 6-digit code sent to your phone or use 123456.');
+    if (!cleanOtp || cleanOtp.length < 6) {
+      setErrorMessage('Please enter the 6-digit verification code sent to your email.');
       return;
     }
 
@@ -432,36 +441,33 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
 
     let dbUser: any = null;
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
-      const regRes = await fetch('/api/auth/register', {
+      const verifyRes = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          email: cleanEmail,
+          otp: cleanOtp,
           name: cleanName,
           phone: cleanPhone,
-          email: cleanEmail,
           password: cleanPassword,
         }),
-        signal: controller.signal,
       });
-      clearTimeout(timeoutId);
-      const regData = await regRes.json();
-      if (regRes.ok && regData.success && regData.user) {
-        dbUser = regData.user;
-      } else if (regRes.status === 409) {
-        setErrorMessage(regData.error || 'An account is already registered with this email or mobile number.');
+
+      const verifyData = await verifyRes.json();
+      if (!verifyRes.ok || !verifyData.success) {
+        setErrorMessage(verifyData.error || 'Invalid or expired verification code. Please check your email.');
         setIsLoading(false);
         return;
       }
+      dbUser = verifyData.user;
     } catch (err: any) {
-      console.warn('Database registration notice, creating studio trial session:', err);
+      console.warn('Realtime OTP verification notice:', err);
     }
 
     // Initialize 48-Hour Free Trial
     const now = new Date();
     const trialDurationMs = 48 * 60 * 60 * 1000;
-    const trialExpiresAt = new Date(now.getTime() + trialDurationMs).toISOString();
+    const trialExpiresAt = dbUser?.trial_expires_at || new Date(now.getTime() + trialDurationMs).toISOString();
 
     const newUser: UserType = {
       id: dbUser?.id || `u_${Date.now()}`,
@@ -482,21 +488,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
       subscriptionStatus: 'active',
     };
 
-    // Dispatch credentials email in background
-    try {
-      fetch('/api/auth/send-credentials-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cleanEmail,
-          name: cleanName,
-          phone: cleanPhone,
-          password: cleanPassword,
-        }),
-      }).catch(() => {});
-    } catch {}
-
-    // Save in localStorage for offline caching
+    // Store in local registered accounts cache
     try {
       const registered = getStoredRegisteredUsers();
       const updated = [
@@ -510,20 +502,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
         },
       ];
       localStorage.setItem('decofrog_registered_users', JSON.stringify(updated));
+      localStorage.setItem('decofrog_current_user', JSON.stringify(newUser));
+      localStorage.setItem('sweethome_current_user', JSON.stringify(newUser));
     } catch (e) {
       console.warn('LocalStorage save error:', e);
     }
 
-    setSuccessMessage('Account created! Your 48-Hour Free Trial is active. Redirecting to 3D Studio...');
+    // Dispatch welcome & credentials email in background
+    fetch('/api/auth/send-credentials-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: cleanEmail,
+        name: cleanName,
+        phone: cleanPhone,
+        password: cleanPassword,
+      }),
+    }).catch((e) => console.warn('Welcome credentials email notice:', e));
 
-    setTimeout(() => {
-      setIsLoading(false);
-      if (onSignUp) {
-        onSignUp(newUser);
-      } else {
-        onLogin(newUser);
-      }
-    }, 700);
+    setIsLoading(false);
+    if (onSignUp) {
+      onSignUp(newUser);
+    } else {
+      onLogin(newUser);
+    }
   };
 
   return (
@@ -844,12 +846,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                       {isLoading ? (
                         <>
                           <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span>Sending Verification Code...</span>
+                          <span>Dispatching Email Verification Code...</span>
                         </>
                       ) : (
                         <>
-                          <Phone className="w-4 h-4" />
-                          <span>Send Verification OTP</span>
+                          <Mail className="w-4 h-4" />
+                          <span>Send Email Verification Code</span>
                           <ArrowRight className="w-4 h-4" />
                         </>
                       )}
@@ -861,9 +863,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                     {/* Header info with change button */}
                     <div className="flex items-center justify-between p-2.5 bg-[#080f1e]/80 border border-slate-800 rounded-xl text-xs">
                       <div className="truncate max-w-[240px]">
-                        <span className="text-slate-400 text-[11px]">Verifying: </span>
-                        <strong className="text-white font-mono">+91 {signUpPhone}</strong>
-                        <span className="text-slate-500 text-[10px] block truncate">{signUpEmail}</span>
+                        <span className="text-slate-400 text-[11px]">Verifying Email: </span>
+                        <strong className="text-white font-mono">{signUpEmail}</strong>
+                        <span className="text-slate-500 text-[10px] block truncate">+91 {signUpPhone}</span>
                       </div>
                       <button
                         type="button"
@@ -881,7 +883,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                     {/* 6-Digit OTP Code */}
                     <div>
                       <label className="block text-xs font-bold text-slate-300 mb-1 tracking-wide uppercase text-[11px]">
-                        6-Digit OTP Code
+                        6-Digit Email Verification Code
                       </label>
                       <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -899,21 +901,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                         />
                       </div>
 
-                      {/* Quick Auto-Fill Demo OTP Helper */}
-                      {simulatedOtp && (
-                        <div className="mt-1.5 flex items-center justify-between text-[11px] bg-sky-500/10 border border-sky-500/20 px-2.5 py-1.5 rounded-lg">
-                          <span className="text-slate-300">
-                            Demo Code: <strong className="text-sky-300 font-mono">{simulatedOtp}</strong>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setSignUpOtp(simulatedOtp)}
-                            className="text-sky-400 font-bold hover:underline cursor-pointer"
-                          >
-                            Auto-Fill Code
-                          </button>
+                      {/* Realtime Email OTP notice - NEVER DISPLAY OTP ON SCREEN */}
+                      <div className="mt-2 flex items-start gap-2 text-[11px] text-slate-400 bg-sky-950/40 border border-sky-800/50 p-2.5 rounded-xl">
+                        <Mail className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                        <div>
+                          <span>A 6-digit verification code has been dispatched to <strong className="text-sky-300 font-medium">{signUpEmail}</strong>.</span>
+                          <span className="block text-[10px] text-slate-500 mt-0.5">Please check your inbox (and spam folder) and enter the code above.</span>
                         </div>
-                      )}
+                      </div>
                     </div>
 
                     {/* Password Field with "Generate Password" Option */}
@@ -1005,7 +1000,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                     {/* Submit OTP Verification & Register */}
                     <button
                       type="submit"
-                      disabled={isLoading || signUpOtp.length < 4 || signUpPassword.length < 6}
+                      disabled={isLoading || signUpOtp.length < 6 || signUpPassword.length < 6}
                       className="w-full py-3 rounded-xl text-xs font-bold text-white shadow-xl transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 via-teal-600 to-indigo-600 hover:from-emerald-400 hover:via-teal-500 hover:to-indigo-500 shadow-emerald-500/25 cursor-pointer disabled:opacity-50 mt-1"
                     >
                       {isLoading ? (
