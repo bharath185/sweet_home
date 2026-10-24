@@ -193,6 +193,8 @@ export interface CatalogItem {
   allowedOnFloor?: boolean;
   elevation?: number;
   defaultElevation?: number;
+  price?: number;
+  updatedAt?: string;
 }
 
 export interface FloorTemplate {

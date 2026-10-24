@@ -63,6 +63,8 @@ import {
   RiseOutlined,
   ShopOutlined,
   RotateLeftOutlined,
+  BoxPlotOutlined,
+  ToolOutlined,
 } from '@ant-design/icons';
 import { User, CatalogItem, FloorTemplate, HomePlan, UserRole } from '../types/plan';
 import { CatalogThumbnail } from './CatalogThumbnail';
@@ -71,6 +73,7 @@ import { EditCatalogItemModal } from './EditCatalogItemModal';
 import { TemplateThumbnail } from './TemplateThumbnail';
 import { Template3DPreviewModal } from './Template3DPreviewModal';
 import { AdminPaymentsView } from './AdminPaymentsView';
+import { Admin3DObjectDesigner } from './Admin3DObjectDesigner';
 
 const { Sider, Content } = Layout;
 const { Text, Title } = Typography;
@@ -84,6 +87,7 @@ export type AdminSectionTab =
   | 'email_config'
   | 'sms_gateway'
   | 'catalog'
+  | 'object_design'
   | 'floors';
 
 interface AdminDashboardProps {
@@ -108,7 +112,8 @@ interface AdminDashboardProps {
   currentUser?: User | null;
   onLogout?: () => void;
   onAddItem?: (item: CatalogItem) => void;
-  onUpdateCatalogItem?: (item: CatalogItem) => void;
+  onAddCustomCatalogItem?: (item: CatalogItem, autoPlaceInScene?: boolean) => Promise<CatalogItem | void>;
+  onUpdateCatalogItem?: (item: CatalogItem) => Promise<CatalogItem | void> | void;
   theme?: 'dark' | 'light';
   onToggleTheme?: () => void;
 }
@@ -134,6 +139,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   currentUser,
   onLogout,
   onAddItem,
+  onAddCustomCatalogItem,
   onUpdateCatalogItem,
   theme = 'light',
   onToggleTheme,
@@ -776,6 +782,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>3D Furniture Catalog</span>
               <Badge count={catalog.length} overflowCount={999} style={{ backgroundColor: '#6366f1' }} />
+            </div>
+          ),
+        },
+        {
+          key: 'object_design',
+          icon: <BoxPlotOutlined style={{ fontSize: 13, color: '#38bdf8' }} />,
+          label: (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>3D Object Design</span>
+              <Badge count="STUDIO" style={{ backgroundColor: '#0284c7' }} />
             </div>
           ),
         },
@@ -1830,9 +1846,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </Space>
                     }
                     extra={
-                      <Button type="primary" icon={<PlusOutlined />} onClick={onOpenAddItemModal}>
-                        Add 3D Model
-                      </Button>
+                      <Space>
+                        <Button
+                          type="primary"
+                          icon={<BoxPlotOutlined />}
+                          style={{ backgroundColor: '#0284c7', borderColor: '#0284c7' }}
+                          onClick={() => handleSelectTab('object_design')}
+                        >
+                          3D Object Design Studio
+                        </Button>
+                        <Button icon={<PlusOutlined />} onClick={onOpenAddItemModal}>
+                          Add 3D Model
+                        </Button>
+                      </Space>
                     }
                   >
                     <div style={{ marginBottom: 16 }}>
@@ -1886,6 +1912,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               <Tooltip key="preview" title="3D Preview">
                                 <EyeOutlined onClick={() => setPreviewCatalogItem(item)} />
                               </Tooltip>,
+                              <Tooltip key="redesign" title="Redesign in 3D Object Studio">
+                                <ToolOutlined
+                                  style={{ color: '#0284c7' }}
+                                  onClick={() => handleSelectTab('object_design')}
+                                />
+                              </Tooltip>,
                               <Tooltip key="edit" title="Edit dimensions & details">
                                 <EditOutlined onClick={() => setEditingCatalogItem(item)} />
                               </Tooltip>,
@@ -1907,6 +1939,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       ))}
                     </Row>
                   </Card>
+                )}
+
+                {/* TAB 8: 3D OBJECT DESIGN STUDIO */}
+                {activeTab === 'object_design' && (
+                  <div style={{ margin: -14, height: 'calc(100vh - 105px)', overflow: 'hidden' }}>
+                    <Admin3DObjectDesigner
+                      catalog={catalog}
+                      onAddCustomCatalogItem={onAddCustomCatalogItem}
+                      onUpdateCatalogItem={onUpdateCatalogItem}
+                      onAddItemToPlan={onAddItem}
+                      plan={plan}
+                    />
+                  </div>
                 )}
 
                 {/* TAB 8: FLOOR TEMPLATES */}

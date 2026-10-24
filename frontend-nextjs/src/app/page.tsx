@@ -1382,6 +1382,7 @@ export default function HomeStudioPage() {
             currentUser={currentUser}
             onLogout={handleLogout}
             onAddItem={handleAddItem}
+            onAddCustomCatalogItem={handleAddCustomItem}
             onUpdateCatalogItem={handleUpdateCatalogItem}
           />
         )}
