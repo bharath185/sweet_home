@@ -154,7 +154,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const refreshUsersList = async () => {
     setIsUsersLoading(true);
     try {
-      const res = await fetch('/api/users', { cache: 'no-store' });
+      const res = await fetch('/api/users', {
+        cache: 'no-store',
+        headers: { 'x-user-role': 'ADMIN' },
+      });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -300,6 +303,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setDbUsers((prev) => prev.filter((u) => u.id !== userId));
       const res = await fetch(`/api/users?id=${encodeURIComponent(userId)}`, {
         method: 'DELETE',
+        headers: { 'x-user-role': 'ADMIN' },
       });
       if (res.ok) {
         message.success(`User "${userName}" deleted from database`);

@@ -16,7 +16,7 @@ export const fetchCache = 'force-no-store';
 export async function GET(req: NextRequest) {
   try {
     const role = req.headers.get('x-user-role');
-    if (role && role !== 'ADMIN') {
+    if (role !== 'ADMIN') {
       return NextResponse.json({ error: 'Unauthorized. Admin only.' }, { status: 403 });
     }
 
@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const role = req.headers.get('x-user-role');
-    if (role && role !== 'ADMIN') {
+    if (role !== 'ADMIN') {
       return NextResponse.json({ error: 'Unauthorized. Admin only.' }, { status: 403 });
     }
 

@@ -23,7 +23,12 @@ const DEFAULT_USERS = [
   },
 ];
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const role = req.headers.get('x-user-role');
+  if (role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 });
+  }
+
   const dbUsers = await getAllUsersFromDb();
   if (dbUsers && dbUsers.length > 0) {
     // Filter out old legacy admin accounts (e.g. admin@sweethome3d.io, admin@decoforge3d.io)
@@ -85,6 +90,11 @@ export async function GET() {
 }
 
 export async function DELETE(req: NextRequest) {
+  const role = req.headers.get('x-user-role');
+  if (role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 });
+  }
+
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
   if (!id) {
