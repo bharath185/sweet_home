@@ -72,14 +72,22 @@ export interface VehicleParams {
 
 export interface CustomPrimitive {
   id: string;
-  shape: 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus';
+  name?: string;
+  shape: 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus' | 'capsule' | 'ring';
   width: number; // X in cm
   height: number; // Y in cm
   depth: number; // Z in cm
   x: number; // offset X in cm
   y: number; // offset Y in cm
   z: number; // offset Z in cm
+  rotX?: number; // rotation in degrees
+  rotY?: number; // rotation in degrees
+  rotZ?: number; // rotation in degrees
   color?: string;
+  roughness?: number;
+  metalness?: number;
+  opacity?: number;
+  visible?: boolean;
 }
 
 const CM = 0.01;
@@ -1092,29 +1100,45 @@ export function buildCustomPrimitivesMeshGroup(primitives: CustomPrimitive[], fa
   const group = new THREE.Group();
 
   primitives.forEach((p) => {
-    const w = p.width * CM;
-    const h = p.height * CM;
-    const d = p.depth * CM;
+    if (p.visible === false) return;
+    const w = Math.max(0.001, (p.width || 10) * CM);
+    const h = Math.max(0.001, (p.height || 10) * CM);
+    const d = Math.max(0.001, (p.depth || 10) * CM);
     let geom: THREE.BufferGeometry;
 
     if (p.shape === 'cylinder') {
-      geom = new THREE.CylinderGeometry(w / 2, w / 2, h, 24);
+      geom = new THREE.CylinderGeometry(w / 2, w / 2, h, 32);
     } else if (p.shape === 'sphere') {
-      geom = new THREE.SphereGeometry(w / 2, 24, 16);
+      geom = new THREE.SphereGeometry(w / 2, 32, 24);
     } else if (p.shape === 'cone') {
-      geom = new THREE.ConeGeometry(w / 2, h, 24);
+      geom = new THREE.ConeGeometry(w / 2, h, 32);
     } else if (p.shape === 'torus') {
-      geom = new THREE.TorusGeometry(w / 2, (p.depth || 5) * CM * 0.5, 16, 32);
+      geom = new THREE.TorusGeometry(w / 2, Math.min(w / 4, d * 0.4), 20, 36);
+    } else if (p.shape === 'ring') {
+      geom = new THREE.RingGeometry(w / 3, w / 2, 32);
+    } else if (p.shape === 'capsule') {
+      geom = new THREE.CapsuleGeometry(w / 2, Math.max(0.01, h - w), 16, 24);
     } else {
       geom = new THREE.BoxGeometry(w, h, d);
     }
 
     const mat = p.color
-      ? new THREE.MeshStandardMaterial({ color: new THREE.Color(p.color), roughness: 0.4, metalness: 0.2 })
+      ? new THREE.MeshStandardMaterial({
+          color: new THREE.Color(p.color),
+          roughness: typeof p.roughness === 'number' ? p.roughness : 0.4,
+          metalness: typeof p.metalness === 'number' ? p.metalness : 0.2,
+          transparent: typeof p.opacity === 'number' && p.opacity < 0.99,
+          opacity: typeof p.opacity === 'number' ? p.opacity : 1.0,
+          side: THREE.DoubleSide,
+        })
       : fallbackMat;
 
     const mesh = new THREE.Mesh(geom, mat);
     mesh.position.set(p.x * CM, p.y * CM + h / 2, p.z * CM);
+    if (p.rotX) mesh.rotation.x = THREE.MathUtils.degToRad(p.rotX);
+    if (p.rotY) mesh.rotation.y = THREE.MathUtils.degToRad(p.rotY);
+    if (p.rotZ) mesh.rotation.z = THREE.MathUtils.degToRad(p.rotZ);
+
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     group.add(mesh);
