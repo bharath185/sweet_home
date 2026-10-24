@@ -219,6 +219,35 @@ export function saveUserProject(userId: string, plan: HomePlan, userEmail?: stri
   }
 }
 
+/**
+ * Awaitable version that guarantees database persistence and updates local cache
+ */
+export async function saveUserProjectAsync(
+  userId: string,
+  plan: HomePlan,
+  userEmail?: string
+): Promise<{ list: UserProjectSummary[]; dbSaved: boolean }> {
+  const updatedList = saveUserProject(userId, plan, userEmail);
+  try {
+    const res = await fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: plan.id,
+        userId,
+        userEmail: userEmail || undefined,
+        name: plan.name || 'Untitled Project',
+        data: { ...plan, updatedAt: new Date().toISOString() },
+      }),
+    });
+    const data = await res.json();
+    return { list: updatedList, dbSaved: Boolean(res.ok && data.success) };
+  } catch (e) {
+    console.warn('Async cloud project save warning:', e);
+    return { list: updatedList, dbSaved: false };
+  }
+}
+
 export function deleteUserProject(userId: string, projectId: string): UserProjectSummary[] {
   if (typeof window === 'undefined' || !userId) return [];
   try {

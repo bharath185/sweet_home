@@ -490,6 +490,19 @@ export default function HomeStudioPage() {
 
       autoSaveTimerRef.current = setTimeout(async () => {
         try {
+          const userId = currentUserRef.current?.id || 'guest';
+          const userEmail = currentUserRef.current?.email || undefined;
+          await fetch('/api/projects', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: newPlan.id,
+              userId,
+              userEmail,
+              name: newPlan.name || 'Untitled Project',
+              data: newPlan,
+            }),
+          });
           await savePlanToBackend(newPlan);
           setCloudSyncStatus('synced');
           setLastSyncedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -560,6 +573,9 @@ export default function HomeStudioPage() {
           syncUserProjectsWithCloud(u.id, u.email).then((cloudProjs) => {
             if (cloudProjs && cloudProjs.length > 0) {
               setUserProjects(cloudProjs);
+              if (projs.length === 0 && cloudProjs[0]?.plan) {
+                setPlan(cleanUnrealisticStairs(cloudProjs[0].plan));
+              }
             }
           });
           if (u.role === 'ADMIN') {
@@ -778,18 +794,32 @@ export default function HomeStudioPage() {
 
   const handleSave = async () => {
     setIsSaving(true);
-    if (currentUser) {
-      const updatedList = saveUserProject(currentUser.id, plan, currentUser.email);
-      setUserProjects(updatedList);
-    }
+    const userId = currentUser?.id || 'guest';
+    const userEmail = currentUser?.email || undefined;
     try {
+      if (currentUser) {
+        const updatedList = saveUserProject(currentUser.id, plan, currentUser.email);
+        setUserProjects(updatedList);
+      }
+      // Guarantee database upsert to Supabase PostgreSQL projects table
+      await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: plan.id,
+          userId,
+          userEmail,
+          name: plan.name || 'Untitled Project',
+          data: plan,
+        }),
+      });
       await savePlanToBackend(plan);
       setCloudSyncStatus('synced');
       setLastSyncedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-      message.success('Project blueprint saved successfully');
+      message.success('Project saved to Database & Cloud Synced!');
     } catch (e) {
       setCloudSyncStatus('offline');
-      message.info('Saved locally to your browser storage');
+      message.warning('Saved locally (Offline mode)');
     } finally {
       setIsSaving(false);
     }
@@ -806,10 +836,25 @@ export default function HomeStudioPage() {
   };
 
   const handleSaveNewUserProject = (newPlan: HomePlan) => {
+    const userId = currentUser?.id || 'guest';
+    const userEmail = currentUser?.email || undefined;
     if (currentUser) {
       const updatedList = saveUserProject(currentUser.id, newPlan, currentUser.email);
       setUserProjects(updatedList);
     }
+    // Direct sync to Supabase Cloud Database
+    fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: newPlan.id,
+        userId,
+        userEmail,
+        name: newPlan.name || 'Untitled Project',
+        data: newPlan,
+      }),
+    }).catch((err) => console.warn('Cloud save notice:', err));
+
     setPlan(newPlan);
     historyRef.current = [JSON.parse(JSON.stringify(newPlan))];
     historyIndexRef.current = 0;
@@ -819,11 +864,18 @@ export default function HomeStudioPage() {
     setFitTrigger((prev) => prev + 1);
   };
 
-  const handleDeleteUserProject = (projectId: string) => {
+  const handleDeleteUserProject = async (projectId: string) => {
     if (currentUser) {
       const updatedList = deleteUserProject(currentUser.id, projectId);
       setUserProjects(updatedList);
       message.success('Project deleted');
+      try {
+        await fetch(`/api/projects?id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(currentUser.id)}`, {
+          method: 'DELETE',
+        });
+      } catch (err) {
+        console.warn('Cloud delete notice:', err);
+      }
     }
   };
 

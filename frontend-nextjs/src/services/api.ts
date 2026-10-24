@@ -2733,11 +2733,13 @@ export async function savePlanToBackend(
     localStorage.setItem(`decofrog_plan_${plan.id}`, JSON.stringify(plan));
   }
   try {
-    const url = new URL(`${API_BASE}/plan/save`);
-    url.searchParams.set('author', authorName);
-    url.searchParams.set('description', changeDesc);
+    const query = new URLSearchParams({
+      author: authorName,
+      description: changeDesc,
+    }).toString();
+    const url = `${API_BASE}/plan/save?${query}`;
 
-    const res = await fetch(url.toString(), {
+    const res = await fetch(url, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(plan),
@@ -2748,13 +2750,16 @@ export async function savePlanToBackend(
         success: true,
         id: data.planId || plan.id,
         version: data.version,
-        message: `Saved "${plan.name}" to PostgreSQL database!`
+        message: `Saved "${plan.name}" to Cloud Database!`
       };
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `Database save error: HTTP ${res.status}`);
     }
   } catch (err) {
-    console.warn('PostgreSQL save failed, saved locally.', err);
+    console.warn('PostgreSQL cloud database save notice:', err);
+    throw err;
   }
-  return { success: true, id: plan.id, message: `Saved "${plan.name}" in local storage cache.` };
 }
 
 export async function checkBackendHealth(): Promise<boolean> {
