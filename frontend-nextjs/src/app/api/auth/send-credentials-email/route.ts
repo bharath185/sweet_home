@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import nodemailer from 'nodemailer';
 
 export async function POST(request: Request) {
   try {
@@ -60,6 +61,34 @@ DecoForge 3D Architecture Team
         });
       } catch (err) {
         console.warn('Resend email error:', err);
+      }
+    }
+
+    // Dispatch via Gmail SMTP
+    const smtpHost = process.env.SMTP_HOST;
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+    if (smtpHost && smtpUser && smtpPass) {
+      try {
+        const port = Number(process.env.SMTP_PORT || 465);
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port,
+          secure: port === 465,
+          auth: {
+            user: smtpUser,
+            pass: smtpPass,
+          },
+        });
+
+        await transporter.sendMail({
+          from: process.env.SMTP_FROM || `"SweetHome 3D Studio" <${smtpUser}>`,
+          to: email,
+          subject: emailSubject,
+          text: emailBodyText,
+        });
+      } catch (smtpErr) {
+        console.warn('[CredentialsEmail] SMTP error:', smtpErr);
       }
     }
 
