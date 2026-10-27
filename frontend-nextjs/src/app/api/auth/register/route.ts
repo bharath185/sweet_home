@@ -15,8 +15,34 @@ export async function POST(req: NextRequest) {
 
     if (!cleanEmail || !cleanPhone || !cleanName) {
       return NextResponse.json(
-        { success: false, error: 'Name, phone number, and email are required' },
+        { success: false, error: 'Name, mobile phone number, and email are required.' },
         { status: 400 }
+      );
+    }
+
+    if (cleanPhone.length !== 10) {
+      return NextResponse.json(
+        { success: false, error: 'A valid 10-digit mobile phone number is mandatory.' },
+        { status: 400 }
+      );
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return NextResponse.json(
+        { success: false, error: 'Please enter a valid email address.' },
+        { status: 400 }
+      );
+    }
+
+    const isGmail = cleanEmail.endsWith('@gmail.com') || cleanEmail.endsWith('@googlemail.com');
+    if (!isGmail) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Non-Gmail addresses require email OTP verification. Please verify your email with the 6-digit code.',
+        },
+        { status: 403 }
       );
     }
 

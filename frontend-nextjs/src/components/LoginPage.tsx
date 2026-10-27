@@ -336,7 +336,157 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
   };
 
   // ==========================================
-  // 2. CREATE ACCOUNT: STEP 1 - SEND REAL-TIME EMAIL OTP
+  // 2A. CREATE ACCOUNT: INSTANT REGISTRATION FOR GMAIL (NO OTP NEEDED)
+  // ==========================================
+  const handleRegisterWithGmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    const cleanName = signUpName.trim();
+    const cleanPhone = signUpPhone.replace(/\D/g, '');
+    const cleanEmail = signUpEmail.trim().toLowerCase();
+    const cleanPassword = signUpPassword.trim();
+
+    if (!cleanName || cleanName.length < 2) {
+      setErrorMessage('Please enter your full name (at least 2 characters).');
+      return;
+    }
+
+    if (cleanPhone.length !== 10) {
+      setErrorMessage('A valid 10-digit mobile number is mandatory to create an account.');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      setErrorMessage('Please enter a valid Gmail address.');
+      return;
+    }
+
+    if (!cleanEmail.endsWith('@gmail.com') && !cleanEmail.endsWith('@googlemail.com')) {
+      setErrorMessage('This option is for Gmail accounts. Please use email verification for other domains.');
+      return;
+    }
+
+    if (!cleanPassword || cleanPassword.length < 6) {
+      setErrorMessage('Please enter or generate a secure password with at least 6 characters.');
+      return;
+    }
+
+    if (!agreeTerms) {
+      setErrorMessage('Please accept the Terms of Service to complete registration.');
+      return;
+    }
+
+    // Check if phone or email is already registered locally
+    const registered = getStoredRegisteredUsers();
+    const existingPhone = registered.find(
+      (r) => r.phone === cleanPhone || r.user.email?.includes(cleanPhone)
+    );
+    if (existingPhone) {
+      setErrorMessage('An account is already registered with this mobile number. Please switch to Sign In.');
+      return;
+    }
+
+    const existingEmail = registered.find(
+      (r) => r.email?.toLowerCase() === cleanEmail || r.user.email?.toLowerCase() === cleanEmail
+    );
+    if (existingEmail) {
+      setErrorMessage('An account is already registered with this email address. Please switch to Sign In.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: cleanName,
+          phone: cleanPhone,
+          email: cleanEmail,
+          password: cleanPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setErrorMessage(data.error || 'Registration failed. Please check your details.');
+        setIsLoading(false);
+        return;
+      }
+
+      const dbUser = data.user;
+      const now = new Date();
+      const trialDurationMs = 48 * 60 * 60 * 1000;
+      const trialExpiresAt = dbUser?.trial_expires_at || new Date(now.getTime() + trialDurationMs).toISOString();
+
+      const newUser: UserType = {
+        id: dbUser?.id || `u_${Date.now()}`,
+        name: dbUser?.name || cleanName,
+        email: dbUser?.email || cleanEmail,
+        role: dbUser?.role || 'DESIGNER',
+        isOnline: true,
+        assignedPlan: 'plan-sarah-suite',
+        createdAt: 'Just now',
+        payment_status: dbUser?.payment_status || 'paid',
+        plan: 'trial_48h',
+        paid_at: dbUser?.paid_at || now.toISOString(),
+        expires_at: dbUser?.expires_at || trialExpiresAt,
+        isFreeTrial: true,
+        trialStartedAt: dbUser?.trial_started_at || now.toISOString(),
+        trialExpiresAt: dbUser?.trial_expires_at || trialExpiresAt,
+        subscriptionTier: 'TRIAL',
+        subscriptionStatus: 'active',
+      };
+
+      // Store in local registered accounts cache
+      try {
+        const updated = [
+          ...registered,
+          {
+            user: newUser,
+            phone: cleanPhone,
+            email: cleanEmail,
+            username: cleanPhone,
+            passwordHash: cleanPassword,
+          },
+        ];
+        localStorage.setItem('decofrog_registered_users', JSON.stringify(updated));
+        localStorage.setItem('decofrog_current_user', JSON.stringify(newUser));
+        localStorage.setItem('sweethome_current_user', JSON.stringify(newUser));
+      } catch (e) {
+        console.warn('LocalStorage save error:', e);
+      }
+
+      // Send credentials email in background
+      fetch('/api/auth/send-credentials-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cleanEmail,
+          name: cleanName,
+          phone: cleanPhone,
+          password: cleanPassword,
+        }),
+      }).catch((e) => console.warn('Welcome credentials email notice:', e));
+
+      setIsLoading(false);
+      if (onSignUp) {
+        onSignUp(newUser);
+      } else {
+        onLogin(newUser);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Network error during registration.');
+      setIsLoading(false);
+    }
+  };
+
+  // ==========================================
+  // 2B. CREATE ACCOUNT: STEP 1 - SEND REAL-TIME EMAIL OTP (NON-GMAIL)
   // ==========================================
   const handleSendSignUpOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -346,6 +496,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
     const cleanName = signUpName.trim();
     const cleanPhone = signUpPhone.replace(/\D/g, '');
     const cleanEmail = signUpEmail.trim().toLowerCase();
+    const cleanPassword = signUpPassword.trim();
 
     if (!cleanName || cleanName.length < 2) {
       setErrorMessage('Please enter your full name (at least 2 characters).');
@@ -353,13 +504,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
     }
 
     if (cleanPhone.length !== 10) {
-      setErrorMessage('Please enter a valid 10-digit mobile number.');
+      setErrorMessage('A valid 10-digit mobile number is mandatory to create an account.');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!cleanEmail || !emailRegex.test(cleanEmail)) {
       setErrorMessage('Please enter a valid email address to receive your 6-digit verification code.');
+      return;
+    }
+
+    if (!cleanPassword || cleanPassword.length < 6) {
+      setErrorMessage('Please enter or generate a password with at least 6 characters.');
       return;
     }
 
@@ -421,6 +577,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
     const cleanPassword = signUpPassword.trim();
     const cleanName = signUpName.trim();
     const cleanEmail = signUpEmail.trim().toLowerCase();
+
+    if (cleanPhone.length !== 10) {
+      setErrorMessage('A valid 10-digit mobile number is mandatory to create an account.');
+      return;
+    }
 
     if (!cleanOtp || cleanOtp.length < 6) {
       setErrorMessage('Please enter the 6-digit verification code sent to your email.');
@@ -527,6 +688,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
       onLogin(newUser);
     }
   };
+
+  const cleanSignUpEmail = signUpEmail.trim().toLowerCase();
+  const isGmailDomain = cleanSignUpEmail.endsWith('@gmail.com') || cleanSignUpEmail.endsWith('@googlemail.com');
 
   return (
     <div
@@ -762,8 +926,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
               /* ==================================================== */
               <div className="space-y-4">
                 {!isOtpSent ? (
-                  /* STEP 1: Full Name, Mobile Number & Email */
-                  <form onSubmit={handleSendSignUpOtp} className="space-y-3">
+                  /* STEP 1: Full Name, Mobile Number (Mandatory), Email & Password */
+                  <form onSubmit={isGmailDomain ? handleRegisterWithGmail : handleSendSignUpOtp} className="space-y-3">
                     {/* Full Name */}
                     <div>
                       <label className="block text-xs font-bold text-slate-300 mb-1 tracking-wide uppercase text-[11px]">
@@ -785,10 +949,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                       </div>
                     </div>
 
-                    {/* Mobile Number */}
+                    {/* Mobile Number - 100% Mandatory */}
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1 tracking-wide uppercase text-[11px]">
-                        Mobile Phone Number
+                      <label className="block text-xs font-bold text-slate-300 mb-1 tracking-wide uppercase text-[11px] flex items-center justify-between">
+                        <span>Mobile Phone Number</span>
+                        <span className="text-[10px] font-bold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          * Mandatory
+                        </span>
                       </label>
                       <div className="h-10 flex items-center rounded-xl border border-slate-700/80 bg-[#080f1e]/90 overflow-hidden focus-within:border-sky-400 focus-within:ring-2 focus-within:ring-sky-500/20 transition-all shadow-inner">
                         <div className="h-full shrink-0 flex items-center gap-1.5 px-3 bg-slate-800/80 border-r border-slate-700/80 select-none whitespace-nowrap">
@@ -811,13 +978,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                           className="w-full h-full px-3 bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none"
                         />
                       </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Required for verification, project notifications, and account recovery.
+                      </p>
                     </div>
 
                     {/* Email Address */}
                     <div>
                       <label className="block text-xs font-bold text-slate-300 mb-1 tracking-wide uppercase text-[11px] flex items-center justify-between">
                         <span>Email Address</span>
-                        <span className="text-[10px] text-sky-400 font-normal lowercase">(receives your password)</span>
+                        <span className="text-[10px] text-sky-400 font-normal lowercase">
+                          {isGmailDomain ? '⚡ Instant (No OTP)' : '🔒 Verification Code'}
+                        </span>
                       </label>
                       <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
@@ -832,30 +1004,152 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                           className="w-full h-10 pl-9 pr-3 bg-[#080f1e]/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-all shadow-inner"
                         />
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        Your account password and login link will be sent to this email upon creation.
-                      </p>
+
+                      {/* Smart Domain Indicator */}
+                      {isGmailDomain ? (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                          <span>Gmail detected: Instant account activation (No email OTP required)</span>
+                        </div>
+                      ) : cleanSignUpEmail && cleanSignUpEmail.includes('@') ? (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-sky-400 bg-sky-500/10 border border-sky-500/20 px-2.5 py-1 rounded-lg">
+                          <Mail className="w-3.5 h-3.5 shrink-0 text-sky-400" />
+                          <span>Non-Gmail email: 6-digit email verification code required to activate</span>
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          Gmail accounts activate instantly; other emails receive a 6-digit verification code.
+                        </p>
+                      )}
                     </div>
 
-                    {/* Send OTP CTA */}
-                    <button
-                      type="submit"
-                      disabled={isLoading || signUpPhone.length < 10 || signUpName.trim().length < 2 || !signUpEmail.trim()}
-                      className="w-full py-2.5 rounded-xl text-xs font-bold text-white shadow-xl transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-sky-500 via-indigo-600 to-indigo-700 hover:from-sky-400 hover:via-indigo-500 hover:to-indigo-600 shadow-sky-500/25 cursor-pointer disabled:opacity-50 mt-1"
-                    >
-                      {isLoading ? (
-                        <>
-                          <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span>Dispatching Email Verification Code...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Mail className="w-4 h-4" />
-                          <span>Send Email Verification Code</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </>
-                      )}
-                    </button>
+                    {/* Set Account Password */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-300 tracking-wide uppercase text-[11px]">
+                          Set Account Password
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleGeneratePassword}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded-md cursor-pointer transition-all shadow-sm"
+                            title="Generate a secure random password automatically"
+                          >
+                            <Wand2 className="w-3 h-3" />
+                            <span>Generate Password</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                            className="text-[10px] text-slate-400 hover:text-slate-200 cursor-pointer"
+                          >
+                            {showSignUpPassword ? 'Hide' : 'Show'}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                          <Lock className="w-4 h-4" />
+                        </div>
+                        <input
+                          type={showSignUpPassword ? 'text' : 'password'}
+                          required
+                          value={signUpPassword}
+                          onChange={(e) => setSignUpPassword(e.target.value)}
+                          placeholder="Enter or generate password (min 6 chars)"
+                          className="w-full pl-10 pr-10 py-2 bg-[#080f1e]/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 shadow-inner"
+                        />
+                        {signUpPassword && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (navigator.clipboard) {
+                                navigator.clipboard.writeText(signUpPassword).catch(() => {});
+                                setIsPasswordCopied(true);
+                                setTimeout(() => setIsPasswordCopied(false), 2000);
+                              }
+                            }}
+                            title="Copy password to clipboard"
+                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white cursor-pointer"
+                          >
+                            {isPasswordCopied ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Agree Terms */}
+                    <div className="flex items-center gap-2 text-xs pt-0.5">
+                      <input
+                        type="checkbox"
+                        id="signup-terms"
+                        checked={agreeTerms}
+                        onChange={(e) => setAgreeTerms(e.target.checked)}
+                        className="rounded bg-[#080f1e] border-slate-700 text-sky-500 focus:ring-0 cursor-pointer w-3.5 h-3.5"
+                      />
+                      <label htmlFor="signup-terms" className="text-[11px] text-slate-400 cursor-pointer select-none">
+                        I agree to Terms & Conditions & 48-Hour Free Trial
+                      </label>
+                    </div>
+
+                    {/* Dynamic Submit CTA Button */}
+                    {isGmailDomain ? (
+                      <button
+                        type="submit"
+                        disabled={
+                          isLoading ||
+                          signUpPhone.length !== 10 ||
+                          signUpName.trim().length < 2 ||
+                          !signUpEmail.trim() ||
+                          signUpPassword.length < 6
+                        }
+                        className="w-full py-2.5 rounded-xl text-xs font-bold text-white shadow-xl transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 via-teal-600 to-indigo-600 hover:from-emerald-400 hover:via-teal-500 hover:to-indigo-500 shadow-emerald-500/25 cursor-pointer disabled:opacity-50 mt-1"
+                      >
+                        {isLoading ? (
+                          <>
+                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span>Creating Studio Account...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 text-emerald-200" />
+                            <span>Create Studio Account & Start 48h Free Trial</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={
+                          isLoading ||
+                          signUpPhone.length !== 10 ||
+                          signUpName.trim().length < 2 ||
+                          !signUpEmail.trim() ||
+                          signUpPassword.length < 6
+                        }
+                        className="w-full py-2.5 rounded-xl text-xs font-bold text-white shadow-xl transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-sky-500 via-indigo-600 to-indigo-700 hover:from-sky-400 hover:via-indigo-500 hover:to-indigo-600 shadow-sky-500/25 cursor-pointer disabled:opacity-50 mt-1"
+                      >
+                        {isLoading ? (
+                          <>
+                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span>Dispatching Email Verification Code...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="w-4 h-4" />
+                            <span>Send 6-Digit Email Verification Code</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    )}
                   </form>
                 ) : (
                   /* STEP 2: Enter OTP & Set/Generate Password */

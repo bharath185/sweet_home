@@ -20,6 +20,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      return NextResponse.json(
+        { success: false, error: 'A valid 10-digit mobile phone number is mandatory.' },
+        { status: 400 }
+      );
+    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
       return NextResponse.json(
@@ -28,13 +35,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if user is already registered with this email
+    // Check if phone or email is already registered in database
+    const existingPhone = await findUserInDb(cleanPhone);
+    if (existingPhone) {
+      return NextResponse.json(
+        { success: false, error: 'An account is already registered with this mobile number. Please switch to Sign In.' },
+        { status: 409 }
+      );
+    }
+
     const existing = await findUserInDb(cleanEmail);
     if (existing) {
       return NextResponse.json(
         { success: false, error: 'An account is already registered with this email. Please switch to Sign In.' },
         { status: 409 }
       );
+    }
+
+    // Gmail accounts bypass OTP verification
+    const isGmail = cleanEmail.endsWith('@gmail.com') || cleanEmail.endsWith('@googlemail.com');
+    if (isGmail) {
+      return NextResponse.json({
+        success: true,
+        isGmail: true,
+        message: 'Gmail address detected. Email verification OTP is not required for Gmail.',
+      });
     }
 
     // Generate real-time 6-digit OTP code

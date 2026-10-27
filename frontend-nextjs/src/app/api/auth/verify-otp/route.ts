@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyOtp } from '@/lib/emailOtpService';
-import { upsertUserInDb } from '@/lib/supabaseDb';
+import { upsertUserInDb, findUserInDb } from '@/lib/supabaseDb';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +34,21 @@ export async function POST(req: NextRequest) {
     const cleanPassword = (password || '').trim();
 
     if (cleanPassword) {
+      if (!cleanPhone || cleanPhone.length !== 10) {
+        return NextResponse.json(
+          { success: false, error: 'A valid 10-digit mobile phone number is mandatory to create an account.' },
+          { status: 400 }
+        );
+      }
+
+      const existingPhone = await findUserInDb(cleanPhone);
+      if (existingPhone && existingPhone.email?.toLowerCase() !== cleanEmail) {
+        return NextResponse.json(
+          { success: false, error: 'An account is already registered with this mobile number. Please switch to Sign In.' },
+          { status: 409 }
+        );
+      }
+
       const now = new Date();
       const trialDurationMs = 48 * 60 * 60 * 1000;
       const trialStartedAt = now.toISOString();
