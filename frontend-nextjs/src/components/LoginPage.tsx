@@ -123,6 +123,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  // --- GOOGLE OAUTH STATES (Personal @gmail.com Only) ---
+  const [isPhoneModalOpen, setIsPhoneModalOpen] = useState<boolean>(false);
+  const [googlePhone, setGooglePhone] = useState<string>('');
+  const [pendingGoogleCredential, setPendingGoogleCredential] = useState<string | null>(null);
+  const [pendingGoogleEmail, setPendingGoogleEmail] = useState<string>('');
+  const [pendingGoogleName, setPendingGoogleName] = useState<string>('');
+
   // Resend OTP Countdown Timer
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -131,6 +138,185 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
     }
     return () => clearTimeout(timer);
   }, [resendCountdown]);
+
+  // Helper to complete user login and sync local session
+  const handleCompleteLogin = (u: any) => {
+    const isAdmin = u.role === 'ADMIN' || u.email?.includes('admin');
+    const now = new Date();
+    const trialDurationMs = 48 * 60 * 60 * 1000;
+    const trialExpiresAt = u.trial_expires_at || new Date(now.getTime() + trialDurationMs).toISOString();
+
+    const finalUser: UserType = {
+      id: u.id || `u_${Date.now()}`,
+      name: u.name || u.email?.split('@')[0] || 'Designer',
+      email: u.email,
+      role: u.role || (isAdmin ? 'ADMIN' : 'DESIGNER'),
+      isOnline: true,
+      assignedPlan: 'plan-sarah-suite',
+      createdAt: u.created_at || 'Today',
+      payment_status: u.payment_status || 'paid',
+      plan: u.plan || 'trial_48h',
+      paid_at: u.paid_at || now.toISOString(),
+      expires_at: u.expires_at || trialExpiresAt,
+      isFreeTrial: u.is_free_trial ?? true,
+      trialStartedAt: u.trial_started_at || now.toISOString(),
+      trialExpiresAt: trialExpiresAt,
+      subscriptionTier: isAdmin ? 'PRO' : (u.is_free_trial ? 'TRIAL' : (u.payment_status === 'paid' ? 'PRO' : 'FREE')),
+      subscriptionStatus: 'active',
+    };
+
+    try {
+      localStorage.setItem('decofrog_current_user', JSON.stringify(finalUser));
+      localStorage.setItem('sweethome_current_user', JSON.stringify(finalUser));
+    } catch {}
+
+    onLogin(finalUser);
+  };
+
+  // Google OAuth credential response handler
+  const handleGoogleCredentialResponse = async (response: any) => {
+    if (!response?.credential) return;
+    setIsLoading(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: response.credential }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        if (data.isBusinessEmail) {
+          setAuthMode('signup');
+          setSignUpEmail(data.email || '');
+          setErrorMessage(
+            data.error ||
+              'Google Social Login is only allowed for personal @gmail.com accounts. Business/work email users must register using the Email OTP verification form below.'
+          );
+        } else {
+          setErrorMessage(data.error || 'Google authentication failed.');
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      // If first-time user or missing mandatory mobile phone
+      if (data.needsPhone) {
+        setPendingGoogleCredential(response.credential);
+        setPendingGoogleEmail(data.email || '');
+        setPendingGoogleName(data.name || '');
+        setGooglePhone('');
+        setIsPhoneModalOpen(true);
+        setIsLoading(false);
+        return;
+      }
+
+      if (data.user) {
+        handleCompleteLogin(data.user);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Network error during Google authentication.');
+      setIsLoading(false);
+    }
+  };
+
+  // Complete Google sign-in with mandatory phone number
+  const handleCompleteGoogleWithPhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    const cleanPhone = googlePhone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      setErrorMessage('A valid 10-digit mobile phone number is mandatory to activate your account.');
+      return;
+    }
+
+    if (!pendingGoogleCredential) {
+      setErrorMessage('Google credential expired. Please click Continue with Google again.');
+      setIsPhoneModalOpen(false);
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          credential: pendingGoogleCredential,
+          phone: cleanPhone,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setErrorMessage(data.error || 'Failed to complete registration.');
+        setIsLoading(false);
+        return;
+      }
+
+      setIsPhoneModalOpen(false);
+      handleCompleteLogin(data.user);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Network error while completing registration.');
+      setIsLoading(false);
+    }
+  };
+
+  // Initialize Google Identity Services (GSI)
+  useEffect(() => {
+    const GOOGLE_CLIENT_ID =
+      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
+      '394367748205-dcmca6ria2rqm9ligb38ojp85ib7khqo.apps.googleusercontent.com';
+
+    const initGsi = () => {
+      if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
+        try {
+          (window as any).google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: handleGoogleCredentialResponse,
+            auto_select: false,
+            cancel_on_tap_outside: true,
+          });
+
+          const btnContainer = document.getElementById('googleSignInBtn');
+          if (btnContainer) {
+            btnContainer.innerHTML = '';
+            (window as any).google.accounts.id.renderButton(btnContainer, {
+              theme: 'filled_black',
+              size: 'large',
+              text: 'continue_with',
+              shape: 'pill',
+              width: 320,
+              logo_alignment: 'left',
+            });
+          }
+        } catch (gsiErr) {
+          console.warn('[GSI] Init error:', gsiErr);
+        }
+      }
+    };
+
+    const scriptId = 'google-gsi-client';
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        setTimeout(initGsi, 50);
+      };
+      document.body.appendChild(script);
+    } else {
+      setTimeout(initGsi, 50);
+    }
+  }, [authMode]);
 
   // Helper to retrieve registered accounts from localStorage
   const getStoredRegisteredUsers = (): RegisteredAccountRecord[] => {
@@ -824,6 +1010,50 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
               </div>
             )}
 
+            {/* GOOGLE SOCIAL LOGIN (PERSONAL @GMAIL.COM ONLY) */}
+            <div className="mb-4">
+              <div className="flex flex-col items-center">
+                <div id="googleSignInBtn" className="flex justify-center w-full min-h-[44px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
+                        (window as any).google.accounts.id.prompt();
+                      } else {
+                        setErrorMessage('Google Sign-In is initializing. Please try again in a moment.');
+                      }
+                    }}
+                    className="w-full max-w-[320px] h-11 bg-slate-900/90 hover:bg-slate-800 text-slate-100 text-xs font-semibold rounded-full flex items-center justify-center gap-2.5 px-4 shadow-lg border border-slate-700 hover:border-slate-500 transition-all cursor-pointer group"
+                  >
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                    <span>Continue with Google</span>
+                    <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded font-medium ml-1">
+                      Gmail Only
+                    </span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1.5 text-center">
+                  Only personal <strong className="text-slate-200">@gmail.com</strong> accounts supported. Business emails use OTP below.
+                </p>
+              </div>
+
+              <div className="relative my-3.5">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-700/60" />
+                </div>
+                <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-wider">
+                  <span className="bg-[#0e1930] px-3 text-slate-400">
+                    or {authMode === 'signin' ? 'sign in with credentials' : 'create account below'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             {/* ==================================================== */}
             {/* 1. SIGN IN: USERNAME & PASSWORD FORM                 */}
             {/* ==================================================== */}
@@ -1410,6 +1640,88 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                 </button>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Mandatory Mobile Phone Modal for First-Time Google Users */}
+      {isPhoneModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+          <div className="relative w-full max-w-sm bg-[#0c1424] border border-slate-700/80 rounded-2xl p-6 shadow-2xl text-slate-100">
+            <button
+              onClick={() => setIsPhoneModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-400">
+                <Phone className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Mobile Number Required</h3>
+                <p className="text-[11px] text-slate-400 truncate max-w-[220px]">
+                  {pendingGoogleEmail}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-2.5 bg-amber-500/10 border border-amber-500/25 rounded-xl text-[11px] text-amber-300 mb-3.5 leading-relaxed">
+              To complete your Google registration and activate your <strong>48-Hour Free Trial</strong>, a valid mobile number is mandatory.
+            </div>
+
+            <form onSubmit={handleCompleteGoogleWithPhone} className="space-y-3.5">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1 tracking-wide uppercase flex items-center justify-between">
+                  <span>Mobile Phone Number</span>
+                  <span className="text-[10px] text-amber-400 font-bold bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30">
+                    * Mandatory
+                  </span>
+                </label>
+                <div className="h-10 flex items-center rounded-xl border border-slate-700 bg-[#080f1e] overflow-hidden focus-within:border-sky-400 focus-within:ring-2 focus-within:ring-sky-500/20">
+                  <div className="h-full shrink-0 flex items-center gap-1.5 px-3 bg-slate-800 border-r border-slate-700 select-none">
+                    <svg className="w-4 h-3 rounded-[2px] shadow-sm shrink-0" viewBox="0 0 640 480" aria-label="India Flag">
+                      <path fill="#f93" d="M0 0h640v160H0z"/>
+                      <path fill="#fff" d="M0 160h640v160H0z"/>
+                      <path fill="#128807" d="M0 320h640v160H0z"/>
+                      <circle cx="320" cy="240" r="40" fill="none" stroke="#008" strokeWidth="8"/>
+                      <circle cx="320" cy="240" r="8" fill="#008"/>
+                    </svg>
+                    <span className="text-xs font-bold text-slate-200">+91</span>
+                  </div>
+                  <input
+                    type="tel"
+                    required
+                    autoFocus
+                    maxLength={10}
+                    value={googlePhone}
+                    onChange={(e) => setGooglePhone(e.target.value.replace(/\D/g, ''))}
+                    placeholder="10-digit mobile number"
+                    className="w-full h-full px-3 bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading || googlePhone.length !== 10}
+                className="w-full py-2.5 rounded-xl text-xs font-bold text-white shadow-xl flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 via-teal-600 to-indigo-600 hover:from-emerald-400 hover:via-teal-500 hover:to-indigo-500 shadow-emerald-500/25 cursor-pointer disabled:opacity-50 mt-1"
+              >
+                {isLoading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Activating Studio...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-emerald-200" />
+                    <span>Complete Sign In & Start Free Trial</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
           </div>
         </div>
       )}
