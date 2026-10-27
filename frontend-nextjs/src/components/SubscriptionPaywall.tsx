@@ -64,7 +64,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
       }
     });
 
-    fetch('/api/payment-config')
+    fetch(`/api/payment-config?t=${Date.now()}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => {
         if (data.plans) {
@@ -78,7 +78,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
         }
       })
       .catch(() => {
-        fetch('/api/plans')
+        fetch(`/api/plans?t=${Date.now()}`, { cache: 'no-store' })
           .then((r) => r.json())
           .then((data) => {
             if (data.plans) setPricingPlans({ ...data.plans });

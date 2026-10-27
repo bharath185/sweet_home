@@ -90,7 +90,7 @@ export default function UpgradeModal({
         if (live) setPricingPlans({ ...live });
       });
 
-      fetch('/api/payment-config')
+      fetch(`/api/payment-config?t=${Date.now()}`, { cache: 'no-store' })
         .then((r) => r.json())
         .then((data) => {
           if (data.plans) {
@@ -104,7 +104,7 @@ export default function UpgradeModal({
           }
         })
         .catch(() => {
-          fetch('/api/plans')
+          fetch(`/api/plans?t=${Date.now()}`, { cache: 'no-store' })
             .then((r) => r.json())
             .then((data) => {
               if (data.plans) setPricingPlans({ ...data.plans });

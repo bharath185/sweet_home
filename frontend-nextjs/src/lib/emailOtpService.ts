@@ -181,7 +181,7 @@ export async function sendOtpEmail(
 ): Promise<{ success: boolean; provider: string }> {
   const recipientEmail = email.trim().toLowerCase();
   const userName = name || 'Designer';
-  const emailSubject = `${otpCode} is your SweetHome 3D Studio verification code`;
+  const emailSubject = `${otpCode} is your DecoForge 3D verification code`;
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -189,7 +189,7 @@ export async function sendOtpEmail(
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>SweetHome 3D Studio Verification</title>
+        <title>DecoForge 3D Studio Verification</title>
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0b1120; color: #f8fafc; margin: 0; padding: 24px; }
           .container { max-width: 520px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
@@ -208,8 +208,8 @@ export async function sendOtpEmail(
       <body>
         <div class="container">
           <div class="logo">
-            <h1>SweetHome 3D Studio</h1>
-            <p>Architectural Interior Design & Blueprint Engine</p>
+            <h1>DecoForge 3D</h1>
+            <p>Interior Architecture Studio & Blueprint Engine</p>
           </div>
           <div class="content">
             <div class="greeting">Hi ${userName},</div>
@@ -221,7 +221,7 @@ export async function sendOtpEmail(
               <div class="expiry">Expires in 10 minutes</div>
             </div>
             <div class="security-note">
-              Do not share this code with anyone. SweetHome 3D Studio will never ask for your verification code.
+              Do not share this code with anyone. DecoForge 3D will never ask for your verification code.
               If you did not request this verification, you can safely ignore this email.
             </div>
           </div>
@@ -230,7 +230,7 @@ export async function sendOtpEmail(
     </html>
   `.trim();
 
-  const plainText = `Hi ${userName},\n\nYour SweetHome 3D Studio verification code is: ${otpCode}\n\nThis code is valid for 10 minutes.\n\nBest regards,\nSweetHome 3D Architecture Team`;
+  const plainText = `Hi ${userName},\n\nYour DecoForge 3D verification code is: ${otpCode}\n\nThis code is valid for 10 minutes.\n\nBest regards,\nDecoForge 3D Architecture Team`;
 
   // 1. Try Resend API
   const resendApiKey = process.env.RESEND_API_KEY;
@@ -243,7 +243,7 @@ export async function sendOtpEmail(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: 'SweetHome 3D <onboarding@resend.dev>',
+          from: 'DecoForge 3D <onboarding@resend.dev>',
           to: [recipientEmail],
           subject: emailSubject,
           html: htmlContent,
@@ -276,7 +276,7 @@ export async function sendOtpEmail(
       });
 
       await transporter.sendMail({
-        from: process.env.SMTP_FROM || `"SweetHome 3D Studio" <${smtpUser}>`,
+        from: process.env.SMTP_FROM || `"DecoForge 3D" <${smtpUser}>`,
         to: recipientEmail,
         subject: emailSubject,
         html: htmlContent,

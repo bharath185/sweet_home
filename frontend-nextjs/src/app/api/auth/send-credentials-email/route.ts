@@ -14,6 +14,7 @@ export async function POST(request: Request) {
     }
 
     // HTML Email Template for DecoForge 3D Studio credentials
+    const portalUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://3dstudio.prigenix.com';
     const emailSubject = 'Your DecoForge 3D Account Credentials';
     const emailBodyText = `
 Welcome to DecoForge 3D Interior Architecture Studio!
@@ -22,7 +23,7 @@ Hi ${name || 'Designer'},
 
 Your account has been created successfully. Here are your login credentials:
 
-- Login Portal: http://localhost:3000
+- Login Portal: ${portalUrl}
 - Username / Mobile: +91 ${phone || ''}
 - Registered Email: ${email}
 - Security Password: ${password}
@@ -82,7 +83,7 @@ DecoForge 3D Architecture Team
         });
 
         await transporter.sendMail({
-          from: process.env.SMTP_FROM || `"SweetHome 3D Studio" <${smtpUser}>`,
+          from: process.env.SMTP_FROM || `"DecoForge 3D" <${smtpUser}>`,
           to: email,
           subject: emailSubject,
           text: emailBodyText,
