@@ -40,51 +40,45 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
   isRefreshing = false,
 }) => {
   const [selectedPlan, setSelectedPlan] = useState<PlanId>('monthly');
-  const [pricingPlans, setPricingPlans] = useState<Record<string, PlanDetail>>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('decofrog_cached_plans') || localStorage.getItem('sweethome_cached_plans');
-        if (cached) return JSON.parse(cached);
-      } catch {}
-    }
-    return PRICING_PLANS;
-  });
+  const [pricingPlans, setPricingPlans] = useState<Record<string, PlanDetail>>({});
+  const [isLoadingPlans, setIsLoadingPlans] = useState<boolean>(true);
   const [activeGateway, setActiveGateway] = useState<'cashfree' | 'razorpay'>('cashfree');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activePolicy, setActivePolicy] = useState<'terms' | 'privacy' | 'refund' | 'contact' | null>(null);
 
   useEffect(() => {
-    fetchActivePricingPlans().then((live) => {
-      if (live) {
-        setPricingPlans({ ...live });
-        try {
-          localStorage.setItem('decofrog_cached_plans', JSON.stringify(live));
-        } catch {}
-      }
-    });
+    // Purge any legacy client storage to ensure 100% database-driven pricing
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('decofrog_cached_plans');
+        localStorage.removeItem('sweethome_cached_plans');
+        sessionStorage.removeItem('decofrog_cached_plans');
+        sessionStorage.removeItem('sweethome_cached_plans');
+      } catch {}
+    }
 
+    setIsLoadingPlans(true);
     fetch(`/api/payment-config?t=${Date.now()}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => {
         if (data.plans) {
-          setPricingPlans({ ...data.plans });
-          try {
-            localStorage.setItem('decofrog_cached_plans', JSON.stringify(data.plans));
-          } catch {}
+          setPricingPlans(data.plans);
         }
         if (data.activeGateway) {
           setActiveGateway(data.activeGateway);
         }
       })
       .catch(() => {
-        fetch(`/api/plans?t=${Date.now()}`, { cache: 'no-store' })
+        return fetch(`/api/plans?t=${Date.now()}`, { cache: 'no-store' })
           .then((r) => r.json())
           .then((data) => {
-            if (data.plans) setPricingPlans({ ...data.plans });
+            if (data.plans) setPricingPlans(data.plans);
             if (data.gateway?.activeGateway) setActiveGateway(data.gateway.activeGateway);
-          })
-          .catch(() => {});
+          });
+      })
+      .finally(() => {
+        setIsLoadingPlans(false);
       });
   }, []);
 
@@ -322,7 +316,13 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
               </div>
               <h3 className="text-lg font-bold text-white">{pricingPlans.trial_2days?.name || '2-Day Trial'}</h3>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹{pricingPlans.trial_2days?.priceINR?.toLocaleString('en-IN') ?? 2}</span>
+                {isLoadingPlans ? (
+                  <span className="inline-block w-20 h-8 bg-slate-700/60 rounded animate-pulse" />
+                ) : (
+                  <span className="text-2xl sm:text-3xl font-extrabold text-white">
+                    ₹{pricingPlans.trial_2days?.priceINR !== undefined ? pricingPlans.trial_2days.priceINR.toLocaleString('en-IN') : '...'}
+                  </span>
+                )}
                 <span className="text-xs text-slate-400">{pricingPlans.trial_2days?.periodLabel || '/ 48 hrs'}</span>
               </div>
               <p className="text-xs text-slate-400 mt-2">
@@ -369,7 +369,13 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                 <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
               </h3>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹{pricingPlans.monthly?.priceINR?.toLocaleString('en-IN') ?? 3}</span>
+                {isLoadingPlans ? (
+                  <span className="inline-block w-20 h-8 bg-slate-700/60 rounded animate-pulse" />
+                ) : (
+                  <span className="text-2xl sm:text-3xl font-extrabold text-white">
+                    ₹{pricingPlans.monthly?.priceINR !== undefined ? pricingPlans.monthly.priceINR.toLocaleString('en-IN') : '...'}
+                  </span>
+                )}
                 <span className="text-xs text-slate-400">{pricingPlans.monthly?.periodLabel || '/ month'}</span>
               </div>
               <p className="text-xs text-slate-400 mt-2">
@@ -416,7 +422,13 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                 <Crown className="w-4 h-4 text-yellow-400" />
               </h3>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="text-2xl sm:text-3xl font-extrabold text-white">₹{pricingPlans.yearly?.priceINR?.toLocaleString('en-IN') ?? 4}</span>
+                {isLoadingPlans ? (
+                  <span className="inline-block w-24 h-8 bg-slate-700/60 rounded animate-pulse" />
+                ) : (
+                  <span className="text-2xl sm:text-3xl font-extrabold text-white">
+                    ₹{pricingPlans.yearly?.priceINR !== undefined ? pricingPlans.yearly.priceINR.toLocaleString('en-IN') : '...'}
+                  </span>
+                )}
                 <span className="text-xs text-slate-400">{pricingPlans.yearly?.periodLabel || '/ year'}</span>
               </div>
               <p className="text-xs text-slate-400 mt-2">
@@ -459,7 +471,9 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                     ? 'Renew Pass'
                     : status === 'failed'
                     ? 'Retry Checkout'
-                    : `Subscribe to ${pricingPlans[selectedPlan]?.name || PRICING_PLANS[selectedPlan]?.name || 'Studio Pass'}`}
+                    : isLoadingPlans
+                    ? 'Loading Pass...'
+                    : `Subscribe to ${pricingPlans[selectedPlan]?.name || 'Studio Pass'}`}
                 </span>
                 <ArrowRight className="w-4 h-4" />
               </>

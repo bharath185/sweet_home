@@ -80,21 +80,28 @@ export default function UpgradeModal({
 
   const [isLoadingPlan, setIsLoadingPlan] = useState<PlanId | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [pricingPlans, setPricingPlans] = useState<Record<string, PlanDetail>>(PRICING_PLANS);
+  const [pricingPlans, setPricingPlans] = useState<Record<string, PlanDetail>>({});
+  const [isLoadingPlans, setIsLoadingPlans] = useState<boolean>(true);
   const [gatewayEnv, setGatewayEnv] = useState<'PRODUCTION' | 'SANDBOX'>('PRODUCTION');
   const [activeGateway, setActiveGateway] = useState<'cashfree' | 'razorpay'>('cashfree');
 
   useEffect(() => {
     if (isOpen) {
-      fetchActivePricingPlans().then((live) => {
-        if (live) setPricingPlans({ ...live });
-      });
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem('decofrog_cached_plans');
+          localStorage.removeItem('sweethome_cached_plans');
+          sessionStorage.removeItem('decofrog_cached_plans');
+          sessionStorage.removeItem('sweethome_cached_plans');
+        } catch {}
+      }
 
+      setIsLoadingPlans(true);
       fetch(`/api/payment-config?t=${Date.now()}`, { cache: 'no-store' })
         .then((r) => r.json())
         .then((data) => {
           if (data.plans) {
-            setPricingPlans({ ...data.plans });
+            setPricingPlans(data.plans);
           }
           if (data.activeGateway) {
             setActiveGateway(data.activeGateway);
@@ -104,14 +111,16 @@ export default function UpgradeModal({
           }
         })
         .catch(() => {
-          fetch(`/api/plans?t=${Date.now()}`, { cache: 'no-store' })
+          return fetch(`/api/plans?t=${Date.now()}`, { cache: 'no-store' })
             .then((r) => r.json())
             .then((data) => {
-              if (data.plans) setPricingPlans({ ...data.plans });
+              if (data.plans) setPricingPlans(data.plans);
               if (data.gateway?.activeGateway) setActiveGateway(data.gateway.activeGateway);
               if (data.gateway?.environment) setGatewayEnv(data.gateway.environment);
-            })
-            .catch(() => {});
+            });
+        })
+        .finally(() => {
+          setIsLoadingPlans(false);
         });
     }
   }, [isOpen]);
@@ -404,9 +413,13 @@ export default function UpgradeModal({
 
                     <div className="mb-3">
                       <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-extrabold tracking-tight">
-                          ₹{pricingPlans.trial_2days?.priceINR?.toLocaleString('en-IN') ?? 51}
-                        </span>
+                        {isLoadingPlans ? (
+                          <span className="inline-block w-24 h-8 bg-slate-700/40 rounded animate-pulse" />
+                        ) : (
+                          <span className="text-3xl font-extrabold tracking-tight">
+                            ₹{pricingPlans.trial_2days?.priceINR !== undefined ? pricingPlans.trial_2days.priceINR.toLocaleString('en-IN') : '...'}
+                          </span>
+                        )}
                         <Text type="secondary" className="text-xs">
                           {pricingPlans.trial_2days?.periodLabel || 'for 2 days (48 Hours)'}
                         </Text>
@@ -458,7 +471,7 @@ export default function UpgradeModal({
                     size="large"
                     block
                     loading={isLoadingPlan === 'trial_2days'}
-                    disabled={isLoadingPlan !== null}
+                    disabled={isLoadingPlan !== null || isLoadingPlans}
                     onClick={() => handleCheckout('trial_2days')}
                     icon={<Zap className="w-4 h-4 text-amber-500 fill-current" />}
                     className={`font-bold text-xs mt-auto rounded-xl ${
@@ -467,7 +480,9 @@ export default function UpgradeModal({
                         : 'bg-slate-900 hover:bg-slate-800 text-white border-none shadow-sm'
                     }`}
                   >
-                    Pay ₹{pricingPlans.trial_2days?.priceINR?.toLocaleString('en-IN') ?? 51}
+                    {isLoadingPlans
+                      ? 'Loading Pass...'
+                      : `Pay ₹${pricingPlans.trial_2days?.priceINR !== undefined ? pricingPlans.trial_2days.priceINR.toLocaleString('en-IN') : '...'}`}
                   </Button>
                 </Card>
               </Col>
@@ -511,9 +526,13 @@ export default function UpgradeModal({
 
                       <div className="mb-3">
                         <div className="flex items-baseline gap-1">
-                          <span className="text-3xl font-extrabold tracking-tight text-indigo-600 dark:text-indigo-400">
-                            ₹{pricingPlans.monthly?.priceINR?.toLocaleString('en-IN') ?? 199}
-                          </span>
+                          {isLoadingPlans ? (
+                            <span className="inline-block w-24 h-8 bg-indigo-500/30 rounded animate-pulse" />
+                          ) : (
+                            <span className="text-3xl font-extrabold tracking-tight text-indigo-600 dark:text-indigo-400">
+                              ₹{pricingPlans.monthly?.priceINR !== undefined ? pricingPlans.monthly.priceINR.toLocaleString('en-IN') : '...'}
+                            </span>
+                          )}
                           <Text type="secondary" className="text-xs">
                             {pricingPlans.monthly?.periodLabel || 'per month (30 Days)'}
                           </Text>
@@ -566,12 +585,14 @@ export default function UpgradeModal({
                       size="large"
                       block
                       loading={isLoadingPlan === 'monthly'}
-                      disabled={isLoadingPlan !== null}
+                      disabled={isLoadingPlan !== null || isLoadingPlans}
                       onClick={() => handleCheckout('monthly')}
                       icon={<Zap className="w-4 h-4 fill-current" />}
                       className="font-bold text-xs mt-auto rounded-xl shadow-md shadow-indigo-500/25 bg-indigo-600 hover:bg-indigo-500 border-none"
                     >
-                      Pay ₹{pricingPlans.monthly?.priceINR?.toLocaleString('en-IN') ?? 199} with {activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}
+                      {isLoadingPlans
+                        ? 'Loading Pass...'
+                        : `Pay ₹${pricingPlans.monthly?.priceINR !== undefined ? pricingPlans.monthly.priceINR.toLocaleString('en-IN') : '...'} with ${activeGateway === 'razorpay' ? 'Razorpay' : 'Cashfree'}`}
                     </Button>
                   </Card>
                 </Badge.Ribbon>
@@ -617,9 +638,13 @@ export default function UpgradeModal({
 
                       <div className="mb-3">
                         <div className="flex items-baseline gap-1">
-                          <span className="text-3xl font-extrabold tracking-tight">
-                            ₹{pricingPlans.yearly?.priceINR?.toLocaleString('en-IN') ?? 1999}
-                          </span>
+                          {isLoadingPlans ? (
+                            <span className="inline-block w-24 h-8 bg-slate-700/40 rounded animate-pulse" />
+                          ) : (
+                            <span className="text-3xl font-extrabold tracking-tight">
+                              ₹{pricingPlans.yearly?.priceINR !== undefined ? pricingPlans.yearly.priceINR.toLocaleString('en-IN') : '...'}
+                            </span>
+                          )}
                           <Text type="secondary" className="text-xs">
                             {pricingPlans.yearly?.periodLabel || 'per year (365 Days)'}
                           </Text>
@@ -672,12 +697,14 @@ export default function UpgradeModal({
                       size="large"
                       block
                       loading={isLoadingPlan === 'yearly'}
-                      disabled={isLoadingPlan !== null}
+                      disabled={isLoadingPlan !== null || isLoadingPlans}
                       onClick={() => handleCheckout('yearly')}
                       icon={<Crown className="w-4 h-4" />}
                       className="font-bold text-xs mt-auto rounded-xl bg-emerald-600 hover:bg-emerald-500 border-none shadow-md shadow-emerald-600/20"
                     >
-                      Pay ₹{pricingPlans.yearly?.priceINR?.toLocaleString('en-IN') ?? 1999}
+                      {isLoadingPlans
+                        ? 'Loading Pass...'
+                        : `Pay ₹${pricingPlans.yearly?.priceINR !== undefined ? pricingPlans.yearly.priceINR.toLocaleString('en-IN') : '...'}`}
                     </Button>
                   </Card>
                 </Badge.Ribbon>

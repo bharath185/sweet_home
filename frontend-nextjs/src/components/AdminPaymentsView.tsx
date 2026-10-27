@@ -75,11 +75,7 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
     name: string;
     durationDays: number;
     badge?: string;
-  }>>({
-    trial_2days: { priceINR: 2, name: '2-Day Full Access Trial', durationDays: 2, badge: 'Quick Test' },
-    monthly: { priceINR: 3, name: 'Monthly Pro Pass', durationDays: 30, badge: 'Most Popular' },
-    yearly: { priceINR: 4, name: 'Annual Pro Pass', durationDays: 365, badge: 'Save 20%' },
-  });
+  }>>({});
 
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -649,7 +645,7 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
                       <input
                         type="number"
                         min="1"
-                        value={plansSettings.trial_2days?.priceINR ?? 200}
+                        value={plansSettings.trial_2days?.priceINR ?? ''}
                         onChange={(e) => setPlansSettings((s) => ({
                           ...s,
                           trial_2days: { ...s.trial_2days, priceINR: Number(e.target.value) }
@@ -709,7 +705,7 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
                       <input
                         type="number"
                         min="1"
-                        value={plansSettings.monthly?.priceINR ?? 999}
+                        value={plansSettings.monthly?.priceINR ?? ''}
                         onChange={(e) => setPlansSettings((s) => ({
                           ...s,
                           monthly: { ...s.monthly, priceINR: Number(e.target.value) }
@@ -769,7 +765,7 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
                       <input
                         type="number"
                         min="1"
-                        value={plansSettings.yearly?.priceINR ?? 9590}
+                        value={plansSettings.yearly?.priceINR ?? ''}
                         onChange={(e) => setPlansSettings((s) => ({
                           ...s,
                           yearly: { ...s.yearly, priceINR: Number(e.target.value) }
