@@ -93,7 +93,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
     setIsProcessing(true);
 
     const planConfig = pricingPlans[planId] || PRICING_PLANS[planId];
-    const durationDays = planConfig?.durationDays || (planId === 'trial_2days' ? 2 : planId === 'yearly' ? 365 : 30);
+    const durationDays = planConfig?.durationDays || (planId === 'trial_2days' ? 1 : planId === 'yearly' ? 365 : 30);
 
     const onPaymentSuccess = (result: {
       tier: 'TRIAL' | 'PRO' | 'ENTERPRISE';
@@ -314,7 +314,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                   {pricingPlans.trial_2days?.durationDays ? `${pricingPlans.trial_2days.durationDays} Days` : '48 Hours'}
                 </span>
               </div>
-              <h3 className="text-lg font-bold text-white">{pricingPlans.trial_2days?.name || '2-Day Trial'}</h3>
+              <h3 className="text-lg font-bold text-white">{pricingPlans.trial_2days?.name || '24-Hour Pass'}</h3>
               <div className="mt-3 flex items-baseline gap-1">
                 {isLoadingPlans ? (
                   <span className="inline-block w-20 h-8 bg-slate-700/60 rounded animate-pulse" />
@@ -323,10 +323,10 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
                     ₹{pricingPlans.trial_2days?.priceINR !== undefined ? pricingPlans.trial_2days.priceINR.toLocaleString('en-IN') : '...'}
                   </span>
                 )}
-                <span className="text-xs text-slate-400">{pricingPlans.trial_2days?.periodLabel || '/ 48 hrs'}</span>
+                <span className="text-xs text-slate-400">{pricingPlans.trial_2days?.periodLabel || '/ 24 hrs'}</span>
               </div>
               <p className="text-xs text-slate-400 mt-2">
-                {pricingPlans.trial_2days?.description || 'Unrestricted 100% studio access for 48 hours. Test raytracing & exports.'}
+                {pricingPlans.trial_2days?.description || 'Unrestricted 100% studio access for 24 hours. Test raytracing & exports.'}
               </p>
             </div>
             <ul className="mt-4 space-y-2 text-xs text-slate-300 border-t border-slate-800 pt-3">

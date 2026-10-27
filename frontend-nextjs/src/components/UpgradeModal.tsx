@@ -156,7 +156,7 @@ export default function UpgradeModal({
     setIsLoadingPlan(planId);
 
     const planConfig = pricingPlans[planId] || PRICING_PLANS[planId];
-    const durationDays = planConfig?.durationDays || (planId === 'trial_2days' ? 2 : planId === 'yearly' ? 365 : 30);
+    const durationDays = planConfig?.durationDays || (planId === 'trial_2days' ? 1 : planId === 'yearly' ? 365 : 30);
 
     const onPaymentSuccess = (result: {
       tier: 'TRIAL' | 'PRO' | 'ENTERPRISE';
@@ -404,7 +404,7 @@ export default function UpgradeModal({
                     <div className="flex items-center justify-between mb-3">
                       <Text strong className="text-base flex items-center gap-1.5">
                         <Clock className="w-4 h-4 text-amber-500" />
-                        {pricingPlans.trial_2days?.name || '2-Day All-Access Pass'}
+                        {pricingPlans.trial_2days?.name || '24-Hour All-Access Pass'}
                       </Text>
                       <Tag color="gold" bordered={false} className="font-bold text-[10px]">
                         {pricingPlans.trial_2days?.badge || 'Quick Test'}
@@ -421,7 +421,7 @@ export default function UpgradeModal({
                           </span>
                         )}
                         <Text type="secondary" className="text-xs">
-                          {pricingPlans.trial_2days?.periodLabel || 'for 2 days (48 Hours)'}
+                          {pricingPlans.trial_2days?.periodLabel || 'for 24 hours (1 Day)'}
                         </Text>
                       </div>
                       <Text className="text-[11px] text-amber-600 dark:text-amber-400 block mt-0.5 font-semibold">
@@ -430,14 +430,14 @@ export default function UpgradeModal({
                     </div>
 
                     <Text type="secondary" className="text-xs block mb-5 leading-relaxed">
-                      100% unrestricted studio access to all drafting, raytracing, and BOM quotation tools for 48 hours.
+                      100% unrestricted studio access to all drafting, raytracing, and BOM quotation tools for 24 hours.
                     </Text>
 
                     <div className="space-y-2.5 mb-6 text-xs">
                       <div className="flex items-start gap-2">
                         <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                         <span>
-                          <strong>{pricingPlans.trial_2days?.durationDays || 2} Days All-Access</strong> to 100% of features
+                          <strong>{pricingPlans.trial_2days?.durationDays || 1} Day (24 Hours) All-Access</strong> to 100% of features
                         </span>
                       </div>
                       <div className="flex items-start gap-2">

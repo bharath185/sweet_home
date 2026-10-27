@@ -18,15 +18,15 @@ export interface PlanDetail {
 export const PRICING_PLANS: Record<string, PlanDetail> = {
   trial_2days: {
     id: 'trial_2days',
-    name: '2-Day All-Access Pass',
+    name: '24-Hour All-Access Pass',
     badge: 'Quick Test',
     tier: 'TRIAL',
     priceINR: 51,
-    durationDays: 2,
-    periodLabel: 'for 2 days (48 Hours)',
-    description: '100% unrestricted access to all studio tools, multi-floor drafting, 4K raytrace renders, and BOM quotations for 48 hours.',
+    durationDays: 1,
+    periodLabel: 'for 24 hours (1 Day)',
+    description: '100% unrestricted access to all studio tools, multi-floor drafting, 4K raytrace renders, and BOM quotations for 24 hours.',
     features: [
-      'Full 100% Studio All-Access for 48 Hours',
+      'Full 100% Studio All-Access for 24 Hours',
       'Unlimited Multi-Floor Architecture Drafting',
       '4K Ultra Raytracing & High-Res Snapshots',
       'Bill of Materials (BOM) Excel & CSV Quotations',
@@ -259,8 +259,8 @@ export function start48HourFreeTrialLocally(user: User): User {
     return expiredUser;
   }
 
-  // Fresh 48-Hour Free Trial!
-  const trialDurationMs = 48 * 60 * 60 * 1000;
+  // Fresh 24-Hour Free Trial!
+  const trialDurationMs = 24 * 60 * 60 * 1000;
   const now = new Date();
   const trialStartedAt = now.toISOString();
   const trialExpiresAt = new Date(now.getTime() + trialDurationMs).toISOString();
@@ -268,7 +268,7 @@ export function start48HourFreeTrialLocally(user: User): User {
   const trialUser: User = {
     ...user,
     payment_status: 'paid',
-    plan: 'trial_48h',
+    plan: 'trial_24h',
     trialStartedAt,
     trialExpiresAt,
     expires_at: trialExpiresAt,

@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       }
 
       const now = new Date();
-      const trialDurationMs = 48 * 60 * 60 * 1000;
+      const trialDurationMs = 24 * 60 * 60 * 1000;
       const trialStartedAt = now.toISOString();
       const trialExpiresAt = new Date(now.getTime() + trialDurationMs).toISOString();
 
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
         password_hash: cleanPassword,
         role: 'DESIGNER',
         payment_status: 'paid',
-        plan: 'trial_48h',
+        plan: 'trial_24h',
         trial_started_at: trialStartedAt,
         trial_expires_at: trialExpiresAt,
         expires_at: trialExpiresAt,

@@ -627,14 +627,14 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Plan 1: 2-Day Trial */}
+              {/* Plan 1: 24-Hour Pass */}
               <div className={`p-4 rounded-xl border ${
                 isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950/60 border-slate-800'
               }`}>
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-extrabold uppercase text-amber-500">Plan 1: Trial Pass</span>
+                  <span className="text-xs font-extrabold uppercase text-amber-500">Plan 1: 24-Hour Pass</span>
                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500">
-                    {plansSettings.trial_2days?.durationDays || 2} Days
+                    {plansSettings.trial_2days?.durationDays || 1} Day (24h)
                   </span>
                 </div>
                 <div className="space-y-2.5">
@@ -660,7 +660,7 @@ export const AdminPaymentsView: React.FC<AdminPaymentsViewProps> = ({ currentUse
                     <label className="block text-[11px] font-bold text-slate-500 mb-1">Display Title</label>
                     <input
                       type="text"
-                      value={plansSettings.trial_2days?.name || '2-Day Full Access Trial'}
+                      value={plansSettings.trial_2days?.name || '24-Hour Full Access Pass'}
                       onChange={(e) => setPlansSettings((s) => ({
                         ...s,
                         trial_2days: { ...s.trial_2days, name: e.target.value }

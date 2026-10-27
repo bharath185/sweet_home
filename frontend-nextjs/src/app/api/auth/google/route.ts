@@ -105,9 +105,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 6. Create or update user in Supabase DB with 48h trial
+    // 6. Create or update user in Supabase DB with 24h trial
     const now = new Date();
-    const trialDurationMs = 48 * 60 * 60 * 1000;
+    const trialDurationMs = 24 * 60 * 60 * 1000;
     const trialStartedAt = existing?.trial_started_at || now.toISOString();
     const trialExpiresAt = existing?.trial_expires_at || new Date(now.getTime() + trialDurationMs).toISOString();
 
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
       password_hash: existing?.password_hash || `google_oauth_${tokenInfo.sub || Date.now()}`,
       role: existing?.role || (cleanEmail.includes('admin') ? 'ADMIN' : 'DESIGNER'),
       payment_status: existing?.payment_status || 'paid',
-      plan: existing?.plan || 'trial_48h',
+      plan: existing?.plan || 'trial_24h',
       paid_at: existing?.paid_at || now.toISOString(),
       expires_at: existing?.expires_at || trialExpiresAt,
       trial_started_at: trialStartedAt,
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       user,
-      message: 'Account verified with Google & 48-Hour Free Trial activated!',
+      message: 'Account verified with Google & 24-Hour Free Trial activated!',
     });
   } catch (error: any) {
     console.error('[GoogleAuth] Error handling Google sign-in:', error);

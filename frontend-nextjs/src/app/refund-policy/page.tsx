@@ -42,9 +42,9 @@ export default function RefundPolicyPage() {
 
         <div className="space-y-8 text-xs sm:text-sm text-slate-300 leading-relaxed">
           <section>
-            <h2 className="text-base sm:text-lg font-bold text-white mb-2">1. 48-Hour Free Trial</h2>
+            <h2 className="text-base sm:text-lg font-bold text-white mb-2">1. 24-Hour Free Trial</h2>
             <p>
-              We provide an unrestricted 48-Hour Free Trial on all new accounts so users can evaluate the 2D CAD drafting, 3D WebGL rendering, and furniture customization tools with zero upfront payment and no credit card required.
+              We provide an unrestricted 24-Hour Free Trial on all new accounts so users can evaluate the 2D CAD drafting, 3D WebGL rendering, and furniture customization tools with zero upfront payment and no credit card required.
             </p>
           </section>
 

@@ -1304,7 +1304,7 @@ export default function HomeStudioPage() {
         </div>
       )}
 
-      {/* 48-Hour Free Trial Active Banner with Upgrade Button */}
+      {/* 24-Hour Free Trial Active Banner with Upgrade Button */}
       {currentUser.role !== 'ADMIN' && isUserOnFreeTrial(currentUser) && (
         <div className={`px-4 py-1.5 flex items-center justify-between text-xs z-30 select-none border-b transition-colors ${
           isDark
@@ -1316,7 +1316,7 @@ export default function HomeStudioPage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
             </span>
-            <span className="font-bold">48-Hour Free Trial Active:</span>
+            <span className="font-bold">24-Hour Free Trial Active:</span>
             <span className="font-normal opacity-90">
               Full 2D blueprint drafting, 3D walking & custom layout features are unlocked ({getSubscriptionRemainingText(currentUser).replace(' • Upgrade', '')}).
             </span>

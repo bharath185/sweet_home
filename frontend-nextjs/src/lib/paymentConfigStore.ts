@@ -36,15 +36,15 @@ const TMP_CONFIG_FILE_PATH = path.join('/tmp', 'payment_config.json');
 const DEFAULT_PLANS: Record<string, PlanConfigItem> = {
   trial_2days: {
     id: 'trial_2days',
-    name: '2-Day All-Access Pass',
+    name: '24-Hour All-Access Pass',
     badge: 'Quick Test',
     tier: 'TRIAL',
     priceINR: 51,
-    durationDays: 2,
-    periodLabel: 'for 2 days (48 Hours)',
-    description: '100% unrestricted access to all studio tools, multi-floor drafting, and raytracing for 48 hours.',
+    durationDays: 1,
+    periodLabel: 'for 24 hours (1 Day)',
+    description: '100% unrestricted access to all studio tools, multi-floor drafting, and raytracing for 24 hours.',
     features: [
-      'Full 100% Studio All-Access for 48 Hours',
+      'Full 100% Studio All-Access for 24 Hours',
       'Unlimited Multi-Floor Architecture Drafting',
       '4K Ultra Raytracing & High-Res Snapshots',
       'Bill of Materials (BOM) Excel & CSV Quotations',

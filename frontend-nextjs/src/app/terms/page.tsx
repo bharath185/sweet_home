@@ -59,7 +59,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-base sm:text-lg font-bold text-white mb-2">3. Free Trial & Subscription Plans</h2>
             <p>
-              Eligible new users receive an unrestricted 48-Hour Free Trial upon registration. Following the expiration of the trial period, access to advanced features (such as unlimited active projects, custom item creation, and continuous cloud synchronization) requires an active subscription pass (Monthly or Annual).
+              Eligible new users receive an unrestricted 24-Hour Free Trial upon registration. Following the expiration of the trial period, access to advanced features (such as unlimited active projects, custom item creation, and continuous cloud synchronization) requires an active subscription pass (Monthly or Annual).
             </p>
             <p className="mt-2 text-slate-400 italic">
               [REPLACE WITH FINAL TEXT: Detail exact billing cycles, pricing tiers in INR, and auto-renewal policies.]

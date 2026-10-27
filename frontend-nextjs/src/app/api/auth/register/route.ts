@@ -63,9 +63,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Compute 48-Hour Free Trial window
+    // 2. Compute 24-Hour Free Trial window
     const now = new Date();
-    const trialDurationMs = 48 * 60 * 60 * 1000;
+    const trialDurationMs = 24 * 60 * 60 * 1000;
     const trialStartedAt = now.toISOString();
     const trialExpiresAt = new Date(now.getTime() + trialDurationMs).toISOString();
 
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       password_hash: cleanPassword,
       role: 'DESIGNER',
       payment_status: 'paid', // Active free trial counts as paid access
-      plan: 'trial_48h',
+      plan: 'trial_24h',
       trial_started_at: trialStartedAt,
       trial_expires_at: trialExpiresAt,
       expires_at: trialExpiresAt,
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       user: newUser,
-      message: 'Account created with 48-Hour Free Trial!',
+      message: 'Account created with 24-Hour Free Trial!',
       trialExpiresAt,
     });
   } catch (error: any) {

@@ -198,8 +198,8 @@ export function startOrGet48HourFreeTrial(params: {
     }
   }
 
-  // First-time login: grant 48-hour free trial!
-  const trialDurationMs = 48 * 60 * 60 * 1000;
+  // First-time login: grant 24-hour free trial!
+  const trialDurationMs = 24 * 60 * 60 * 1000;
   const now = new Date();
   const trialStartedAt = now.toISOString();
   const trialExpiresAt = new Date(now.getTime() + trialDurationMs).toISOString();
@@ -210,13 +210,16 @@ export function startOrGet48HourFreeTrial(params: {
     name: params.name,
     role: params.role,
     payment_status: 'paid',
-    plan: 'trial_48h',
+    plan: 'trial_24h',
     trial_started_at: trialStartedAt,
     trial_expires_at: trialExpiresAt,
     expires_at: trialExpiresAt,
     is_free_trial: true,
   });
 }
+
+// Backward-compatible alias
+export const startOrGet24HourFreeTrial = startOrGet48HourFreeTrial;
 
 /**
  * Retrieves a user record by ID or Email
