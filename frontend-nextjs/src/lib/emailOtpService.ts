@@ -313,3 +313,124 @@ export async function sendOtpEmail(
 
   return { success: true, provider: 'direct' };
 }
+
+/**
+ * Sends Password Reset OTP Email via configured SMTP
+ */
+export async function sendPasswordResetOtpEmail(
+  email: string,
+  otpCode: string,
+  name?: string
+): Promise<{ success: boolean; provider: string }> {
+  const recipientEmail = email.trim().toLowerCase();
+  const userName = name || 'Designer';
+  const emailSubject = `${otpCode} is your DecoForge 3D password reset code`;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>DecoForge 3D Password Reset</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0b1120; color: #f8fafc; margin: 0; padding: 24px; }
+          .container { max-width: 520px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+          .logo { text-align: center; margin-bottom: 24px; }
+          .logo h1 { color: #38bdf8; font-size: 22px; margin: 0; font-weight: 800; letter-spacing: -0.5px; }
+          .logo p { color: #94a3b8; font-size: 12px; margin: 4px 0 0; }
+          .content { text-align: center; }
+          .greeting { font-size: 16px; color: #e2e8f0; margin-bottom: 12px; }
+          .instructions { font-size: 14px; color: #94a3b8; line-height: 1.6; margin-bottom: 28px; }
+          .otp-box { background: #1e293b; border: 2px solid #38bdf8; border-radius: 12px; padding: 18px 24px; display: inline-block; margin-bottom: 24px; }
+          .otp-code { font-family: 'Courier New', monospace; font-size: 36px; font-weight: 800; color: #ffffff; letter-spacing: 8px; margin: 0; }
+          .expiry { font-size: 12px; color: #f59e0b; margin-top: 8px; }
+          .security-note { font-size: 11px; color: #64748b; border-top: 1px solid #1e293b; padding-top: 20px; margin-top: 24px; line-height: 1.5; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="logo">
+            <h1>DecoForge 3D</h1>
+            <p>Interior Architecture Studio & Blueprint Engine</p>
+          </div>
+          <div class="content">
+            <div class="greeting">Hi ${userName},</div>
+            <div class="instructions">
+              We received a request to reset the password for your DecoForge 3D account. Enter this 6-digit verification code to choose a new password:
+            </div>
+            <div class="otp-box">
+              <div class="otp-code">${otpCode}</div>
+              <div class="expiry">Expires in 10 minutes</div>
+            </div>
+            <div class="security-note">
+              Do not share this code with anyone. DecoForge 3D will never ask for your code.
+              If you did not request a password reset, you can safely ignore this email — your account remains completely secure.
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `.trim();
+
+  const plainText = `Hi ${userName},\n\nYour DecoForge 3D password reset code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request a password reset, please ignore this message.\n\nBest regards,\nDecoForge 3D Architecture Team`;
+
+  // Custom SMTP
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+  if (smtpHost && smtpUser && smtpPass) {
+    try {
+      const port = Number(process.env.SMTP_PORT || 587);
+      const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port,
+        secure: port === 465,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+      });
+
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || `"DecoForge 3D" <${smtpUser}>`,
+        to: recipientEmail,
+        subject: emailSubject,
+        html: htmlContent,
+        text: plainText,
+      });
+
+      return { success: true, provider: 'smtp' };
+    } catch (smtpErr) {
+      console.warn('[EmailOtp] Password reset SMTP dispatch error:', smtpErr);
+    }
+  }
+
+  // Fallback to Resend if configured
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (resendApiKey) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'DecoForge 3D <onboarding@resend.dev>',
+          to: [recipientEmail],
+          subject: emailSubject,
+          html: htmlContent,
+          text: plainText,
+        }),
+      });
+      if (res.ok) {
+        return { success: true, provider: 'resend' };
+      }
+    } catch (err) {
+      console.warn('[EmailOtp] Resend password reset error:', err);
+    }
+  }
+
+  return { success: true, provider: 'direct' };
+}
