@@ -1640,15 +1640,25 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span>256-Bit SSL Encrypted</span>
               </div>
-              <div className="flex items-center justify-center gap-1.5">
-                <span className="text-[8.5px] uppercase font-semibold tracking-wider text-slate-500">
+              <div className="flex items-center justify-center gap-1.5 pt-0.5">
+                <span className="text-[8.5px] uppercase font-semibold tracking-wider text-slate-500 select-none">
                   Powered by
                 </span>
-                <img
-                  src="/vr-logo.jpg"
-                  alt="Visual Rendered"
-                  className="h-4.5 sm:h-5 w-auto object-contain rounded border border-slate-700/80 shadow-xs"
-                />
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-900/90 border border-slate-700/70 shadow-xs hover:border-slate-600 transition-colors select-none">
+                  <span className="flex items-center justify-center w-3.5 h-3.5 rounded bg-gradient-to-tr from-sky-500 via-indigo-500 to-cyan-400 p-[0.5px] shadow-xs">
+                    <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                      <line x1="12" y1="22.08" x2="12" y2="12" />
+                    </svg>
+                  </span>
+                  <span className="text-[11px] font-black tracking-tight leading-none font-sans">
+                    <span className="text-slate-100">Visual</span>
+                    <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-indigo-300 bg-clip-text text-transparent ml-0.5">
+                      Rendered
+                    </span>
+                  </span>
+                </div>
               </div>
             </div>
 
