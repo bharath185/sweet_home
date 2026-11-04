@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
         name: paramName || 'Valued Designer',
         role: isSuperadmin ? 'ADMIN' : ((paramRole as any) || 'DESIGNER'),
         payment_status: 'paid',
-        plan: paramPlan || (isSuperadmin ? 'yearly' : 'pass_24h'),
+        plan: paramPlan || (isSuperadmin ? 'yearly' : 'trial_24h'),
         cashfree_order_id: paramOrderId || `ord_${(userId || 'pass').slice(0, 8)}`,
         paid_at: new Date().toISOString(),
         expires_at: isSuperadmin
@@ -70,30 +70,51 @@ export async function GET(req: NextRequest) {
       const trialExpiresAtMs = userRecord.trial_expires_at ? new Date(userRecord.trial_expires_at).getTime() : 0;
 
       const isPaidActive = Boolean(
-        userRecord.payment_status === 'paid' && (!userRecord.expires_at || expiresAtMs > now)
+        userRecord.payment_status === 'paid' && !userRecord.is_free_trial && (!userRecord.expires_at || expiresAtMs > now)
       );
       const isTrialActive = Boolean(
-        userRecord.is_free_trial && trialExpiresAtMs > now
+        userRecord.is_free_trial && (trialExpiresAtMs > now || expiresAtMs > now)
       );
 
+      // Clean plan naming - STRICTLY 24-HOUR ONLY, NO 48-HOUR
       let effectivePlanName = '24-Hour Full Access Pass';
-      if (userRecord.plan === 'monthly') effectivePlanName = 'Monthly Pro Pass (₹199)';
-      else if (userRecord.plan === 'yearly') effectivePlanName = 'Annual Pro Pass (₹1,999)';
-      else if (userRecord.plan === 'trial_2days' || userRecord.plan === 'pass_24h') effectivePlanName = '24-Hour Pass (₹51)';
-      else if (isTrialActive) effectivePlanName = '48-Hour Free Trial Pass';
+      let planDuration = '24 Hours (1 Day)';
+      let planAmount = 51;
+
+      const rawPlan = (userRecord.plan || '').toLowerCase();
+      if (rawPlan.includes('monthly') || rawPlan === 'pro_monthly') {
+        effectivePlanName = 'Monthly Pro Pass';
+        planDuration = '30 Days';
+        planAmount = 199;
+      } else if (rawPlan.includes('yearly') || rawPlan.includes('annual') || rawPlan === 'pro_yearly') {
+        effectivePlanName = 'Annual Pro Pass';
+        planDuration = '365 Days';
+        planAmount = 1999;
+      } else if (isTrialActive && !isPaidActive) {
+        effectivePlanName = '24-Hour Free Trial Pass';
+        planDuration = '24 Hours (1 Day)';
+        planAmount = 0;
+      } else {
+        effectivePlanName = '24-Hour Full Access Pass';
+        planDuration = '24 Hours (1 Day)';
+        planAmount = 51;
+      }
+
+      const activeOrderId = userRecord.cashfree_order_id || (userRecord as any).razorpayOrderId || (userRecord as any).order_id || `ord_${userRecord.id?.slice(0, 8) || 'active'}`;
 
       activeSubscription = {
-        plan: userRecord.plan || (isTrialActive ? 'free_trial' : 'pass_24h'),
+        plan: userRecord.plan || (isTrialActive ? 'trial_24h' : 'pass_24h'),
         planName: effectivePlanName,
-        status: isPaidActive ? 'PAID' : isTrialActive ? 'ACTIVE_TRIAL' : 'EXPIRED',
-        amount: userRecord.plan === 'monthly' ? 199 : userRecord.plan === 'yearly' ? 1999 : 51,
+        planDuration,
+        status: isPaidActive ? 'PAID & ACTIVE' : isTrialActive ? 'ACTIVE TRIAL' : 'EXPIRED',
+        amount: isTrialActive && !isPaidActive ? 0 : planAmount,
         currency: 'INR',
-        gateway: userRecord.cashfree_order_id ? 'cashfree' : 'razorpay',
-        orderId: userRecord.cashfree_order_id || (userRecord as any).razorpayOrderId || `ord_${userId.slice(0, 8)}`,
-        paymentId: userRecord.cashfree_payment_id || undefined,
+        gateway: userRecord.cashfree_order_id ? 'Cashfree' : 'Razorpay',
+        orderId: activeOrderId,
+        paymentId: userRecord.cashfree_payment_id || (userRecord as any).payment_id || undefined,
         paidAt: userRecord.paid_at || userRecord.trial_started_at || new Date().toISOString(),
         expiresAt: userRecord.expires_at || userRecord.trial_expires_at || undefined,
-        isFreeTrial: Boolean(isTrialActive),
+        isFreeTrial: Boolean(isTrialActive && !isPaidActive),
         isActive: isPaidActive || isTrialActive,
       };
 
@@ -105,21 +126,38 @@ export async function GET(req: NextRequest) {
           userId: userRecord.id,
           customerName: userRecord.name || 'Valued Designer',
           customerEmail: userRecord.email,
-          planId: (userRecord.plan as any) || 'trial_2days',
+          planId: (userRecord.plan as any) || 'trial_24h',
           planName: effectivePlanName,
-          amount: isPaidActive ? activeSubscription.amount : 0,
+          amount: activeSubscription.amount,
           gateway: activeSubscription.gateway as any,
-          status: isPaidActive ? 'PAID' : 'PAID',
-          paymentMethod: isTrialActive ? 'Free Trial Pass' : 'UPI / Card / NetBanking',
+          status: 'PAID',
+          paymentMethod: isTrialActive && !isPaidActive ? 'Free Trial Pass' : 'Online UPI / Card',
           createdAt: activeSubscription.paidAt,
           expiresAt: activeSubscription.expiresAt,
         });
       }
     }
 
+    // Clean and normalize all transactions: Wipe out any legacy "48-Hour" text
+    const cleanedOrders = transactions.map((t) => {
+      let pName = t.planName || '24-Hour Full Access Pass';
+      pName = pName.replace(/48[- ]?hour/gi, '24-Hour').replace(/48h/gi, '24-Hour');
+      
+      // If amount is 51, it's definitely the paid 24-Hour Full Access Pass (not a Free Trial)
+      if (t.amount === 51 && pName.includes('Free Trial')) {
+        pName = '24-Hour Full Access Pass';
+      }
+
+      return {
+        ...t,
+        planName: pName,
+        paymentMethod: t.paymentMethod ? t.paymentMethod.replace(/48[- ]?hour/gi, '24-Hour') : (t.amount > 0 ? 'Online Payment' : 'Free Trial Pass'),
+      };
+    });
+
     return NextResponse.json({
       success: true,
-      orders: transactions,
+      orders: cleanedOrders,
       activeSubscription,
     });
   } catch (error: any) {

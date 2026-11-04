@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 3. If non-admin user is logging in and has no record yet -> Grant 48-Hour Free Trial!
+    // 3. If non-admin user is logging in and has no record yet -> Grant 24-Hour Free Trial!
     if (!record) {
       record = startOrGet48HourFreeTrial({
         userId,

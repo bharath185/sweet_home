@@ -95,7 +95,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           <img
             src="/decofrog-logo.jpg"
             alt="DecoFrog 3D"
-            className="h-7 w-auto object-contain rounded-lg"
+            className="h-7 max-w-[125px] w-auto object-contain rounded-md"
+            style={{ maxHeight: '28px' }}
           />
         </div>
 
@@ -160,7 +161,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         }`}>
           <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-            <img src="/decofrog-logo.jpg" alt="DecoFrog 3D" className="h-4.5 w-auto object-contain rounded" /><span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Studio</span>
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Studio</span>
           </span>
           <span className="text-slate-300 dark:text-slate-700">|</span>
           <span className="text-slate-500 dark:text-slate-400 font-medium truncate max-w-[220px]">

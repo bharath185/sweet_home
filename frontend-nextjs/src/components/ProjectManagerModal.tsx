@@ -134,7 +134,12 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
               <FolderOpen className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2 mb-0.5"><div className="bg-gradient-to-b from-white to-amber-50/40 px-2.5 py-1 rounded-xl border border-amber-300/40 shadow-xs ring-1 ring-amber-400/25 inline-flex items-center"><img src="/decofrog-logo.jpg" alt="DecoFrog 3D" className="h-5.5 w-auto object-contain" /></div><span className="text-xs font-bold text-slate-700 dark:text-slate-300">Project Center</span></div>
+              <div className="flex items-center gap-2 mb-0.5">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Project Center</h2>
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200/80 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/60">
+                  DecoFrog 3D
+                </span>
+              </div>
               <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 {currentUser?.name ? `Signed in as ${currentUser.name}` : 'Saved Architectural Projects'}
               </p>

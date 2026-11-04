@@ -149,7 +149,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
   const handleCompleteLogin = (u: any) => {
     const isAdmin = u.role === 'ADMIN' || u.email?.includes('admin');
     const now = new Date();
-    const trialDurationMs = 48 * 60 * 60 * 1000;
+    const trialDurationMs = 24 * 60 * 60 * 1000;
     const trialExpiresAt = u.trial_expires_at || new Date(now.getTime() + trialDurationMs).toISOString();
 
     const finalUser: UserType = {
@@ -161,7 +161,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
       assignedPlan: 'plan-sarah-suite',
       createdAt: u.created_at || 'Today',
       payment_status: u.payment_status || 'paid',
-      plan: u.plan || 'trial_48h',
+      plan: u.plan || 'trial_24h',
       paid_at: u.paid_at || now.toISOString(),
       expires_at: u.expires_at || trialExpiresAt,
       isFreeTrial: u.is_free_trial ?? true,
@@ -688,7 +688,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
 
       const dbUser = data.user;
       const now = new Date();
-      const trialDurationMs = 48 * 60 * 60 * 1000;
+      const trialDurationMs = 24 * 60 * 60 * 1000;
       const trialExpiresAt = dbUser?.trial_expires_at || new Date(now.getTime() + trialDurationMs).toISOString();
 
       const newUser: UserType = {
@@ -700,7 +700,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
         assignedPlan: 'plan-sarah-suite',
         createdAt: 'Just now',
         payment_status: dbUser?.payment_status || 'paid',
-        plan: 'trial_48h',
+        plan: 'trial_24h',
         paid_at: dbUser?.paid_at || now.toISOString(),
         expires_at: dbUser?.expires_at || trialExpiresAt,
         isFreeTrial: true,
@@ -893,9 +893,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
       console.warn('Realtime OTP verification notice:', err);
     }
 
-    // Initialize 48-Hour Free Trial
+    // Initialize 24-Hour Free Trial
     const now = new Date();
-    const trialDurationMs = 48 * 60 * 60 * 1000;
+    const trialDurationMs = 24 * 60 * 60 * 1000;
     const trialExpiresAt = dbUser?.trial_expires_at || new Date(now.getTime() + trialDurationMs).toISOString();
 
     const newUser: UserType = {
@@ -907,7 +907,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
       assignedPlan: 'plan-sarah-suite',
       createdAt: 'Just now',
       payment_status: dbUser?.payment_status || 'paid',
-      plan: 'trial_48h',
+      plan: 'trial_24h',
       paid_at: dbUser?.paid_at || now.toISOString(),
       expires_at: dbUser?.expires_at || trialExpiresAt,
       isFreeTrial: true,
@@ -992,7 +992,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
         <div className="order-1 lg:order-2 lg:col-span-5 flex flex-col items-center lg:items-end w-full">
           
           {/* Royale Play Wall Texture Switcher Badge (EXACTLY 1 cm / 38px gap to login card) */}
-          <div className="h-8 flex items-center gap-1.5 bg-slate-900/85 backdrop-blur-md px-3 py-1 rounded-full border border-slate-700/70 shadow-lg text-[10px] mb-[38px] z-20 self-center lg:self-end">
+          <div className="h-8 flex items-center gap-1.5 bg-slate-900/85 backdrop-blur-md px-3 py-1 rounded-full border border-slate-700/70 shadow-lg text-[10px] mb-3 z-20 self-center lg:self-end">
             <Palette className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span className="text-[10px] font-semibold text-slate-300 mr-0.5 hidden sm:inline">Royale Play Wall:</span>
             <div className="flex items-center gap-1.5">
@@ -1873,7 +1873,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
             </div>
 
             <div className="p-2.5 bg-amber-500/10 border border-amber-500/25 rounded-xl text-[11px] text-amber-300 mb-3.5 leading-relaxed">
-              To complete your Google registration and activate your <strong>48-Hour Free Trial</strong>, a valid mobile number is mandatory.
+              To complete your Google registration and activate your <strong>24-Hour Free Trial</strong>, a valid mobile number is mandatory.
             </div>
 
             <form onSubmit={handleCompleteGoogleWithPhone} className="space-y-3.5">

@@ -372,9 +372,7 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
               <span className="truncate max-w-[130px] sm:max-w-[200px]" title={plan.name}>
                 {plan.name || 'My house.sh3d'}
               </span>
-              <span className="text-[10px] text-slate-400 font-normal hidden xl:inline">
-                <img src="/decofrog-logo.jpg" alt="DecoFrog 3D" className="h-4 w-auto object-contain rounded bg-white px-1 py-0.5 inline-block ml-1" />
-              </span>
+              
             </div>
 
             <div className="w-[1px] h-3.5 bg-slate-300 dark:bg-slate-700 mx-1 shrink-0" />
