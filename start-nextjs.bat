@@ -1,7 +1,12 @@
 @echo off
+setlocal
+cd /d "%~dp0frontend-nextjs"
+
 echo ========================================================
-echo Starting DecoFrog 3D - Next.js Frontend
+echo Starting DecoFrog 3D Studio (Port 4005)...
+echo Opening in browser at: http://localhost:4005
 echo ========================================================
-cd frontend-nextjs
+
+start "" http://localhost:4005
 npm run dev
 pause

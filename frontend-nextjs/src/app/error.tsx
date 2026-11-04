@@ -49,7 +49,7 @@ export default function GlobalErrorPage({
       </div>
 
       <div className="mt-12 text-[11px] text-slate-600 font-mono">
-        DecoForge 3D Recovery Safe Mode
+        <div className="flex items-center justify-center gap-2"><img src="/decofrog-logo.jpg" alt="DecoFrog 3D" className="h-6 w-auto object-contain bg-white rounded px-2 py-0.5" /><span>Recovery Safe Mode</span></div>
       </div>
     </div>
   );

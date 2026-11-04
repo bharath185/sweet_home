@@ -145,6 +145,21 @@ body {
   50% { opacity: 1; transform: scale(1.02); }
 }
 
+.custom-scrollbar-dark::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.custom-scrollbar-dark::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.4);
+}
+.custom-scrollbar-dark::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 4px;
+}
+.custom-scrollbar-dark::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.7);
+}
+
 .pulse-glow {
   animation: pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

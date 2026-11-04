@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Layers,
   Sparkles,
@@ -17,6 +17,9 @@ import {
   Moon,
   CheckCircle2,
   Loader2,
+  FolderOpen,
+  Receipt,
+  ChevronDown,
 } from 'lucide-react';
 import { HomePlan, UserRole, User } from '../types/plan';
 import { hasActiveSubscription, getSubscriptionRemainingText, isUserOnFreeTrial } from '../services/subscriptionService';
@@ -40,6 +43,8 @@ interface NavbarProps {
   theme?: 'dark' | 'light';
   onToggleTheme?: () => void;
   onOpenWelcomeGuide?: () => void;
+  onOpenProjects?: () => void;
+  onOpenOrderHistory?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -59,10 +64,24 @@ export const Navbar: React.FC<NavbarProps> = ({
   theme = 'light',
   onToggleTheme,
   onOpenWelcomeGuide,
+  onOpenProjects,
+  onOpenOrderHistory,
 }) => {
   const isDark = theme === 'dark';
-
   const isAdmin = userRole === 'ADMIN' || currentUser?.role === 'ADMIN';
+
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <header className={`h-11 px-3 sm:px-4 flex items-center justify-between select-none z-30 relative transition-colors duration-200 ${
@@ -71,15 +90,16 @@ export const Navbar: React.FC<NavbarProps> = ({
         : 'bg-white/95 backdrop-blur border-b border-slate-200/80 text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.02)]'
     }`}>
       {/* 1. Left: Brand Mark */}
-      <div className="flex items-center gap-2.5 min-w-[180px]">
-        <div className="w-7 h-7 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 flex items-center justify-center font-bold shadow-xs shrink-0">
-          <Layers className="w-3.5 h-3.5" />
+      <div className="flex items-center gap-2">
+        <div className="flex items-center shrink-0">
+          <img
+            src="/decofrog-logo.jpg"
+            alt="DecoFrog 3D"
+            className="h-7 w-auto object-contain rounded-lg"
+          />
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-xs tracking-tight text-slate-900 dark:text-white flex items-center gap-1">
-            <span>{APP_NAME}</span>
-          </span>
+        <div className="flex items-center gap-1.5">
           <span className={`text-[10px] uppercase font-semibold px-2 py-0.5 rounded-md border tracking-wider ${
             isAdmin
               ? 'bg-indigo-50 text-indigo-700 border-indigo-200/80 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/60'
@@ -140,7 +160,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         }`}>
           <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-            <span>{APP_NAME} Design Studio</span>
+            <img src="/decofrog-logo.jpg" alt="DecoFrog 3D" className="h-4.5 w-auto object-contain rounded" /><span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Studio</span>
           </span>
           <span className="text-slate-300 dark:text-slate-700">|</span>
           <span className="text-slate-500 dark:text-slate-400 font-medium truncate max-w-[220px]">
@@ -253,19 +273,163 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         )}
 
-        {/* User profile & Logout */}
+        {/* Quick Navigation: Design History & Order History */}
         {currentUser && (
-          <div className={`flex items-center gap-2 pl-2 border-l ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-            <div className={`flex items-center gap-2 px-2.5 py-1 rounded-lg border ${
-              isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-slate-100/70 border-slate-200/80 text-slate-800'
-            }`}>
+          <div className="flex items-center gap-1.5">
+            {onOpenProjects && (
+              <button
+                onClick={onOpenProjects}
+                className={`hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-800 hover:text-white'
+                    : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-700 border-slate-200/90'
+                }`}
+                title="Open Saved Designs & Projects (Ctrl+O)"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Designs</span>
+              </button>
+            )}
+
+            {onOpenOrderHistory && (
+              <button
+                onClick={onOpenOrderHistory}
+                className={`hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-800 hover:text-white'
+                    : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-700 border-slate-200/90'
+                }`}
+                title="View Orders & Purchase Receipts"
+              >
+                <Receipt className="w-3.5 h-3.5 text-sky-400" />
+                <span>Orders</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* User profile with Dropdown Menu & Logout */}
+        {currentUser && (
+          <div ref={menuRef} className={`relative flex items-center gap-2 pl-2 border-l ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+            <button
+              type="button"
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              className={`flex items-center gap-2 px-2.5 py-1 rounded-lg border transition cursor-pointer select-none ${
+                isDark
+                  ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-200'
+                  : 'bg-slate-100/70 hover:bg-slate-200/80 border-slate-200/80 text-slate-800'
+              }`}
+              title="Click to view Account, Design History & Orders"
+            >
               <div className="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center font-bold text-[10px]">
                 {currentUser.name.charAt(0).toUpperCase()}
               </div>
               <span className="hidden sm:inline text-xs font-semibold truncate max-w-[90px]">
                 {currentUser.name}
               </span>
-            </div>
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isUserMenuOpen && (
+              <div
+                className={`absolute right-0 top-full mt-2 w-64 rounded-2xl border shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 ${
+                  isDark
+                    ? 'bg-slate-900 border-slate-800 text-slate-100 shadow-black/80'
+                    : 'bg-white border-slate-200 text-slate-800 shadow-slate-300/80'
+                }`}
+              >
+                <div className="p-2.5 border-b border-inherit mb-1">
+                  <div className="text-xs font-bold truncate">{currentUser.name}</div>
+                  <div className="text-[11px] text-slate-400 truncate">{currentUser.email || 'Designer Account'}</div>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 border border-indigo-500/20">
+                      {currentUser.role || 'PRO DESIGNER'}
+                    </span>
+                    {currentUser.plan && (
+                      <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                        {currentUser.plan}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-0.5">
+                  {onOpenProjects && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        onOpenProjects();
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition cursor-pointer text-left ${
+                        isDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      <FolderOpen className="w-4 h-4 text-indigo-400" />
+                      <div>
+                        <div className="font-semibold">Design History (My Projects)</div>
+                        <div className="text-[10px] text-slate-400">View & open saved house designs</div>
+                      </div>
+                    </button>
+                  )}
+
+                  {onOpenOrderHistory && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        onOpenOrderHistory();
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition cursor-pointer text-left ${
+                        isDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      <Receipt className="w-4 h-4 text-sky-400" />
+                      <div>
+                        <div className="font-semibold">Order & Purchase History</div>
+                        <div className="text-[10px] text-slate-400">View orders, passes & receipts</div>
+                      </div>
+                    </button>
+                  )}
+
+                  {onOpenUpgradeModal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        onOpenUpgradeModal();
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition cursor-pointer text-left ${
+                        isDark ? 'hover:bg-slate-800 text-slate-200' : 'hover:bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      <Crown className="w-4 h-4 text-amber-400" />
+                      <div>
+                        <div className="font-semibold">Subscription Pass Details</div>
+                        <div className="text-[10px] text-slate-400">Renew or upgrade studio pass</div>
+                      </div>
+                    </button>
+                  )}
+                </div>
+
+                {onLogout && (
+                  <div className="border-t border-inherit mt-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        onLogout();
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-xs font-medium text-rose-400 hover:bg-rose-500/10 transition cursor-pointer text-left`}
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {onLogout && (
               <button

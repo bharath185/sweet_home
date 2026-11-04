@@ -106,7 +106,7 @@ function normalizeKey(val?: string | null): string {
 }
 
 /**
- * Checks if a user's subscription or 48-hour free trial is currently active (not expired)
+ * Checks if a user's subscription or 24-hour free trial is currently active (not expired)
  */
 export function isSubscriptionActive(record: UserPaymentRecord | null | undefined): boolean {
   if (!record) return false;
@@ -119,13 +119,13 @@ export function isSubscriptionActive(record: UserPaymentRecord | null | undefine
     return !isNaN(expTime) && Date.now() < expTime;
   }
 
-  // 2. 48-Hour Free Trial (Active window check)
+  // 2. 24-Hour Free Trial (Active window check)
   if (record.is_free_trial || record.trial_expires_at) {
     const trialExp = record.trial_expires_at ? new Date(record.trial_expires_at).getTime() : 0;
     if (trialExp > 0 && Date.now() < trialExp) {
       return true; // Trial active: studio unlocked!
     }
-    // 48 hours is complete -> blocked!
+    // 24 hours is complete -> blocked!
     return false;
   }
 
@@ -139,7 +139,7 @@ export function getEffectivePaymentStatus(record: UserPaymentRecord | null | und
   if (!record) return 'unpaid';
   if (record.role === 'ADMIN') return 'paid';
 
-  // Check 48-Hour Free Trial
+  // Check 24-Hour Free Trial
   if (record.is_free_trial || record.trial_expires_at) {
     const trialExp = record.trial_expires_at ? new Date(record.trial_expires_at).getTime() : 0;
     if (trialExp > 0) {
@@ -149,7 +149,7 @@ export function getEffectivePaymentStatus(record: UserPaymentRecord | null | und
         record.has_completed_trial = true;
         record.is_free_trial = false;
         record.payment_status = 'expired';
-        return 'expired'; // Completed 48 hours -> blocked!
+        return 'expired'; // Completed 24 hours -> blocked!
       }
     }
   }
@@ -167,7 +167,7 @@ export function getEffectivePaymentStatus(record: UserPaymentRecord | null | und
 }
 
 /**
- * Grants or retrieves a 48-hour free trial for a user upon login
+ * Grants or retrieves a 24-hour free trial for a user upon login
  */
 export function startOrGet48HourFreeTrial(params: {
   userId?: string | null;
@@ -177,7 +177,7 @@ export function startOrGet48HourFreeTrial(params: {
 }): UserPaymentRecord {
   const existing = getUserPaymentStatus({ userId: params.userId, email: params.email });
   if (existing) {
-    // If user already consumed their 48 hours: blocked!
+    // If user already consumed their 24 hours: blocked!
     if (existing.has_completed_trial) {
       existing.payment_status = 'expired';
       return existing;
@@ -443,3 +443,19 @@ export function verifySubscriptionToken(token: string, secret: string): any | nu
     return null;
   }
 }
+
+/**
+ * Retrieves all payment transactions correlating to a specific user (by userId or email)
+ */
+export function getUserTransactions(identifier: { userId?: string; email?: string }): PaymentTransactionRecord[] {
+  const { userId, email } = identifier;
+  const cleanEmail = (email || '').toLowerCase().trim();
+  const cleanUserId = (userId || '').toLowerCase().trim();
+  if (!cleanEmail && !cleanUserId) return [];
+  return transactions.filter((t) => {
+    const matchEmail = cleanEmail && t.customerEmail?.toLowerCase().trim() === cleanEmail;
+    const matchUserId = cleanUserId && t.userId?.toLowerCase().trim() === cleanUserId;
+    return Boolean(matchEmail || matchUserId);
+  });
+}
+

@@ -1,5 +1,62 @@
+import fs from 'fs';
+import path from 'path';
 import { getSupabaseAdmin, isSupabaseConfigured } from './supabase';
 import { UserPaymentRecord, PaymentTransactionRecord } from './paymentStore';
+
+const DATA_DIR = path.join(process.cwd(), 'data');
+const PROJECTS_FILE = path.join(DATA_DIR, 'projects_store.json');
+const TRANSACTIONS_FILE = path.join(DATA_DIR, 'transactions_store.json');
+
+function ensureDataDir() {
+  if (!fs.existsSync(DATA_DIR)) {
+    try {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    } catch {}
+  }
+}
+
+function readLocalProjects(): DbProjectRecord[] {
+  ensureDataDir();
+  if (!fs.existsSync(PROJECTS_FILE)) return [];
+  try {
+    const raw = fs.readFileSync(PROJECTS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalProjects(projects: DbProjectRecord[]) {
+  ensureDataDir();
+  try {
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(projects, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('Failed to write local projects file:', err);
+  }
+}
+
+function readLocalTransactions(): PaymentTransactionRecord[] {
+  ensureDataDir();
+  if (!fs.existsSync(TRANSACTIONS_FILE)) return [];
+  try {
+    const raw = fs.readFileSync(TRANSACTIONS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalTransactions(txs: PaymentTransactionRecord[]) {
+  ensureDataDir();
+  try {
+    fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(txs, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('Failed to write local transactions file:', err);
+  }
+}
+
 
 export interface DbUserRecord extends UserPaymentRecord {
   password_hash?: string;
@@ -167,43 +224,66 @@ export async function deleteUserInDb(userId: string): Promise<boolean> {
  * 4. Save project to Supabase
  */
 export async function saveProjectInDb(project: DbProjectRecord): Promise<DbProjectRecord | null> {
-  const admin = getSupabaseAdmin();
-  if (!admin || !project.id) return null;
+  if (!project.id) return null;
 
+  const payload: DbProjectRecord = {
+    id: project.id,
+    user_id: project.user_id || 'anonymous',
+    user_email: project.user_email || undefined,
+    name: project.name || 'Untitled Project',
+    data: project.data,
+    thumbnail: project.thumbnail || undefined,
+    updated_at: new Date().toISOString(),
+  };
+
+  // 1. Always persist to local file store
   try {
-    const payload = {
-      id: project.id,
-      user_id: project.user_id || 'anonymous',
-      user_email: project.user_email || null,
-      name: project.name || 'Untitled Project',
-      data: project.data,
-      thumbnail: project.thumbnail || null,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { data, error } = await admin
-      .from('projects')
-      .upsert(payload, { onConflict: 'id' })
-      .select('*')
-      .single();
-
-    if (error) {
-      console.warn('[SupabaseDb] saveProjectInDb error:', error.message);
-      return null;
+    const local = readLocalProjects();
+    const existingIdx = local.findIndex((p) => p.id === payload.id);
+    if (existingIdx >= 0) {
+      local[existingIdx] = payload;
+    } else {
+      local.unshift(payload);
     }
-    return data as DbProjectRecord;
-  } catch (err: any) {
-    console.warn('[SupabaseDb] saveProjectInDb exception:', err.message);
-    return null;
+    writeLocalProjects(local);
+  } catch (e) {
+    console.warn('Local project store notice:', e);
   }
+
+  // 2. Sync to Supabase Cloud if reachable
+  const admin = getSupabaseAdmin();
+  if (admin) {
+    try {
+      const { data, error } = await admin
+        .from('projects')
+        .upsert(payload, { onConflict: 'id' })
+        .select('*')
+        .single();
+
+      if (!error && data) {
+        return data as DbProjectRecord;
+      }
+    } catch (err: any) {
+      console.warn('[SupabaseDb] saveProjectInDb cloud notice:', err.message);
+    }
+  }
+
+  return payload;
 }
 
 /**
  * 5. Get user projects from Supabase
  */
 export async function getUserProjectsFromDb(userId: string, userEmail?: string): Promise<DbProjectRecord[]> {
+  const localList = readLocalProjects().filter((p) => {
+    const matchUser = userId && p.user_id === userId;
+    const matchEmail = userEmail && p.user_email?.toLowerCase() === userEmail.toLowerCase();
+    const isAnon = (!userId || userId === 'guest') && (p.user_id === 'guest' || p.user_id === 'anonymous');
+    return Boolean(matchUser || matchEmail || isAnon);
+  });
+
   const admin = getSupabaseAdmin();
-  if (!admin) return [];
+  if (!admin) return localList;
 
   try {
     let query = admin.from('projects').select('*');
@@ -217,15 +297,19 @@ export async function getUserProjectsFromDb(userId: string, userEmail?: string):
     }
 
     const { data, error } = await query.order('updated_at', { ascending: false });
-    if (error) {
-      console.warn('[SupabaseDb] getUserProjectsFromDb error:', error.message);
-      return [];
+    if (!error && data && data.length > 0) {
+      const mergedMap = new Map<string, DbProjectRecord>();
+      for (const row of data as DbProjectRecord[]) mergedMap.set(row.id, row);
+      for (const p of localList) {
+        if (!mergedMap.has(p.id)) mergedMap.set(p.id, p);
+      }
+      return Array.from(mergedMap.values());
     }
-    return (data as DbProjectRecord[]) || [];
   } catch (err: any) {
-    console.warn('[SupabaseDb] getUserProjectsFromDb exception:', err.message);
-    return [];
+    console.warn('[SupabaseDb] getUserProjectsFromDb cloud notice:', err.message);
   }
+
+  return localList;
 }
 
 /**
@@ -293,6 +377,53 @@ export async function saveTransactionInDb(tx: PaymentTransactionRecord): Promise
 /**
  * 8. Get all transactions from Supabase
  */
+
+/**
+ * 8b. Get user-specific transactions/orders from Supabase
+ */
+export async function getUserTransactionsFromDb(userId?: string, userEmail?: string): Promise<PaymentTransactionRecord[]> {
+  const admin = getSupabaseAdmin();
+  if (!admin || (!userId && !userEmail)) return [];
+
+  try {
+    let query = admin.from('payment_transactions').select('*');
+    if (userId && userEmail) {
+      query = query.or('user_id.eq.' + userId + ',customer_email.ilike.' + userEmail);
+    } else if (userId) {
+      query = query.eq('user_id', userId);
+    } else if (userEmail) {
+      query = query.ilike('customer_email', userEmail);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('[SupabaseDb] getUserTransactionsFromDb error:', error.message);
+      return [];
+    }
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      orderId: row.order_id,
+      paymentId: row.payment_id,
+      userId: row.user_id,
+      customerName: row.customer_name,
+      customerEmail: row.customer_email,
+      planId: row.plan_id,
+      planName: row.plan_name,
+      amount: Number(row.amount),
+      gateway: row.gateway || 'cashfree',
+      status: row.status,
+      paymentMethod: row.payment_method,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      rawEvent: row.raw_event,
+    }));
+  } catch (err: any) {
+    console.warn('[SupabaseDb] getUserTransactionsFromDb exception:', err.message);
+    return [];
+  }
+}
+
 export async function getAllTransactionsFromDb(): Promise<PaymentTransactionRecord[]> {
   const admin = getSupabaseAdmin();
   if (!admin) return [];

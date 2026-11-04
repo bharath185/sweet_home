@@ -17,6 +17,7 @@ import {
   ArrowRight,
   FileCode2,
   Search,
+  Save,
 } from 'lucide-react';
 import { HomePlan, User } from '../types/plan';
 import {
@@ -133,7 +134,7 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
               <FolderOpen className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold tracking-tight">DecoFrog 3D Project Center</h2>
+              <div className="flex items-center gap-2 mb-0.5"><div className="bg-gradient-to-b from-white to-amber-50/40 px-2.5 py-1 rounded-xl border border-amber-300/40 shadow-xs ring-1 ring-amber-400/25 inline-flex items-center"><img src="/decofrog-logo.jpg" alt="DecoFrog 3D" className="h-5.5 w-auto object-contain" /></div><span className="text-xs font-bold text-slate-700 dark:text-slate-300">Project Center</span></div>
               <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 {currentUser?.name ? `Signed in as ${currentUser.name}` : 'Saved Architectural Projects'}
               </p>
@@ -264,18 +265,34 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
                     <Building className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold">No saved projects found</h3>
+                    <h3 className="text-sm font-bold">No saved design history yet</h3>
                     <p className={`text-xs mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                      Choose one of our pre-defined starter houses to begin your 3D design journey!
+                      Save your current room layout into Design History, or load a popular furnished starter house!
                     </p>
                   </div>
-                  <button
-                    onClick={() => setActiveTab('new')}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-xs inline-flex items-center gap-2 cursor-pointer"
-                  >
-                    <Sparkles className="w-4 h-4 text-amber-300" />
-                    <span>Choose Starter House</span>
-                  </button>
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        onSaveNewProject({
+                          ...currentPlan,
+                          name: currentPlan.name && currentPlan.name !== 'Custom Home Plan' ? currentPlan.name : 'Living & Dining Suite Design',
+                        });
+                      }}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-bold transition shadow-md inline-flex items-center gap-2 cursor-pointer"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>Save Current Room Design</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('new')}
+                      className={`px-4 py-2 rounded-xl border text-xs font-bold transition inline-flex items-center gap-2 cursor-pointer ${
+                        isDark ? 'bg-slate-800 hover:bg-slate-700 text-white border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300'
+                      }`}
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      <span>Browse Starter Houses</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">

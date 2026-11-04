@@ -4,7 +4,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://3dstudio.prigenix.com'),
-  title: 'DecoForge 3D — Professional 2D Floor Plans & Real-Time 3D Studio',
+  title: 'DecoFrog 3D — Professional 2D Floor Plans & Real-Time 3D Studio',
   description:
     'Design precision 2D CAD floor plans, customize parametric furniture, and walk through architectural spaces in real-time 3D WebGL.',
   keywords: [
@@ -15,19 +15,19 @@ export const metadata: Metadata = {
     'Sweet Home 3D online',
     '3D walking tour',
   ],
-  authors: [{ name: 'DecoForge 3D Architecture' }],
+  authors: [{ name: 'DecoFrog 3D Architecture' }],
   openGraph: {
-    title: 'DecoForge 3D — Professional 2D Floor Plans & Real-Time 3D Studio',
+    title: 'DecoFrog 3D — Professional 2D Floor Plans & Real-Time 3D Studio',
     description:
       'Design precision 2D CAD floor plans, customize parametric furniture, and walk through architectural spaces in real-time 3D WebGL.',
     url: 'https://3dstudio.prigenix.com',
-    siteName: 'DecoForge 3D Studio',
+    siteName: 'DecoFrog 3D Studio',
     images: [
       {
         url: '/templates/villa.jpg',
         width: 1200,
         height: 630,
-        alt: 'DecoForge 3D Architectural Visualization Studio',
+        alt: 'DecoFrog 3D Architectural Visualization Studio',
       },
     ],
     locale: 'en_US',
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'DecoForge 3D — Professional 2D Floor Plans & Real-Time 3D Studio',
+    title: 'DecoFrog 3D — Professional 2D Floor Plans & Real-Time 3D Studio',
     description:
       'Design precision 2D CAD floor plans, customize parametric furniture, and walk through architectural spaces in real-time 3D WebGL.',
     images: ['/templates/villa.jpg'],

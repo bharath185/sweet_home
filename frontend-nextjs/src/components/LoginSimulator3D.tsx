@@ -794,7 +794,7 @@ export const LoginSimulator3D: React.FC = () => {
   }, []);
 
   return (
-    <div className="relative w-full h-[520px] sm:h-[580px] lg:h-[660px] flex items-center justify-center select-none overflow-visible touch-none">
+    <div className="relative w-full h-[380px] sm:h-[460px] lg:h-[calc(100vh-140px)] max-h-[580px] flex items-center justify-center select-none overflow-visible touch-none">
       <div ref={mountRef} className="w-full h-full" />
     </div>
   );

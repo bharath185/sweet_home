@@ -83,7 +83,9 @@ import { message } from 'antd';
 import { CostEstimatorModal } from '../components/CostEstimatorModal';
 import { AiStylerModal } from '../components/AiStylerModal';
 import UpgradeModal from '../components/UpgradeModal';
+import { SubscriptionPaywall } from '../components/SubscriptionPaywall';
 import { ProjectManagerModal } from '../components/ProjectManagerModal';
+import { OrderHistoryModal } from '../components/OrderHistoryModal';
 import { SelectDemoModal } from '../components/SelectDemoModal';
 import { GuidedFloorPlanBuilderModal } from '../components/GuidedFloorPlanBuilderModal';
 import { SmartAlignmentBar } from '../components/SmartAlignmentBar';
@@ -342,12 +344,26 @@ export default function HomeStudioPage() {
 
   // User Project Persistence & Starter Houses Modal
   const [isProjectManagerOpen, setIsProjectManagerOpen] = useState<boolean>(false);
+  const [isOrderHistoryOpen, setIsOrderHistoryOpen] = useState<boolean>(false);
   const [projectManagerTab, setProjectManagerTab] = useState<'projects' | 'new' | 'import'>('projects');
   const [userProjects, setUserProjects] = useState<UserProjectSummary[]>([]);
   const [isSelectDemoModalOpen, setIsSelectDemoModalOpen] = useState<boolean>(false);
   const [isGuidedBuilderOpen, setIsGuidedBuilderOpen] = useState<boolean>(false);
   const [isCustomerGuideOpen, setIsCustomerGuideOpen] = useState<boolean>(false);
   const directImportFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Global Keyboard Shortcuts (Ctrl+O for Design History)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
+        e.preventDefault();
+        setProjectManagerTab('projects');
+        setIsProjectManagerOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // First-time onboarding only: Shown once initially, never on every page refresh
   useEffect(() => {
@@ -371,6 +387,19 @@ export default function HomeStudioPage() {
     setUpgradeHighlight(highlight);
     setIsUpgradeModalOpen(true);
   }, []);
+
+  // Real-time access check: if 24-hr trial expires while studio is open, automatically lock studio
+  useEffect(() => {
+    if (!currentUser || currentUser.role === 'ADMIN') return;
+    const checkExpiration = () => {
+      const active = hasActiveSubscription(currentUser);
+      if (!active) {
+        setCurrentUser((prev) => (prev ? { ...prev, payment_status: 'expired', subscriptionStatus: 'inactive' } : null));
+      }
+    };
+    const interval = setInterval(checkExpiration, 30000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
 
   // Return URL & Server Payment Verification States
   const [isVerifyingReturnPayment, setIsVerifyingReturnPayment] = useState<boolean>(false);
@@ -1206,7 +1235,7 @@ export default function HomeStudioPage() {
               </div>
               <h2 className="text-xl font-bold text-white mb-2">Payment Verified!</h2>
               <p className="text-sm text-emerald-300 mb-4">{returnVerificationMsg}</p>
-              <p className="text-xs text-slate-400">Opening DecoFrog 3D Studio...</p>
+              <div className="flex items-center justify-center gap-2 mb-2"><div className="bg-white px-2 py-0.5 rounded-lg inline-flex items-center"><img src="/decofrog-logo.jpg" alt="DecoFrog 3D" className="h-5 w-auto object-contain" /></div><span className="text-xs text-slate-400">Opening Studio...</span></div>
             </>
           )}
 
@@ -1236,7 +1265,7 @@ export default function HomeStudioPage() {
       <div className="h-screen w-screen bg-[#080d19] flex items-center justify-center text-slate-400">
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-          <span>Loading {APP_NAME}...</span>
+          <div className="bg-white px-2.5 py-1 rounded-xl shadow-md inline-flex items-center"><img src="/decofrog-logo.jpg" alt="DecoFrog 3D" className="h-6 w-auto object-contain" /></div>
         </div>
       </div>
     );
@@ -1252,6 +1281,24 @@ export default function HomeStudioPage() {
           setUsers((prev) => [newUser, ...prev]);
           handleLoginSuccess(newUser);
         }}
+      />
+    );
+  }
+
+  // 4. Blocked: 24-hour Free Trial expired or Pass expired -> Show Paywall with packs
+  const isAllowedStudio = currentUser.role === 'ADMIN' || hasActiveSubscription(currentUser);
+  if (!isAllowedStudio) {
+    return (
+      <SubscriptionPaywall
+        currentUser={currentUser}
+        status={(currentUser.payment_status as any) || 'expired'}
+        isRefreshing={isRefreshingStatus}
+        onRefreshStatus={refreshUserPaymentStatus}
+        onUserUpdated={(updatedUser) => {
+          setCurrentUser(updatedUser);
+          localStorage.setItem('decofrog_current_user', JSON.stringify(updatedUser));
+        }}
+        onLogout={handleLogout}
       />
     );
   }
@@ -1281,6 +1328,11 @@ export default function HomeStudioPage() {
         currentUser={currentUser}
         onLogout={handleLogout}
         onOpenUpgradeModal={() => handleOpenUpgrade()}
+        onOpenProjects={() => {
+          setProjectManagerTab('projects');
+          setIsProjectManagerOpen(true);
+        }}
+        onOpenOrderHistory={() => setIsOrderHistoryOpen(true)}
         onOpenWelcomeGuide={() => setIsCustomerGuideOpen(true)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
@@ -1425,6 +1477,11 @@ export default function HomeStudioPage() {
               hasSelection={Boolean(selectedId)}
               onSave={handleSave}
               isSaving={isSaving}
+              onOpenProjects={() => {
+                setProjectManagerTab('projects');
+                setIsProjectManagerOpen(true);
+              }}
+              onOpenOrderHistory={() => setIsOrderHistoryOpen(true)}
               onOpenGuidedBuilder={() => setIsGuidedBuilderOpen(true)}
               onOpenBlueprintModal={() => setIsBlueprintModalOpen(true)}
               onExportJson={() => exportPlanAsJson(plan, currentUser)}
@@ -1942,6 +1999,15 @@ export default function HomeStudioPage() {
         }}
         initialFeatureHighlight={upgradeHighlight}
         theme={theme}
+      />
+
+      {/* Order & Purchase History Modal */}
+      <OrderHistoryModal
+        isOpen={isOrderHistoryOpen}
+        onClose={() => setIsOrderHistoryOpen(false)}
+        currentUser={currentUser}
+        theme={theme}
+        onUpgrade={() => handleOpenUpgrade()}
       />
 
       {/* Project Center Modal: User Saved Projects, Pre-defined Starter Houses & JSON Import/Export */}

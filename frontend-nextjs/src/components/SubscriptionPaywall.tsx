@@ -170,7 +170,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white tracking-tight">DecoFrog 3D Studio</h2>
+              <div className="relative group inline-block mb-1.5"><div className="relative inline-flex items-center"><img src="/decofrog-logo-dark.png" alt="DecoFrog 3D" className="h-8 w-auto object-contain drop-shadow-md" /></div></div>
               <p className="text-xs text-slate-400">
                 Logged in as <span className="text-indigo-400 font-medium">{currentUser.name}</span> ({currentUser.email})
               </p>
@@ -252,13 +252,13 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
             <Clock className="w-6 h-6 shrink-0 mt-0.5 text-orange-400" />
             <div className="flex-1">
               <h3 className="font-semibold text-base text-orange-200">
-                {currentUser.hasCompletedTrial || currentUser.isFreeTrial || currentUser.plan === 'trial_48h'
-                  ? '48-Hour Free Trial Completed'
+                {currentUser.hasCompletedTrial || currentUser.isFreeTrial || currentUser.plan === 'trial_48h' || currentUser.plan === 'trial_24h'
+                  ? '24-Hour Free Trial Completed'
                   : 'Subscription Pass Expired'}
               </h3>
               <p className="text-sm text-orange-300/80 mt-1">
-                {currentUser.hasCompletedTrial || currentUser.isFreeTrial || currentUser.plan === 'trial_48h'
-                  ? 'Your complimentary 48-hour free trial has ended. Select an access pass below to continue drafting multi-floor blueprints, 3D walkthroughs, and project exports.'
+                {currentUser.hasCompletedTrial || currentUser.isFreeTrial || currentUser.plan === 'trial_48h' || currentUser.plan === 'trial_24h'
+                  ? 'Your complimentary 24-hour free trial has ended. Select an access pass below to continue drafting multi-floor blueprints, 3D walkthroughs, and project exports.'
                   : `Your pass expired ${formattedExpiry ? `on ${formattedExpiry}` : 'recently'}. Please renew your pass to regain access to multi-floor drafting, raytrace renders, and blueprints.`}
               </p>
               <div className="mt-3">
@@ -311,7 +311,7 @@ export const SubscriptionPaywall: React.FC<SubscriptionPaywallProps> = ({
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{pricingPlans.trial_2days?.badge || 'Quick Test'}</span>
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
-                  {pricingPlans.trial_2days?.durationDays ? `${pricingPlans.trial_2days.durationDays} Days` : '48 Hours'}
+                  {pricingPlans.trial_2days?.durationDays ? `${pricingPlans.trial_2days.durationDays} Days` : '24 Hours'}
                 </span>
               </div>
               <h3 className="text-lg font-bold text-white">{pricingPlans.trial_2days?.name || '24-Hour Pass'}</h3>

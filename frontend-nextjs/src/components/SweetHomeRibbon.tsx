@@ -34,6 +34,8 @@ import {
   DragOutlined,
   FileTextOutlined,
   FileImageOutlined,
+  FolderOpenOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import {
   MousePointer,
@@ -96,6 +98,8 @@ interface SweetHomeRibbonProps {
   onToggleSnapToGrid?: () => void;
   theme?: 'dark' | 'light';
   onOpenWelcomeGuide?: () => void;
+  onOpenProjects?: () => void;
+  onOpenOrderHistory?: () => void;
 }
 
 export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
@@ -131,6 +135,8 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
   onToggleSnapToGrid,
   theme = 'light',
   onOpenWelcomeGuide,
+  onOpenProjects,
+  onOpenOrderHistory,
 }) => {
   // Default to compact ribbon to maximize viewport area for design
   const [isRibbonCollapsed, setIsRibbonCollapsed] = useState(true);
@@ -143,6 +149,12 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
       label: 'New Custom Home Plan (+Create)',
       icon: <PlusOutlined />,
       onClick: onOpenGuidedBuilder,
+    },
+    {
+      key: 'open_projects',
+      label: 'Open Projects & Design History (Ctrl+O)',
+      icon: <FolderOpenOutlined />,
+      onClick: onOpenProjects,
     },
     {
       key: 'import_scan',
@@ -170,6 +182,15 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
       label: 'Import Plan from JSON',
       icon: <UploadOutlined />,
       onClick: onImportJson,
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: 'order_history',
+      label: 'Order & Purchase History',
+      icon: <HistoryOutlined />,
+      onClick: onOpenOrderHistory,
     },
   ];
 
@@ -352,7 +373,7 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
                 {plan.name || 'My house.sh3d'}
               </span>
               <span className="text-[10px] text-slate-400 font-normal hidden xl:inline">
-                - {APP_NAME} Studio
+                <img src="/decofrog-logo.jpg" alt="DecoFrog 3D" className="h-4 w-auto object-contain rounded bg-white px-1 py-0.5 inline-block ml-1" />
               </span>
             </div>
 
@@ -482,6 +503,20 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
                     <span className="text-[9px] font-semibold mt-1">+ Create</span>
                   </Button>
                 </Tooltip>
+
+                {onOpenProjects && (
+                  <Tooltip title="Open Saved Projects & Design History (Ctrl+O)">
+                    <Button
+                      type="text"
+                      size="small"
+                      onClick={onOpenProjects}
+                      className="flex flex-col items-center justify-center h-10 px-2 leading-none"
+                    >
+                      <FolderOpenOutlined style={{ fontSize: 14, color: '#6366f1' }} />
+                      <span className="text-[9px] font-semibold mt-1">Projects</span>
+                    </Button>
+                  </Tooltip>
+                )}
 
                 <Tooltip title="Import Blueprint Scan Overlay or Project CAD">
                   <Button

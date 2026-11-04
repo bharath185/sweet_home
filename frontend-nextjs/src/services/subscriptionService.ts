@@ -128,11 +128,12 @@ export async function fetchActivePricingPlans(): Promise<Record<string, PlanDeta
 }
 
 /**
- * Checks if the user is currently on an active 48-Hour Free Trial.
+ * Checks if the user is currently on an active 24-Hour Free Trial.
  */
 export function isUserOnFreeTrial(user: User | null): boolean {
   if (!user || user.role === 'ADMIN') return false;
-  if (!user.isFreeTrial && !user.trialExpiresAt && user.plan !== 'trial_48h') return false;
+  if (user.payment_status === 'paid' && !user.isFreeTrial) return false;
+  if (!user.isFreeTrial && !user.trialExpiresAt && user.plan !== 'trial_24h' && user.plan !== 'trial_48h') return false;
 
   const trialExpStr = user.trialExpiresAt || user.subscriptionExpiresAt || user.expires_at;
   if (!trialExpStr) return false;
@@ -141,32 +142,82 @@ export function isUserOnFreeTrial(user: User | null): boolean {
 }
 
 /**
- * Checks if the user has already finished/exhausted their 48-Hour Free Trial.
+ * Checks if the user has already finished/exhausted their 24-Hour Free Trial.
  */
 export function hasCompletedFreeTrial(user: User | null): boolean {
+  if (!user || user.role === 'ADMIN') return false;
+  if (user.payment_status === 'paid' && !user.isFreeTrial) {
+    const paidExp = user.subscriptionExpiresAt || user.expires_at;
+    if (!paidExp) return false;
+    const expTime = new Date(paidExp).getTime();
+    if (!isNaN(expTime) && Date.now() < expTime) return false;
+  }
+  if (user.hasCompletedTrial) return true;
+  const trialExpStr = user.trialExpiresAt || user.expires_at;
+  if (trialExpStr) {
+    const trialExp = new Date(trialExpStr).getTime();
+    if (!isNaN(trialExp) && Date.now() >= trialExp) return true;
+  }
   return false;
 }
 
 /**
- * Checks if the user has an active pass or active 48-hour free trial that has not expired.
- * All features are fully accessible with 100% all-access pass for all users.
+ * Checks if the user has an active pass or active 24-hour free trial that has not expired.
+ * Automatically blocks access once the 24-hour trial or pass has expired.
  */
 export function hasActiveSubscription(user: User | null): boolean {
-  return true; // 100% unrestricted all-access pass for all users
+  if (!user) return false;
+  if (user.role === 'ADMIN') return true;
+
+  // 1. Paid active pass
+  if (user.payment_status === 'paid' && !user.isFreeTrial) {
+    const paidExpStr = user.subscriptionExpiresAt || user.expires_at;
+    if (!paidExpStr) return true; // Lifetime
+    const paidExp = new Date(paidExpStr).getTime();
+    return !isNaN(paidExp) && Date.now() < paidExp;
+  }
+
+  // 2. Active 24-hour Free Trial
+  if (isUserOnFreeTrial(user)) {
+    return true;
+  }
+
+  // 3. Subscription Token validation
+  if (typeof window !== 'undefined') {
+    try {
+      const token = localStorage.getItem('decofrog_sub_token') || localStorage.getItem('sweethome_sub_token');
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[0]));
+        if (payload.role === 'ADMIN' || (payload.expiresAt && Date.now() < payload.expiresAt)) {
+          return true;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 24 hours expired or no active subscription -> blocked!
+  return false;
 }
 
 /**
- * Access check: All studio features are accessible when the user has an active pass or free trial.
+ * Access check: All studio features are accessible only when user has active pass or active free trial.
  */
 export function canAccessFeature(user: User | null, _feature?: string): boolean {
-  return true;
+  return hasActiveSubscription(user);
 }
 
 /**
  * Resolves the effective subscription tier for the user.
  */
 export function getUserSubscriptionTier(user: User | null): 'FREE' | 'TRIAL' | 'PRO' | 'ENTERPRISE' {
-  return 'PRO';
+  if (user?.role === 'ADMIN') return 'ENTERPRISE';
+  if (user?.payment_status === 'paid' && !user.isFreeTrial && hasActiveSubscription(user)) {
+    return 'PRO';
+  }
+  if (isUserOnFreeTrial(user)) {
+    return 'TRIAL';
+  }
+  return 'FREE';
 }
 
 /**
@@ -349,3 +400,5 @@ export function saveSubscriptionLocally(
 
   return updated;
 }
+
+export const start24HourFreeTrialLocally = start48HourFreeTrialLocally;
