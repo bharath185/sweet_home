@@ -1042,7 +1042,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
               </div>
 
               {/* Segmented Auth Mode Switcher (Sign In vs Create Account) - Larger Clear Font */}
-              <div className={`flex bg-[#080f1e]/90 p-1 rounded-xl border border-slate-700/60 ${authMode === 'signin' ? 'mb-4 sm:mb-4.5' : 'mb-1 sm:mb-1.5'}`}>
+              <div className={`flex bg-[#080f1e]/90 p-1 rounded-xl border border-slate-700/60 ${authMode === 'signin' ? 'mb-3 sm:mb-3.5' : 'mb-3 sm:mb-3.5'}`}>
                 <button
                   type="button"
                   onClick={() => {
@@ -1092,8 +1092,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                 </div>
               )}
 
-              {/* GOOGLE SOCIAL LOGIN (PERSONAL @GMAIL.COM ONLY) */}
-              <div className={authMode === 'signin' ? 'mb-2 sm:mb-2.5' : 'mb-1 sm:mb-1.5'}>
+              {/* GOOGLE SOCIAL LOGIN (SIGN IN TAB ONLY) */}
+              {authMode === 'signin' && (
+                <div className="mb-2 sm:mb-2.5">
                 <div className="flex flex-col items-center">
                   <div id="googleSignInBtn" className="flex justify-center w-full min-h-[32px]">
                     <button
@@ -1130,11 +1131,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                   </div>
                   <div className="relative flex justify-center text-[9px] uppercase font-bold tracking-wider">
                     <span className="bg-[#0e1930] px-3 text-slate-400">
-                      or {authMode === 'signin' ? 'sign in with credentials' : 'create account below'}
+                      or sign in with credentials
                     </span>
                   </div>
                 </div>
-              </div>
+                </div>
+              )}
             </div>
 
             {/* MIDDLE SECTION: Uniformly Spaced Form Body (Locked Height) */}
