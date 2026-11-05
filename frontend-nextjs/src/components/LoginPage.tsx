@@ -970,6 +970,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
         backgroundBlendMode: 'multiply',
       }}
     >
+            {/* Top Corner: Royale Play Wall Texture Switcher Badge */}
+      <div className="absolute top-3 sm:top-4 right-3 sm:right-6 z-30 h-8 flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md px-3 py-1 rounded-full border border-slate-700/80 shadow-xl text-[10px]">
+        <Palette className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+        <span className="text-[10px] font-semibold text-slate-300 mr-0.5 hidden sm:inline">Royale Play Wall:</span>
+        <div className="flex items-center gap-1.5">
+          {ROYALE_PLAY_TEXTURES.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTexture(t.url)}
+              title={t.name}
+              type="button"
+              className={`w-4 h-4 rounded-full border transition-transform cursor-pointer outline-none focus:outline-none [-webkit-tap-highlight-color:transparent] ${
+                activeTexture === t.url ? 'scale-125 ring-2 ring-white border-transparent' : 'border-slate-500/60 opacity-70 hover:opacity-100'
+              }`}
+              style={{ backgroundColor: t.accentColor }}
+            />
+          ))}
+        </div>
+      </div>
+
       {/* Interior Lighting Vignette & Ambient Radial Glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-32 -left-32 w-[600px] h-[600px] bg-gradient-to-br from-amber-500/10 via-sky-500/10 to-indigo-600/10 rounded-full blur-[140px]" />
@@ -991,24 +1011,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
         {/* RIGHT COLUMN: Royale Play Wall Control + Fixed-Dimension Auth Card */}
         <div className="order-1 lg:order-2 lg:col-span-5 flex flex-col items-center lg:items-end w-full">
           
-          {/* Royale Play Wall Texture Switcher Badge (EXACTLY 1 cm / 38px gap to login card) */}
-          <div className="h-8 flex items-center gap-1.5 bg-slate-900/85 backdrop-blur-md px-3 py-1 rounded-full border border-slate-700/70 shadow-lg text-[10px] mb-3 z-20 self-center lg:self-end">
-            <Palette className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="text-[10px] font-semibold text-slate-300 mr-0.5 hidden sm:inline">Royale Play Wall:</span>
-            <div className="flex items-center gap-1.5">
-              {ROYALE_PLAY_TEXTURES.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setActiveTexture(t.url)}
-                  title={t.name}
-                  className={`w-4 h-4 rounded-full border transition-transform cursor-pointer ${
-                    activeTexture === t.url ? 'scale-125 ring-2 ring-white border-transparent' : 'border-slate-500/60 opacity-70 hover:opacity-100'
-                  }`}
-                  style={{ backgroundColor: t.accentColor }}
-                />
-              ))}
-            </div>
-          </div>
+          
 
           {/* Luxury Slate Glassmorphism Auth Card - IDENTICAL FIXED DESIGN, WIDTH & HEIGHT */}
           <div className="relative w-full max-w-[480px] sm:max-w-[490px] h-[545px] sm:h-[555px] max-h-[calc(100vh-92px)] bg-gradient-to-b from-[#111e38]/95 to-[#0b1426]/95 border border-slate-700/70 rounded-3xl p-3.5 sm:p-4 shadow-2xl shadow-black/50 backdrop-blur-xl flex flex-col justify-between overflow-hidden">
@@ -1248,7 +1251,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                 <div className="w-full">
                   {!isOtpSent ? (
                     /* STEP 1: Full Name, Mobile Number (Mandatory), Email & Password */
-                    <form onSubmit={isGmailDomain ? handleRegisterWithGmail : handleSendSignUpOtp} className="space-y-2 sm:space-y-2.5">
+                    <form onSubmit={handleSendSignUpOtp} className="space-y-2 sm:space-y-2.5">
                       {/* Row 1: Full Name & Mobile Number in 2 Columns */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {/* Full Name */}
@@ -1310,15 +1313,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                           <label className="block text-[10px] font-bold text-slate-300 tracking-wide uppercase">
                             Email Address
                           </label>
-                          {isGmailDomain ? (
-                            <span className="text-[8.5px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3" />
-                              <span>Instant Access (No OTP)</span>
-                            </span>
-                          ) : cleanSignUpEmail && cleanSignUpEmail.includes('@') ? (
+                          {cleanSignUpEmail && cleanSignUpEmail.includes('@') ? (
                             <span className="text-[8.5px] text-sky-400 bg-sky-500/10 border border-sky-500/20 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
                               <Mail className="w-3 h-3" />
-                              <span>Requires 6-Digit OTP</span>
+                              <span>Requires 6-Digit Email OTP</span>
                             </span>
                           ) : null}
                         </div>
@@ -1412,58 +1410,31 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                         </label>
                       </div>
 
-                      {/* Dynamic Submit CTA Button */}
-                      {isGmailDomain ? (
-                        <button
-                          type="submit"
-                          disabled={
-                            isLoading ||
-                            signUpPhone.length !== 10 ||
-                            signUpName.trim().length < 2 ||
-                            !signUpEmail.trim() ||
-                            signUpPassword.length < 6
-                          }
-                          className="w-full h-9.5 sm:h-10 rounded-xl text-sm font-bold text-white shadow-xl transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 via-teal-600 to-indigo-600 hover:from-emerald-400 hover:via-teal-500 hover:to-indigo-500 shadow-emerald-500/25 cursor-pointer disabled:opacity-50 mt-0.5"
-                        >
-                          {isLoading ? (
-                            <>
-                              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                              <span>Creating Studio Account...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="w-4 h-4 text-emerald-200" />
-                              <span>Create Account & Start 24h Free Pass</span>
-                              <ArrowRight className="w-4 h-4" />
-                            </>
-                          )}
-                        </button>
-                      ) : (
-                        <button
-                          type="submit"
-                          disabled={
-                            isLoading ||
-                            signUpPhone.length !== 10 ||
-                            signUpName.trim().length < 2 ||
-                            !signUpEmail.trim() ||
-                            signUpPassword.length < 6
-                          }
-                          className="w-full h-9.5 sm:h-10 rounded-xl text-sm font-bold text-white shadow-xl transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-sky-500 via-indigo-600 to-indigo-700 hover:from-sky-400 hover:via-indigo-500 hover:to-indigo-600 shadow-sky-500/25 cursor-pointer disabled:opacity-50 mt-0.5"
-                        >
-                          {isLoading ? (
-                            <>
-                              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                              <span>Dispatching Verification Code...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Mail className="w-4 h-4" />
-                              <span>Send 6-Digit Email Verification Code</span>
-                              <ArrowRight className="w-4 h-4" />
-                            </>
-                          )}
-                        </button>
-                      )}
+                      {/* Submit CTA Button - Always Dispatches 6-Digit Verification Code */}
+                      <button
+                        type="submit"
+                        disabled={
+                          isLoading ||
+                          signUpPhone.length !== 10 ||
+                          signUpName.trim().length < 2 ||
+                          !signUpEmail.trim() ||
+                          signUpPassword.length < 6
+                        }
+                        className="w-full h-9.5 sm:h-10 rounded-xl text-sm font-bold text-white shadow-xl transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-sky-500 via-indigo-600 to-indigo-700 hover:from-sky-400 hover:via-indigo-500 hover:to-indigo-600 shadow-sky-500/25 cursor-pointer disabled:opacity-50 mt-0.5"
+                      >
+                        {isLoading ? (
+                          <>
+                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span>Dispatching Verification Code...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="w-4 h-4" />
+                            <span>Send 6-Digit Email Verification Code</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
                     </form>
                   ) : (
                     /* STEP 2: Enter OTP & Set/Generate Password */
@@ -1646,7 +1617,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                 <span className="text-[8.5px] uppercase font-semibold tracking-wider text-slate-500 select-none">
                   Powered by
                 </span>
-                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-900/90 border border-slate-700/70 shadow-xs hover:border-slate-600 transition-colors select-none">
+                <a
+                  href="https://visualrendered.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Interior Design Services | Luxury Home Interiors"
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-900/90 border border-slate-700/70 shadow-xs hover:border-sky-500/70 hover:bg-slate-800 transition-all select-none no-underline outline-none focus:outline-none focus:ring-0 focus-visible:outline-none active:outline-none [-webkit-tap-highlight-color:transparent]"
+                >
                   <span className="flex items-center justify-center w-3.5 h-3.5 rounded bg-gradient-to-tr from-sky-500 via-indigo-500 to-cyan-400 p-[0.5px] shadow-xs">
                     <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -1660,7 +1637,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, availableUsers = 
                       Rendered
                     </span>
                   </span>
-                </div>
+                </a>
               </div>
             </div>
 
