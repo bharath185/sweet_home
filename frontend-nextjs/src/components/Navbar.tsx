@@ -19,6 +19,7 @@ import {
   Loader2,
   FolderOpen,
   Receipt,
+  Lock,
   ChevronDown,
 } from 'lucide-react';
 import { HomePlan, UserRole, User } from '../types/plan';

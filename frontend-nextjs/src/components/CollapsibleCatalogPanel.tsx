@@ -35,6 +35,8 @@ interface CollapsibleCatalogPanelProps {
   onToggleOpen?: () => void;
   onToggle?: () => void;
   theme?: 'dark' | 'light';
+  isReadOnly?: boolean;
+  onReadOnlyAttempt?: () => void;
 }
 
 const CATALOG_CATEGORIES = [
@@ -61,6 +63,8 @@ export const CollapsibleCatalogPanel: React.FC<CollapsibleCatalogPanelProps> = (
   onToggleOpen,
   onToggle,
   theme = 'light',
+  isReadOnly = false,
+  onReadOnlyAttempt,
 }) => {
   const toggleHandler = onToggleOpen || onToggle || (() => {});
   const [search, setSearch] = useState('');
@@ -213,6 +217,11 @@ export const CollapsibleCatalogPanel: React.FC<CollapsibleCatalogPanelProps> = (
                   key={item.id}
                   draggable
                   onDragStart={(e) => {
+                    if (isReadOnly) {
+                      e.preventDefault();
+                      onReadOnlyAttempt?.();
+                      return;
+                    }
                     e.dataTransfer.setData('application/json', JSON.stringify(item));
                   }}
                   className={`p-2 rounded-xl border transition flex items-center justify-between gap-2.5 group cursor-grab active:cursor-grabbing ${
@@ -246,6 +255,10 @@ export const CollapsibleCatalogPanel: React.FC<CollapsibleCatalogPanelProps> = (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (isReadOnly) {
+                        onReadOnlyAttempt?.();
+                        return;
+                      }
                       onAddItem?.(item);
                     }}
                     className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-600 text-indigo-600 hover:text-white dark:text-indigo-400 flex items-center justify-center transition shrink-0 cursor-pointer"

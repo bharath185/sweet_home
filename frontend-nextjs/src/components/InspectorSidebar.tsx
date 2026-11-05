@@ -101,6 +101,8 @@ interface InspectorSidebarProps {
   onImportJson?: () => void;
   onToggleFurnitureList?: () => void;
   isFurnitureListOpen?: boolean;
+  isReadOnly?: boolean;
+  onReadOnlyAttempt?: () => void;
 }
 
 interface MaterialSwatch {
@@ -242,7 +244,17 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
   onImportJson,
   onToggleFurnitureList,
   isFurnitureListOpen = false,
+  isReadOnly = false,
+  onReadOnlyAttempt,
 }) => {
+  const originalOnUpdatePlan = onUpdatePlan;
+  onUpdatePlan = (updated: HomePlan) => {
+    if (isReadOnly) {
+      onReadOnlyAttempt?.();
+      return;
+    }
+    originalOnUpdatePlan(updated);
+  };
   const selectedFurniture = plan.furniture.find((f) => f.id === selectedId);
   const selectedWall = plan.walls.find((w) => w.id === selectedId);
   const selectedRoom = plan.rooms.find((r) => r.id === selectedId);

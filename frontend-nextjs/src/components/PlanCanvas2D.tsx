@@ -57,6 +57,8 @@ interface PlanCanvas2DProps {
   onZoomChange?: (scale: number) => void;
   fitTrigger?: number;
   onOpenTemplates?: () => void;
+  isReadOnly?: boolean;
+  onReadOnlyAttempt?: () => void;
 }
 
 export type ToolMode =
@@ -129,6 +131,8 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   onZoomChange,
   fitTrigger,
   onOpenTemplates,
+  isReadOnly = false,
+  onReadOnlyAttempt,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const blueprintImgRef = useRef<HTMLImageElement | null>(null);
@@ -500,6 +504,10 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedId) {
           e.preventDefault();
+          if (isReadOnly) {
+            onReadOnlyAttempt?.();
+            return;
+          }
           handleDeleteSelected();
         }
       } else if (e.code === 'Escape') {
@@ -2334,6 +2342,92 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
   // Mouse Down Event Handler
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // READ-ONLY / VIEW-ONLY MODE INTERCEPTION:
+    // Allows camera panning, floor navigation, walking tour, and item inspection,
+    // but strictly blocks moving furniture, drawing walls/rooms, or modifying the plan.
+    if (isReadOnly) {
+      if (e.button === 1 || toolMode === 'pan' || isSpacePressed || e.altKey) {
+        setIsPanning(true);
+        setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+        if (selectedId) onSelectId(null);
+        return;
+      }
+
+      const rect = canvasRef.current!.getBoundingClientRect();
+      const clickScreenX = e.clientX - rect.left;
+      const clickScreenY = e.clientY - rect.top;
+
+      // Allow 2D Visitor Dragging for 3D walkthrough
+      if (isWalkMode && visitorCamera && (visitorCamera.floorLevel === undefined || visitorCamera.floorLevel === activeFloor)) {
+        const vScreen = planToScreen(visitorCamera.x, visitorCamera.y, activeFloor);
+        const vDistScreen = Math.hypot(clickScreenX - vScreen.x, clickScreenY - vScreen.y);
+        if (vDistScreen <= 24) {
+          setIsDraggingVisitor(true);
+          return;
+        }
+      }
+
+      // Allow Side-by-Side Floor Selection
+      if (canvasFloorMode === 'sideBySide') {
+        for (const fl of allFloors) {
+          const centerScreen = planToScreen(0, 0, fl.level);
+          const boxW = 860 * scale;
+          const boxH = 720 * scale;
+          if (Math.abs(clickScreenX - centerScreen.x) <= boxW / 2 && Math.abs(clickScreenY - centerScreen.y) <= boxH / 2) {
+            if (activeFloor !== fl.level && onFloorChange) {
+              onFloorChange(fl.level);
+            }
+            break;
+          }
+        }
+      }
+
+      // If user is trying to use a drawing tool in read-only mode: prompt upgrade
+      if (toolMode !== 'select') {
+        onReadOnlyAttempt?.();
+        setToolMode('select');
+        return;
+      }
+
+      // In select mode: Allow selecting items to view properties, but NEVER drag or modify
+      const clickPlan = screenToPlan(e.clientX, e.clientY);
+      const hitFurniture = floorFurniture.slice().reverse().find((f) => {
+        const dx = clickPlan.x - f.x;
+        const dy = clickPlan.y - f.y;
+        const cos = Math.cos(-(f.angle || 0));
+        const sin = Math.sin(-(f.angle || 0));
+        const lx = dx * cos - dy * sin;
+        const ly = dx * sin + dy * cos;
+        return Math.abs(lx) <= f.width / 2 && Math.abs(ly) <= f.depth / 2;
+      });
+      if (hitFurniture) {
+        setSelectedIds([hitFurniture.id]);
+        onSelectId(hitFurniture.id);
+        return;
+      }
+
+      const hitWall = floorWalls.find((w) => {
+        const d = pointToSegmentDist(clickPlan.x, clickPlan.y, w.xStart, w.yStart, w.xEnd, w.yEnd);
+        return d <= (w.thickness || 15) / 2 + 10;
+      });
+      if (hitWall) {
+        setSelectedIds([hitWall.id]);
+        onSelectId(hitWall.id);
+        return;
+      }
+
+      const hitRoom = floorRooms.find((r) => isPointInPolygon(clickPlan, r.points));
+      if (hitRoom) {
+        setSelectedIds([hitRoom.id]);
+        onSelectId(hitRoom.id);
+        return;
+      }
+
+      setSelectedIds([]);
+      onSelectId(null);
+      return;
+    }
+
     if (e.button === 1 || toolMode === 'pan' || isSpacePressed || e.altKey) {
       setIsPanning(true);
       setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });

@@ -78,6 +78,7 @@ import {
   AlertCircle,
   Compass,
   Laptop,
+  Lock,
 } from 'lucide-react';
 import { message } from 'antd';
 import { CostEstimatorModal } from '../components/CostEstimatorModal';
@@ -457,6 +458,7 @@ export default function HomeStudioPage() {
   const hasPass = hasActiveSubscription(currentUser);
   const remainingPassText = getSubscriptionRemainingText(currentUser);
   const isProOrAdmin = hasPass;
+  const isPassExpired = Boolean(currentUser && currentUser.role !== 'ADMIN' && !hasPass);
 
   // Ref-Backed Undo / Redo History Stack
   const historyRef = useRef<HomePlan[]>([JSON.parse(JSON.stringify(sampleDefaultPlan))]);
@@ -1285,23 +1287,7 @@ export default function HomeStudioPage() {
     );
   }
 
-  // 4. Blocked: 24-hour Free Trial expired or Pass expired -> Show Paywall with packs
-  const isAllowedStudio = currentUser.role === 'ADMIN' || hasActiveSubscription(currentUser);
-  if (!isAllowedStudio) {
-    return (
-      <SubscriptionPaywall
-        currentUser={currentUser}
-        status={(currentUser.payment_status as any) || 'expired'}
-        isRefreshing={isRefreshingStatus}
-        onRefreshStatus={refreshUserPaymentStatus}
-        onUserUpdated={(updatedUser) => {
-          setCurrentUser(updatedUser);
-          localStorage.setItem('decofrog_current_user', JSON.stringify(updatedUser));
-        }}
-        onLogout={handleLogout}
-      />
-    );
-  }
+  // 4. Studio Access Mode: Active Pass -> Full Design Studio | Expired Pass -> View-Only Mode (isPassExpired declared at line 460)
 
   // Guard: If regular user somehow has dashboard as activeView, redirect immediately to Design Studio
   if (currentUser.role !== 'ADMIN' && activeView === 'dashboard') {
@@ -1353,6 +1339,37 @@ export default function HomeStudioPage() {
           >
             Continue anyway
           </button>
+        </div>
+      )}
+
+      {/* Pass Expired Banner: View-Only Studio Mode */}
+      {currentUser.role !== 'ADMIN' && isPassExpired && (
+        <div className={`px-4 py-2 flex items-center justify-between text-xs z-30 select-none border-b transition-colors shadow-xs ${
+          isDark
+            ? 'bg-gradient-to-r from-rose-950/80 via-slate-900 to-amber-950/80 border-rose-500/30 text-rose-200'
+            : 'bg-gradient-to-r from-rose-50 via-amber-50 to-orange-50 border-rose-200 text-rose-900'
+        }`}>
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-400 shrink-0">
+              <Lock className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2">
+              <span className="font-bold tracking-wide">Pass Expired — View-Only Mode:</span>
+              <span className="opacity-90 font-normal">
+                You can explore, navigate, and inspect 3D rooms & 2D floor plans. Designing, adding furniture, and drawing walls are locked.
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 ml-3">
+            <button
+              onClick={() => handleOpenUpgrade('Renew pass to unlock full design & drafting tools')}
+              className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 hover:from-amber-400 hover:via-rose-400 hover:to-indigo-500 text-white font-extrabold text-[11px] shadow-sm transition flex items-center gap-1.5 cursor-pointer uppercase tracking-wider"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+              <span>Renew Pass to Design</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -1585,6 +1602,8 @@ export default function HomeStudioPage() {
                             setProjectManagerTab('new');
                             setIsProjectManagerOpen(true);
                           }}
+                          isReadOnly={isPassExpired}
+                          onReadOnlyAttempt={() => handleOpenUpgrade('Renew pass to unlock full drafting & design tools')}
                         />
                       </div>
 
@@ -1609,6 +1628,8 @@ export default function HomeStudioPage() {
                           isPro={isProOrAdmin}
                           targetRoomToFocus={targetRoomToFocus}
                           fitTrigger={fitTrigger}
+                          isReadOnly={isPassExpired}
+                          onReadOnlyAttempt={() => handleOpenUpgrade('Renew pass to unlock 3D design & placement')}
                         />
                       </div>
                     </div>
@@ -1658,10 +1679,12 @@ export default function HomeStudioPage() {
                         onZoomChange={setStudioZoomScale}
                         fitTrigger={fitTrigger}
                         onOpenTemplates={() => {
-                          setProjectManagerTab('new');
-                          setIsProjectManagerOpen(true);
-                        }}
-                      />
+                            setProjectManagerTab('new');
+                            setIsProjectManagerOpen(true);
+                          }}
+                          isReadOnly={isPassExpired}
+                          onReadOnlyAttempt={() => handleOpenUpgrade('Renew pass to unlock full drafting & design tools')}
+                        />
                     </div>
 
                     {/* Draggable Divider Bar */}
@@ -1696,7 +1719,9 @@ export default function HomeStudioPage() {
                         isPro={isProOrAdmin}
                         targetRoomToFocus={targetRoomToFocus}
                         fitTrigger={fitTrigger}
-                      />
+                          isReadOnly={isPassExpired}
+                          onReadOnlyAttempt={() => handleOpenUpgrade('Renew pass to unlock 3D design & placement')}
+                        />
                     </div>
                   </div>
                 )}
@@ -1723,7 +1748,9 @@ export default function HomeStudioPage() {
                       isPro={isProOrAdmin}
                       targetRoomToFocus={targetRoomToFocus}
                       fitTrigger={fitTrigger}
-                    />
+                          isReadOnly={isPassExpired}
+                          onReadOnlyAttempt={() => handleOpenUpgrade('Renew pass to unlock 3D design & placement')}
+                        />
 
                     {/* Minimized Floor Plan Navigator in Tour Mode */}
                     <MinimizedFloorPlan
@@ -1789,10 +1816,12 @@ export default function HomeStudioPage() {
                         onZoomChange={setStudioZoomScale}
                         fitTrigger={fitTrigger}
                         onOpenTemplates={() => {
-                          setProjectManagerTab('new');
-                          setIsProjectManagerOpen(true);
-                        }}
-                      />
+                            setProjectManagerTab('new');
+                            setIsProjectManagerOpen(true);
+                          }}
+                          isReadOnly={isPassExpired}
+                          onReadOnlyAttempt={() => handleOpenUpgrade('Renew pass to unlock full drafting & design tools')}
+                        />
                     </div>
                   </div>
                 )}
@@ -1819,7 +1848,9 @@ export default function HomeStudioPage() {
                       isPro={isProOrAdmin}
                       targetRoomToFocus={targetRoomToFocus}
                       fitTrigger={fitTrigger}
-                    />
+                          isReadOnly={isPassExpired}
+                          onReadOnlyAttempt={() => handleOpenUpgrade('Renew pass to unlock 3D design & placement')}
+                        />
                   </div>
                 )}
               </div>

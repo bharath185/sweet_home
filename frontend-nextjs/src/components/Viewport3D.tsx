@@ -92,6 +92,8 @@ interface Viewport3DProps {
   onUpgradePrompt?: (featureName: string) => void;
   isPro?: boolean;
   fitTrigger?: number;
+  isReadOnly?: boolean;
+  onReadOnlyAttempt?: () => void;
 }
 
 const CM = 0.01;
@@ -452,7 +454,13 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   onUpgradePrompt,
   isPro = true,
   fitTrigger,
+  isReadOnly = false,
+  onReadOnlyAttempt,
 }) => {
+  const isReadOnlyRef = useRef(isReadOnly);
+  isReadOnlyRef.current = isReadOnly;
+  const onReadOnlyAttemptRef = useRef(onReadOnlyAttempt);
+  onReadOnlyAttemptRef.current = onReadOnlyAttempt;
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -821,6 +829,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const updatePlan = onUpdatePlanRef.current;
 
       if (selId && updatePlan) {
+        if (isReadOnlyRef.current && (e.code === 'KeyR' || e.code === 'Equal' || e.code === 'NumpadAdd' || e.code === 'Minus' || e.code === 'NumpadSubtract' || e.code === 'Delete' || e.code === 'Backspace')) {
+          e.preventDefault();
+          onReadOnlyAttemptRef.current?.();
+          return;
+        }
         const item = currentPlan.furniture.find((f) => f.id === selId);
         if (item) {
           // 'R' -> Rotate 45 deg
@@ -2641,6 +2654,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
         // If user pressed on the ALREADY selected furniture item, prepare for possible 3D translation drag
         if (hit.type === 'furniture' && selectedIdRef.current === hit.id) {
+          if (isReadOnlyRef.current) {
+            canDragSelectedItemRef.current = false;
+            onReadOnlyAttemptRef.current?.();
+            return;
+          }
           const item = planRef.current.furniture.find((f) => f.id === hit.id);
           if (item && !item.isLocked) {
             canDragSelectedItemRef.current = true;
@@ -2891,6 +2909,10 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOverCatalog(false);
+    if (isReadOnlyRef.current) {
+      onReadOnlyAttemptRef.current?.();
+      return;
+    }
 
     let itemData: CatalogItem | null = null;
     try {

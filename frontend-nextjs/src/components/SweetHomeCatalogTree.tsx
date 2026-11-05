@@ -31,6 +31,7 @@ import {
   Box,
 } from 'lucide-react';
 import { CatalogItem } from '../types/plan';
+import { Lock } from 'lucide-react';
 import { CatalogThumbnail } from './CatalogThumbnail';
 
 const { Text } = Typography;
@@ -39,6 +40,8 @@ interface SweetHomeCatalogTreeProps {
   catalog: CatalogItem[];
   onAddItem: (item: CatalogItem) => void;
   theme?: 'dark' | 'light';
+  isReadOnly?: boolean;
+  onReadOnlyAttempt?: () => void;
 }
 
 interface CategoryDefinition {
@@ -155,7 +158,16 @@ export const SweetHomeCatalogTree: React.FC<SweetHomeCatalogTreeProps> = ({
   catalog,
   onAddItem,
   theme = 'light',
+  isReadOnly = false,
+  onReadOnlyAttempt,
 }) => {
+  const handleItemAdd = (item: CatalogItem) => {
+    if (isReadOnly) {
+      onReadOnlyAttempt?.();
+      return;
+    }
+    handleItemAdd(item);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCollapseKeys, setActiveCollapseKeys] = useState<string[]>(['living', 'bedroom']);
   const isDark = theme === 'dark';
@@ -238,7 +250,7 @@ export const SweetHomeCatalogTree: React.FC<SweetHomeCatalogTreeProps> = ({
                   key={item.id}
                   draggable
                   onDragStart={(e) => handleDragStart(e, item)}
-                  onClick={() => onAddItem(item)}
+                  onClick={() => handleItemAdd(item)}
                   className={`flex items-center justify-between p-1.5 rounded transition cursor-pointer border ${
                     isDark
                       ? 'bg-slate-900/40 border-slate-800 hover:border-indigo-500 hover:bg-slate-800'
@@ -267,7 +279,7 @@ export const SweetHomeCatalogTree: React.FC<SweetHomeCatalogTreeProps> = ({
                       icon={<PlusOutlined style={{ fontSize: 10 }} />}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onAddItem(item);
+                        handleItemAdd(item);
                       }}
                       style={{
                         width: 22,
@@ -366,7 +378,7 @@ export const SweetHomeCatalogTree: React.FC<SweetHomeCatalogTreeProps> = ({
                     key={item.id}
                     draggable
                     onDragStart={(e) => handleDragStart(e, item)}
-                    onClick={() => onAddItem(item)}
+                    onClick={() => handleItemAdd(item)}
                     className={`flex items-center justify-between p-1.5 rounded transition cursor-pointer border ${
                       isDark
                         ? 'bg-slate-900/60 border-slate-800 hover:border-indigo-500 hover:bg-slate-800'
@@ -395,7 +407,7 @@ export const SweetHomeCatalogTree: React.FC<SweetHomeCatalogTreeProps> = ({
                         icon={<PlusOutlined style={{ fontSize: 10 }} />}
                         onClick={(e) => {
                           e.stopPropagation();
-                          onAddItem(item);
+                          handleItemAdd(item);
                         }}
                         style={{
                           width: 22,

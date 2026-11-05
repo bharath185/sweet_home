@@ -100,6 +100,8 @@ interface SweetHomeRibbonProps {
   onOpenWelcomeGuide?: () => void;
   onOpenProjects?: () => void;
   onOpenOrderHistory?: () => void;
+  isReadOnly?: boolean;
+  onReadOnlyAttempt?: () => void;
 }
 
 export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
@@ -137,7 +139,25 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
   onOpenWelcomeGuide,
   onOpenProjects,
   onOpenOrderHistory,
+  isReadOnly = false,
+  onReadOnlyAttempt,
 }) => {
+  const handleToolModeClick = (mode: ToolMode) => {
+    if (isReadOnly && mode !== 'select' && mode !== 'pan') {
+      onReadOnlyAttempt?.();
+      return;
+    }
+    onSelectToolMode(activeToolMode === mode ? 'select' : mode);
+  };
+
+  const handleProtectedAction = (action?: () => void) => {
+    if (isReadOnly) {
+      onReadOnlyAttempt?.();
+      return;
+    }
+    action?.();
+  };
+
   // Default to compact ribbon to maximize viewport area for design
   const [isRibbonCollapsed, setIsRibbonCollapsed] = useState(true);
   const isDark = theme === 'dark';
@@ -555,7 +575,7 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
                   <Button
                     type={activeToolMode === 'drawWall' ? 'primary' : 'text'}
                     size="small"
-                    onClick={() => onSelectToolMode(activeToolMode === 'drawWall' ? 'select' : 'drawWall')}
+                    onClick={() => handleToolModeClick(activeToolMode === 'drawWall' ? 'select' : 'drawWall')}
                     className="flex flex-col items-center justify-center h-10 px-2 leading-none"
                     style={activeToolMode === 'drawWall' ? { backgroundColor: '#4f46e5' } : undefined}
                   >
@@ -568,7 +588,7 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
                   <Button
                     type={activeToolMode === 'drawRoom' ? 'primary' : 'text'}
                     size="small"
-                    onClick={() => onSelectToolMode(activeToolMode === 'drawRoom' ? 'select' : 'drawRoom')}
+                    onClick={() => handleToolModeClick(activeToolMode === 'drawRoom' ? 'select' : 'drawRoom')}
                     className="flex flex-col items-center justify-center h-10 px-2 leading-none"
                     style={activeToolMode === 'drawRoom' ? { backgroundColor: '#4f46e5' } : undefined}
                   >
@@ -581,7 +601,7 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
                   <Button
                     type={activeToolMode === 'door' ? 'primary' : 'text'}
                     size="small"
-                    onClick={() => onSelectToolMode(activeToolMode === 'door' ? 'select' : 'door')}
+                    onClick={() => handleToolModeClick(activeToolMode === 'door' ? 'select' : 'door')}
                     className="flex flex-col items-center justify-center h-10 px-2 leading-none"
                     style={activeToolMode === 'door' ? { backgroundColor: '#10b981' } : undefined}
                   >
@@ -594,7 +614,7 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
                   <Button
                     type={activeToolMode === 'window' ? 'primary' : 'text'}
                     size="small"
-                    onClick={() => onSelectToolMode(activeToolMode === 'window' ? 'select' : 'window')}
+                    onClick={() => handleToolModeClick(activeToolMode === 'window' ? 'select' : 'window')}
                     className="flex flex-col items-center justify-center h-10 px-2 leading-none"
                     style={activeToolMode === 'window' ? { backgroundColor: '#06b6d4' } : undefined}
                   >
@@ -607,7 +627,7 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
                   <Button
                     type={activeToolMode === 'stairs' ? 'primary' : 'text'}
                     size="small"
-                    onClick={() => onSelectToolMode(activeToolMode === 'stairs' ? 'select' : 'stairs')}
+                    onClick={() => handleToolModeClick(activeToolMode === 'stairs' ? 'select' : 'stairs')}
                     className="flex flex-col items-center justify-center h-10 px-2 leading-none"
                     style={activeToolMode === 'stairs' ? { backgroundColor: '#d97706' } : undefined}
                   >
@@ -729,7 +749,7 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
                   <Button
                     type={activeToolMode === 'dimension' ? 'primary' : 'text'}
                     size="small"
-                    onClick={() => onSelectToolMode('dimension')}
+                    onClick={() => handleToolModeClick('dimension')}
                     className="flex flex-col items-center justify-center h-10 px-2 leading-none"
                     style={activeToolMode === 'dimension' ? { backgroundColor: '#4f46e5' } : undefined}
                   >
@@ -742,7 +762,7 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
                   <Button
                     type={activeToolMode === 'text' ? 'primary' : 'text'}
                     size="small"
-                    onClick={() => onSelectToolMode('text')}
+                    onClick={() => handleToolModeClick('text')}
                     className="flex flex-col items-center justify-center h-10 px-2 leading-none"
                     style={activeToolMode === 'text' ? { backgroundColor: '#4f46e5' } : undefined}
                   >

@@ -39,6 +39,8 @@ interface SweetHomeFurnitureTableProps {
   onDeleteItem: (id: string) => void;
   collidingItemIds?: Set<string>;
   theme?: 'dark' | 'light';
+  isReadOnly?: boolean;
+  onReadOnlyAttempt?: () => void;
 }
 
 const CATEGORY_TAG_COLORS: Record<string, string> = {
@@ -62,7 +64,16 @@ export const SweetHomeFurnitureTable: React.FC<SweetHomeFurnitureTableProps> = (
   onDeleteItem,
   collidingItemIds = new Set(),
   theme = 'light',
+  isReadOnly = false,
+  onReadOnlyAttempt,
 }) => {
+  const handleProtectedAction = (fn: () => void) => {
+    if (isReadOnly) {
+      onReadOnlyAttempt?.();
+      return;
+    }
+    fn();
+  };
   const [search, setSearch] = useState('');
   const isDark = theme === 'dark';
 
@@ -216,7 +227,7 @@ export const SweetHomeFurnitureTable: React.FC<SweetHomeFurnitureTableProps> = (
                     <UnlockOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />
                   )
                 }
-                onClick={() => onToggleLock(record.id)}
+                onClick={() => handleProtectedAction(() => onToggleLock(record.id))}
                 style={{ width: 20, height: 20, minWidth: 20, padding: 0 }}
               />
             </Tooltip>
@@ -224,7 +235,7 @@ export const SweetHomeFurnitureTable: React.FC<SweetHomeFurnitureTableProps> = (
             <Popconfirm
               title="Delete item?"
               description={`Delete ${record.name}?`}
-              onConfirm={() => onDeleteItem(record.id)}
+              onConfirm={() => handleProtectedAction(() => onDeleteItem(record.id))}
               okText="Yes"
               cancelText="No"
               placement="topRight"
