@@ -185,14 +185,17 @@ export default function HomeStudioPage() {
       }
     }
 
-    const savedLayout = localStorage.getItem('decofrog_last_layout') as 'sweethome' | 'split' | '2d' | '3d' | 'tour' | null;
-    if (savedLayout && ['sweethome', 'split', '2d', '3d', 'tour'].includes(savedLayout)) {
+    const savedLayout = localStorage.getItem('decofrog_last_layout') as 'sweethome' | 'split' | 'live' | '2d' | '3d' | 'tour' | null;
+    if (savedLayout && ['sweethome', 'split', 'live', '2d', '3d', 'tour'].includes(savedLayout)) {
       setStudioLayout(savedLayout);
       if (savedLayout === '2d') {
         setActiveView('2d');
       } else if (savedLayout === '3d') {
         setActiveView('3d');
         setCameraMode3D('aerial');
+      } else if (savedLayout === 'live') {
+        setActiveView('3d');
+        setCameraMode3D('topdown');
       } else if (savedLayout === 'tour') {
         setActiveView('split');
         setCameraMode3D('visitor');
@@ -231,7 +234,7 @@ export default function HomeStudioPage() {
   }, []);
 
   const [activeView, setActiveView] = useState<'split' | '2d' | '3d' | 'customer' | 'dashboard'>('split');
-  const [studioLayout, setStudioLayout] = useState<'sweethome' | 'split' | '2d' | '3d' | 'tour'>('sweethome');
+  const [studioLayout, setStudioLayout] = useState<'sweethome' | 'split' | 'live' | '2d' | '3d' | 'tour'>('sweethome');
   const [cadToolMode, setCadToolMode] = useState<ToolMode>('select');
   const [targetRoomToFocus, setTargetRoomToFocus] = useState<Room | null>(null);
   const [catalogCategoryRequest, setCatalogCategoryRequest] = useState<string | undefined>(undefined);
@@ -241,7 +244,7 @@ export default function HomeStudioPage() {
   const [floorMode, setFloorMode] = useState<'single' | 'sideBySide' | 'stacked'>('single');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(true);
-  const [cameraMode3D, setCameraMode3D] = useState<'aerial' | 'visitor'>('aerial');
+  const [cameraMode3D, setCameraMode3D] = useState<'aerial' | 'visitor' | 'topdown'>('aerial');
   const [visitorCamera, setVisitorCamera] = useState<VisitorCameraState>({
     x: 0,
     y: 0,
@@ -1514,6 +1517,9 @@ export default function HomeStudioPage() {
                 } else if (newLayout === '3d') {
                   setActiveView('3d');
                   setCameraMode3D('aerial');
+                } else if (newLayout === 'live') {
+                  setActiveView('3d');
+                  setCameraMode3D('topdown');
                 } else if (newLayout === 'tour') {
                   setActiveView('split');
                   setCameraMode3D('visitor');

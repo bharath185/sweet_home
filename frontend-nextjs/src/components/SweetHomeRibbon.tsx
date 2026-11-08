@@ -36,6 +36,7 @@ import {
   FileImageOutlined,
   FolderOpenOutlined,
   HistoryOutlined,
+  VideoCameraOutlined,
 } from '@ant-design/icons';
 import {
   MousePointer,
@@ -90,9 +91,9 @@ interface SweetHomeRibbonProps {
   onToggleLayer?: (layerKey: keyof CADLayers) => void;
   onOpenAiStyler: () => void;
   onOpenCostEstimator: () => void;
-  studioLayout: 'sweethome' | 'split' | '2d' | '3d' | 'tour';
-  onLayoutChange: (layout: 'sweethome' | 'split' | '2d' | '3d' | 'tour') => void;
-  cameraMode3D: 'aerial' | 'visitor';
+  studioLayout: 'sweethome' | 'split' | 'live' | '2d' | '3d' | 'tour';
+  onLayoutChange: (layout: 'sweethome' | 'split' | 'live' | '2d' | '3d' | 'tour') => void;
+  cameraMode3D: 'aerial' | 'visitor' | 'topdown';
   onToggleCameraMode3D: () => void;
   snapToGrid?: boolean;
   onToggleSnapToGrid?: () => void;
@@ -294,6 +295,14 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
 
   const view3dMenuItems: MenuProps['items'] = [
     {
+      key: 'toggle_live',
+      label: cameraMode3D === 'topdown' ? 'Current: Live 3D Top-Down' : 'Switch to Live 3D Plan',
+      icon: <VideoCameraOutlined />,
+      onClick: () => {
+        onLayoutChange('live');
+      },
+    },
+    {
       key: 'toggle_orbit',
       label: cameraMode3D === 'aerial' ? 'Current: 3D Aerial Orbit' : 'Switch to Aerial Orbit',
       icon: <EyeOutlined />,
@@ -465,6 +474,11 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
                   label: <span className="text-[10px] font-semibold">Split</span>,
                   value: 'split',
                   icon: <SplitCellsOutlined style={{ fontSize: 11 }} />,
+                },
+                {
+                  label: <span className="text-[10px] font-semibold">Live 3D</span>,
+                  value: 'live',
+                  icon: <VideoCameraOutlined style={{ fontSize: 11 }} />,
                 },
                 {
                   label: <span className="text-[10px] font-semibold">3D</span>,

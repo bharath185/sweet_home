@@ -81,7 +81,7 @@ export const CustomerPresentationView: React.FC<CustomerPresentationViewProps> =
   onUpdateVisitorCamera,
 }) => {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(plan.rooms[0] || null);
-  const [tourCameraMode, setTourCameraMode] = useState<'visitor' | 'aerial'>('visitor');
+  const [tourCameraMode, setTourCameraMode] = useState<'visitor' | 'aerial' | 'topdown'>('visitor');
   const [tourToolMode, setTourToolMode] = useState<'select' | 'pan'>('select');
   const [showSpecDrawer, setShowSpecDrawer] = useState<boolean>(false);
   const [showAddCatalogDrawer, setShowAddCatalogDrawer] = useState<boolean>(false);

@@ -82,8 +82,8 @@ interface Viewport3DProps {
   onFloorModeChange?: (mode: 'single' | 'sideBySide' | 'stacked') => void;
   onFloorChange?: (floor: number) => void;
   isSplitMode?: boolean;
-  cameraModeProp?: 'aerial' | 'visitor';
-  onCameraModeChangeProp?: (mode: 'aerial' | 'visitor') => void;
+  cameraModeProp?: 'aerial' | 'visitor' | 'topdown';
+  onCameraModeChangeProp?: (mode: 'aerial' | 'visitor' | 'topdown') => void;
   targetRoomToFocus?: Room | null;
   toolModeProp?: 'select' | 'pan';
   onToolModeChangeProp?: (mode: 'select' | 'pan') => void;
@@ -526,18 +526,27 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const nextFloorGapRef = useRef(nextFloorGap);
   nextFloorGapRef.current = nextFloorGap;
 
-  // Camera Mode: 'aerial' (orbit) or 'visitor' (human eye level walkthrough at 160cm)
-  const [localCameraMode, setLocalCameraMode] = useState<'aerial' | 'visitor'>(
+  // Camera Mode: 'aerial' (orbit), 'visitor' (walkthrough), or 'topdown' (Image 3: Live 3D Top-Down Mode)
+  const [localCameraMode, setLocalCameraMode] = useState<'aerial' | 'visitor' | 'topdown'>(
     cameraModeProp || (isCustomerMode ? 'visitor' : 'aerial')
   );
   const cameraMode = cameraModeProp !== undefined ? cameraModeProp : localCameraMode;
-  const setCameraMode = (m: 'aerial' | 'visitor') => {
+  const setCameraMode = (m: 'aerial' | 'visitor' | 'topdown') => {
     setLocalCameraMode(m);
     if (m === 'visitor') {
       onSelectId(null);
+    } else if (m === 'topdown') {
+      sphericalRef.current.theta = 0;
+      sphericalRef.current.phi = 0.06;
+      sphericalRef.current.radius = Math.max(14, sphericalRef.current.radius);
     }
     if (onCameraModeChangeProp) onCameraModeChangeProp(m);
   };
+
+  // Top-down Live 3D Room Badges (Image 3 Parity)
+  const [topDownLabels, setTopDownLabels] = useState<
+    { id: string; name: string; dim: string; x: number; y: number }[]
+  >([]);
 
   // Top View / Ceiling Toggle: false = removed top (interior cutaway view), true = keep top (enclosed ceiling)
   const [showCeiling, setShowCeiling] = useState<boolean>(false);
@@ -563,12 +572,16 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     }
   }, [visitorCameraProp, cameraMode, onFloorChange]);
 
-  const cameraModeRef = useRef<'aerial' | 'visitor'>('aerial');
+  const cameraModeRef = useRef<'aerial' | 'visitor' | 'topdown'>('aerial');
   cameraModeRef.current = cameraMode;
 
   useEffect(() => {
     if (cameraMode === 'visitor') {
       onSelectId(null);
+    } else if (cameraMode === 'topdown') {
+      sphericalRef.current.theta = 0;
+      sphericalRef.current.phi = 0.06;
+      sphericalRef.current.radius = Math.max(14, sphericalRef.current.radius);
     }
   }, [cameraMode]);
 
@@ -1222,13 +1235,76 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           }
         }
       } else {
-        // Apply Aerial Orbit Camera Position
-        const s = sphericalRef.current;
-        const x = targetRef.current.x + s.radius * Math.sin(s.phi) * Math.sin(s.theta);
-        const y = targetRef.current.y + s.radius * Math.cos(s.phi);
-        const z = targetRef.current.z + s.radius * Math.sin(s.phi) * Math.cos(s.theta);
-        camera.position.set(x, y, z);
-        camera.lookAt(targetRef.current);
+        // Apply Aerial Orbit or Top-Down Camera Position
+        if (mode === 'topdown') {
+          // Strictly lock top-down angle: looking directly down on the floor plan (Image 3 reference)
+          const s = sphericalRef.current;
+          s.phi = 0.06; // ~86.5 degrees steep top-down cutaway
+          s.theta = 0;
+          const x = targetRef.current.x;
+          const y = targetRef.current.y + s.radius * Math.cos(s.phi);
+          const z = targetRef.current.z + s.radius * Math.sin(s.phi);
+          camera.position.set(x, y, z);
+          camera.lookAt(targetRef.current);
+
+          // Update Top-Down 3D Room Badges (Image 3 Parity)
+          if (canvasMountRef.current) {
+            const rect = canvasMountRef.current.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+              const curFloor = activeFloorRef.current ?? 0;
+              const offset = getFloor3DOffset(curFloor);
+              const rooms = planRef.current.rooms.filter((r) => (r.floorLevel ?? 0) === curFloor && r.points.length >= 3);
+              const nextLabels = rooms.map((room) => {
+                const avgX = (room.points.reduce((acc, p) => acc + p.x, 0) / room.points.length) * 0.01 + offset.x;
+                const avgZ = (room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length) * 0.01 + offset.z;
+                const v = new THREE.Vector3(avgX, offset.y + 0.3, avgZ);
+                v.project(camera);
+                const sx = ((v.x + 1) * rect.width) / 2;
+                const sy = ((-v.y + 1) * rect.height) / 2;
+
+                let dim = '';
+                const match = room.name.match(/^(.*?)\s*\(([^)]+)\)$/);
+                let pName = room.name;
+                if (match) {
+                  pName = match[1].trim();
+                  dim = match[2].trim();
+                } else {
+                  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                  room.points.forEach((pt) => {
+                    if (pt.x < minX) minX = pt.x;
+                    if (pt.x > maxX) maxX = pt.x;
+                    if (pt.y < minY) minY = pt.y;
+                    if (pt.y > maxY) maxY = pt.y;
+                  });
+                  const wFt = Math.round((maxX - minX) / 30.48);
+                  const dFt = Math.round((maxY - minY) / 30.48);
+                  if (wFt > 0 && dFt > 0) dim = `${wFt}' × ${dFt}'`;
+                }
+
+                return {
+                  id: room.id,
+                  name: pName,
+                  dim: dim,
+                  x: Math.round(sx),
+                  y: Math.round(sy),
+                };
+              });
+
+              setTopDownLabels((prev) => {
+                if (prev.length !== nextLabels.length) return nextLabels;
+                const hasMoved = nextLabels.some((nl, i) => Math.abs(nl.x - (prev[i]?.x ?? 0)) > 2 || Math.abs(nl.y - (prev[i]?.y ?? 0)) > 2);
+                return hasMoved ? nextLabels : prev;
+              });
+            }
+          }
+        } else {
+          const s = sphericalRef.current;
+          const x = targetRef.current.x + s.radius * Math.sin(s.phi) * Math.sin(s.theta);
+          const y = targetRef.current.y + s.radius * Math.cos(s.phi);
+          const z = targetRef.current.z + s.radius * Math.sin(s.phi) * Math.cos(s.theta);
+          camera.position.set(x, y, z);
+          camera.lookAt(targetRef.current);
+        }
       }
 
       // ----------------------------------------------------
@@ -2641,6 +2717,13 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       return;
     }
 
+    // In Top-Down Live Mode: Any mouse drag is strictly Pan (no 3D orbit tumbling or tilting!)
+    if (cameraModeRef.current === 'topdown') {
+      isPanningRef.current = true;
+      setIsPanningState(true);
+      return;
+    }
+
     // Check if user pressed on 3D furniture or wall item
     if (
       cameraModeRef.current === 'aerial' &&
@@ -2820,6 +2903,13 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         );
         visitorPosRef.current.addScaledVector(right, -dx * panSpeed);
         visitorPosRef.current.addScaledVector(forward, dy * panSpeed);
+      }
+    } else if (cameraMode === 'topdown') {
+      if (isDraggingRef.current || isPanningRef.current) {
+        // Top-Down Live Mode Pan: Move camera target across floor plan smoothly (Pan & Zoom Only)
+        const panSpeed = (sphericalRef.current.radius / 900);
+        targetRef.current.x -= dx * panSpeed;
+        targetRef.current.z -= dy * panSpeed;
       }
     } else {
       if (isDraggingRef.current) {
@@ -3031,6 +3121,10 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         -Math.cos(visitorYawRef.current)
       );
       visitorPosRef.current.addScaledVector(forward, e.deltaY < 0 ? 0.5 : -0.5);
+    } else if (cameraMode === 'topdown') {
+      // Top-Down Live Mode Zoom (Wheel zooms directly in and out)
+      const zoomFactor = e.deltaY < 0 ? 0.88 : 1.14;
+      sphericalRef.current.radius = Math.max(3, Math.min(80, sphericalRef.current.radius * zoomFactor));
     } else {
       // 3D ORBIT VIEW: ZOOM TOWARDS MOUSE CURSOR POSITION
       if (cameraRef.current && canvasMountRef.current) {
@@ -3478,14 +3572,35 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
               </>
             )}
 
-            {/* Camera Mode */}
+            {/* Camera Mode Switcher (Live 3D Top-Down, 3D Orbit, First-Person Walk Tour) */}
             <div className="flex items-center gap-0.5">
+              <button
+                onClick={() => {
+                  sphericalRef.current.theta = 0;
+                  sphericalRef.current.phi = 0.06;
+                  sphericalRef.current.radius = Math.max(14, sphericalRef.current.radius);
+                  setCameraMode('topdown');
+                }}
+                className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer font-bold ${
+                  cameraMode === 'topdown'
+                    ? 'bg-sky-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
+                }`}
+                title="Live 3D Mode (Image 3: Top-Down Plan, Pan & Zoom Only)"
+              >
+                <Layers className="w-3 h-3" />
+                <span>Live 3D</span>
+              </button>
               <button
                 onClick={() => {
                   setCameraMode('aerial');
                 }}
-                className="px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer bg-sky-600 text-white font-bold shadow-2xs"
-                title="Aerial Orbit View"
+                className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer font-bold ${
+                  cameraMode === 'aerial'
+                    ? 'bg-sky-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
+                }`}
+                title="Aerial Orbit View (Rotate & Tilt)"
               >
                 <Rotate3d className="w-3 h-3" />
                 <span>Orbit</span>
@@ -3738,8 +3853,41 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         </div>
       )}
 
+      {/* Top-Down Live 3D Mode Room Badges Overlay & Guidance (Image 3 Parity) */}
+      {cameraMode === 'topdown' && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
+          {topDownLabels.map((lbl) => (
+            <div
+              key={lbl.id}
+              style={{
+                position: 'absolute',
+                left: `${lbl.x}px`,
+                top: `${lbl.y}px`,
+                transform: 'translate(-50%, -50%)',
+              }}
+              className="flex flex-col items-center justify-center px-2.5 py-1 bg-white/95 text-slate-900 rounded-lg shadow-md border border-slate-300/80 backdrop-blur-xs select-none pointer-events-none"
+            >
+              <span className="text-[11px] font-bold tracking-tight text-slate-900 whitespace-nowrap">
+                {lbl.name}
+              </span>
+              {lbl.dim && (
+                <span className="text-[9.5px] font-semibold text-slate-500 whitespace-nowrap">
+                  {lbl.dim}
+                </span>
+              )}
+            </div>
+          ))}
+
+          {/* Controls guidance pill */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white px-3.5 py-1.5 rounded-full text-[11px] font-medium backdrop-blur-md shadow-xl border border-slate-700/80 flex items-center gap-2 pointer-events-none">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Live 3D Mode: Drag to Pan • Wheel to Zoom</span>
+          </div>
+        </div>
+      )}
+
       {/* Floating 3D Pick & Drag / Visitor Instructions Banner (Aerial Mode only, hidden in split/sweethome mode) */}
-      {!isCustomerMode && cameraMode !== 'visitor' && !isSplitMode && (
+      {!isCustomerMode && cameraMode === 'aerial' && !isSplitMode && (
         <div className="absolute bottom-4 left-4 z-10 flex items-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 text-[11px] text-slate-600 pointer-events-none shadow-md">
           <Sparkles className="w-3.5 h-3.5 text-sky-600" />
           <span>

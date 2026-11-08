@@ -947,35 +947,58 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       const expMatch = room.name.match(/^(.*?)\s*\(([^)]+)\)$/);
       if (expMatch) {
         expPrimary = expMatch[1].trim().toUpperCase();
-        expDim = expMatch[2].trim();
+        expDim = expMatch[2].trim().toUpperCase();
       }
-      const expSub = expDim ? `${expDim}  •  ${formatArea(room.areaSquareMeters || 12.5, unit)}` : formatArea(room.areaSquareMeters || 12.5, unit);
+
+      let expDimStr = expDim;
+      if (!expDimStr) {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        room.points.forEach((pt) => {
+          if (pt.x < minX) minX = pt.x;
+          if (pt.x > maxX) maxX = pt.x;
+          if (pt.y < minY) minY = pt.y;
+          if (pt.y > maxY) maxY = pt.y;
+        });
+        const wFt = Math.round((maxX - minX) / 30.48);
+        const dFt = Math.round((maxY - minY) / 30.48);
+        if (wFt > 0 && dFt > 0) {
+          expDimStr = `${wFt}' X ${dFt}'`;
+        } else {
+          expDimStr = formatArea(room.areaSquareMeters || 12.5, unit);
+        }
+      }
 
       ectx.save();
-      ectx.font = 'bold 18px system-ui';
-      const ew1 = ectx.measureText(expPrimary).width;
-      ectx.font = '15px monospace';
-      const ew2 = ectx.measureText(expSub).width;
-      const expBadgeW = Math.max(ew1, ew2) + 32;
-      const expBadgeH = 50;
-
-      ectx.fillStyle = 'rgba(255, 255, 255, 0.94)';
-      ectx.strokeStyle = '#cbd5e1';
-      ectx.lineWidth = 2;
-      ectx.beginPath();
-      ectx.roundRect(roomCenter.x - expBadgeW / 2, roomCenter.y - expBadgeH / 2, expBadgeW, expBadgeH, 8);
-      ectx.fill();
-      ectx.stroke();
-
-      ectx.fillStyle = '#0f172a';
-      ectx.font = 'bold 18px system-ui';
       ectx.textAlign = 'center';
       ectx.textBaseline = 'middle';
-      ectx.fillText(expPrimary, roomCenter.x, roomCenter.y - 11);
+      ectx.lineJoin = 'round';
+      ectx.miterLimit = 2;
 
-      ectx.fillStyle = '#0284c7';
-      ectx.font = 'bold 15px monospace';
-      ectx.fillText(expSub, roomCenter.x, roomCenter.y + 12);
+      // 1. Room Name
+      ectx.font = 'bold 20px system-ui, -apple-system, sans-serif';
+      ectx.strokeStyle = '#ffffff';
+      ectx.lineWidth = 5;
+      ectx.strokeText(expPrimary, roomCenter.x, roomCenter.y - 14);
+      ectx.fillStyle = '#0f172a';
+      ectx.fillText(expPrimary, roomCenter.x, roomCenter.y - 14);
+
+      // 2. Dimension Text
+      ectx.font = 'bold 15px system-ui, monospace';
+      ectx.strokeStyle = '#ffffff';
+      ectx.lineWidth = 4;
+      ectx.strokeText(expDimStr, roomCenter.x, roomCenter.y + 7);
+      ectx.fillStyle = '#334155';
+      ectx.fillText(expDimStr, roomCenter.x, roomCenter.y + 7);
+
+      // 3. Level Text
+      const expLvl = activeFloor > 0 ? `+${activeFloor * 10}'0" LVL.` : `±2'0" LVL.`;
+      ectx.font = 'bold 13px monospace';
+      ectx.strokeStyle = '#ffffff';
+      ectx.lineWidth = 4;
+      ectx.strokeText(expLvl, roomCenter.x, roomCenter.y + 24);
+      ectx.fillStyle = '#e11d48';
+      ectx.fillText(expLvl, roomCenter.x, roomCenter.y + 24);
+
       ectx.restore();
     });
 
@@ -988,16 +1011,16 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       const len = Math.hypot(dx, dy);
       if (len === 0) return;
       const angle = Math.atan2(dy, dx);
-      const th = Math.max(8, (w.thickness || 15) * hdScale);
+      const thPx = Math.max(8, (w.thickness || 15) * scale * 2);
 
       ectx.save();
       ectx.translate(p1.x, p1.y);
       ectx.rotate(angle);
-      ectx.fillStyle = '#334155';
-      ectx.fillRect(0, -th / 2, len, th);
-      ectx.strokeStyle = '#0f172a';
+      ectx.fillStyle = '#111827';
+      ectx.fillRect(0, -thPx / 2, len, thPx);
+      ectx.strokeStyle = '#000000';
       ectx.lineWidth = 2.5;
-      ectx.strokeRect(0, -th / 2, len, th);
+      ectx.strokeRect(0, -thPx / 2, len, thPx);
       ectx.restore();
     });
 
@@ -1107,11 +1130,12 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     const height = canvas.height;
 
     const render = () => {
-      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
 
       // 1. Blueprint Background Grid
       if (layers.grid) {
-        ctx.strokeStyle = '#e2e8f0';
+        ctx.strokeStyle = '#f1f5f9';
         ctx.lineWidth = 0.6;
         const gridSpacingPx = GRID_SIZE_CM * scale;
         if (gridSpacingPx >= 8) {
@@ -1199,15 +1223,17 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         const curTextNotes = (plan.textNotes || []).filter((t) => (t.floorLevel ?? 0) === flLevel);
 
         // ==========================================
-        // [Z-INDEX LAYER 1]: Room Polygon Fills
+        // [Z-INDEX LAYER 1]: Room Polygon Fills (Clean White Floor CAD Style - Image 2)
         // ==========================================
         if (layers.rooms) {
           curRooms.forEach((room) => {
             if (room.points.length < 3) return;
             const isSelected = selectedId === room.id || selectedIds.includes(room.id);
-            ctx.fillStyle = isSelected ? 'rgba(14, 165, 233, 0.15)' : room.floorColor || 'rgba(14, 165, 233, 0.06)';
-            ctx.strokeStyle = isSelected ? '#0284c7' : 'rgba(14, 165, 233, 0.4)';
-            ctx.lineWidth = isSelected ? 2 : 1.2;
+            // Default to crisp architectural white floor (clean CAD look matching Image 2 reference)
+            const isDefaultFloor = !room.floorColor || room.floorColor === 'rgba(14, 165, 233, 0.06)' || room.floorColor === '#2c3e50';
+            ctx.fillStyle = isSelected ? 'rgba(14, 165, 233, 0.12)' : isDefaultFloor ? '#ffffff' : room.floorColor;
+            ctx.strokeStyle = isSelected ? '#0284c7' : '#cbd5e1';
+            ctx.lineWidth = isSelected ? 2 : 1;
 
             ctx.beginPath();
             const p0 = planToScreen(room.points[0].x, room.points[0].y, flLevel);
@@ -1219,6 +1245,35 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             ctx.closePath();
             ctx.fill();
             ctx.stroke();
+
+            // Diagonal Cross 'X' for Open/Wash Area/Shaft/OTS/Balcony (Image 2 Parity)
+            const rUpper = room.name.toUpperCase();
+            if (
+              rUpper.includes('WASH') ||
+              rUpper.includes('OPEN') ||
+              rUpper.includes('SHAFT') ||
+              rUpper.includes('OTS') ||
+              rUpper.includes('CUTOUT')
+            ) {
+              let rMinX = Infinity, rMinY = Infinity, rMaxX = -Infinity, rMaxY = -Infinity;
+              room.points.forEach((pt) => {
+                const sp = planToScreen(pt.x, pt.y, flLevel);
+                if (sp.x < rMinX) rMinX = sp.x;
+                if (sp.y < rMinY) rMinY = sp.y;
+                if (sp.x > rMaxX) rMaxX = sp.x;
+                if (sp.y > rMaxY) rMaxY = sp.y;
+              });
+              ctx.save();
+              ctx.strokeStyle = '#94a3b8';
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(rMinX + 2, rMinY + 2);
+              ctx.lineTo(rMaxX - 2, rMaxY - 2);
+              ctx.moveTo(rMaxX - 2, rMinY + 2);
+              ctx.lineTo(rMinX + 2, rMaxY - 2);
+              ctx.stroke();
+              ctx.restore();
+            }
           });
         }
 
@@ -1300,8 +1355,9 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
                 ctx.lineWidth = isSelected ? 2.5 : 1.5;
 
                 if (cat === 'Bedroom' || lowerName.includes('bed')) {
-                  // BED SYMBOL: Headboard, pillows, duvet cover
+                  // BED CAD SYMBOL (Image 2 Parity): Crisp white bed, headboard, 2 sage-green pillows, side tables
                   const bedCornerR = Math.max(1, Math.min(4, w / 4, d / 4));
+                  ctx.fillStyle = '#ffffff';
                   ctx.beginPath();
                   ctx.roundRect(-w / 2, -d / 2, w, d, bedCornerR);
                   ctx.fill();
@@ -1309,29 +1365,40 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
 
                   // Headboard bar at top
                   const hbThickness = Math.max(2, Math.min(d * 0.15, 12));
-                  ctx.fillStyle = '#475569';
+                  ctx.fillStyle = '#1e293b';
                   ctx.fillRect(-w / 2, -d / 2, w, hbThickness);
 
-                  // Pillows
+                  // Side Nightstands (Image 2 style)
+                  const nsW = Math.max(3, Math.min(16, w * 0.2));
+                  const nsD = Math.max(3, Math.min(16, d * 0.22));
+                  ctx.fillStyle = '#ffffff';
+                  ctx.strokeStyle = '#64748b';
+                  ctx.lineWidth = 1;
+                  ctx.fillRect(-w / 2 - nsW, -d / 2, nsW, nsD);
+                  ctx.strokeRect(-w / 2 - nsW, -d / 2, nsW, nsD);
+                  ctx.fillRect(w / 2, -d / 2, nsW, nsD);
+                  ctx.strokeRect(w / 2, -d / 2, nsW, nsD);
+
+                  // Pillows with soft sage/lime accent (Image 2 Parity)
                   const availW = Math.max(4, w - 8);
-                  const pillowW = w > 80 * scale ? Math.max(4, (availW - 4) / 2) : availW;
+                  const pillowW = w > 60 * scale ? Math.max(4, (availW - 6) / 2) : availW;
                   const pillowH = Math.max(3, Math.min(14, d * 0.22));
                   const pillowY = -d / 2 + hbThickness + 2;
-                  ctx.fillStyle = '#ffffff';
-                  ctx.strokeStyle = '#94a3b8';
+                  ctx.fillStyle = '#84cc16'; // Soft sage/lime pillow color matching reference Image 2
+                  ctx.strokeStyle = '#4d7c0f';
                   ctx.lineWidth = 1;
 
-                  if (w > 80 * scale && pillowW >= 6) {
+                  if (w > 60 * scale && pillowW >= 6) {
                     // Dual sleeping pillows
                     ctx.beginPath();
-                    ctx.roundRect(-w / 2 + 3, pillowY, pillowW, pillowH, Math.min(2, pillowW / 2, pillowH / 2));
-                    ctx.roundRect(w / 2 - pillowW - 3, pillowY, pillowW, pillowH, Math.min(2, pillowW / 2, pillowH / 2));
+                    ctx.roundRect(-w / 2 + 4, pillowY, pillowW, pillowH, 2);
+                    ctx.roundRect(w / 2 - pillowW - 4, pillowY, pillowW, pillowH, 2);
                     ctx.fill();
                     ctx.stroke();
                   } else if (pillowW >= 4) {
                     // Single pillow
                     ctx.beginPath();
-                    ctx.roundRect(-pillowW / 2, pillowY, pillowW, pillowH, Math.min(2, pillowW / 2, pillowH / 2));
+                    ctx.roundRect(-pillowW / 2, pillowY, pillowW, pillowH, 2);
                     ctx.fill();
                     ctx.stroke();
                   }
@@ -1340,7 +1407,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
                   const duvetY = -d / 2 + hbThickness + pillowH + 6;
                   if (duvetY < d / 2 - 2 && duvetY > -d / 2 + hbThickness) {
                     ctx.strokeStyle = '#cbd5e1';
-                    ctx.lineWidth = 1.5;
+                    ctx.lineWidth = 1.2;
                     ctx.beginPath();
                     ctx.moveTo(-w / 2 + 3, duvetY);
                     ctx.lineTo(w / 2 - 3, duvetY);
@@ -1474,16 +1541,42 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
                     ctx.fillRect(w / 2 - legSize - 2, d / 2 - legSize - 2, legSize, legSize);
                   }
 
+                } else if (lowerName.includes('wardrobe') || lowerName.includes('closet') || cat === 'Storage') {
+                  // WARDROBE CAD SYMBOL (Image 2 Parity): Clean rectangle with "WARDROBE" text
+                  ctx.fillStyle = '#ffffff';
+                  ctx.beginPath();
+                  ctx.rect(-w / 2, -d / 2, w, d);
+                  ctx.fill();
+                  ctx.stroke();
+
+                  // Center door line
+                  ctx.strokeStyle = '#94a3b8';
+                  ctx.lineWidth = 1;
+                  ctx.beginPath();
+                  ctx.moveTo(0, -d / 2);
+                  ctx.lineTo(0, d / 2);
+                  ctx.stroke();
+
+                  // Architectural WARDROBE label inside
+                  if (w >= 28 && d >= 12) {
+                    ctx.save();
+                    ctx.fillStyle = isSelected ? '#0284c7' : '#475569';
+                    ctx.font = 'bold 8px system-ui, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('WARDROBE', 0, 0);
+                    ctx.restore();
+                  }
                 } else {
-                  // General Cabinet, Wardrobe, or Decor
+                  // General Cabinet or Decor
                   const defaultCornerR = Math.max(1, Math.min(4, w / 4, d / 4));
                   ctx.beginPath();
                   ctx.roundRect(-w / 2, -d / 2, w, d, defaultCornerR);
                   ctx.fill();
                   ctx.stroke();
 
-                  // If wardrobe or cabinet, draw front double doors line
-                  if (lowerName.includes('wardrobe') || lowerName.includes('cabinet') || lowerName.includes('refrigerator')) {
+                  // If cabinet or refrigerator, draw front line
+                  if (lowerName.includes('cabinet') || lowerName.includes('refrigerator')) {
                     ctx.strokeStyle = '#94a3b8';
                     ctx.lineWidth = 1;
                     ctx.beginPath();
@@ -1557,39 +1650,19 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             ctx.translate(p1.x, p1.y);
             ctx.rotate(angle);
 
-            // 1. Off-white wall core (or custom wall color if set)
+            // 1. Solid Dark Architectural Wall Core (Image 2 Parity)
             if (isSelected) {
-              ctx.fillStyle = 'rgba(2, 132, 199, 0.35)';
-            } else if (wall.color && wall.color !== '#334155') {
+              ctx.fillStyle = '#0284c7';
+            } else if (wall.color && wall.color !== '#334155' && wall.color !== '#f8fafc' && wall.color !== '#f1f5f9') {
               ctx.fillStyle = wall.color;
             } else {
-              ctx.fillStyle = '#f1f5f9';
+              ctx.fillStyle = '#111827'; // Crisp solid dark charcoal architectural walls (Image 2)
             }
             ctx.fillRect(0, -thPx / 2, len, thPx);
 
-            // 2. DecoFrog 3D Architectural Diagonal Hatch Pattern
-            if (!wall.color || wall.color === '#334155' || isSelected) {
-              ctx.save();
-              ctx.beginPath();
-              ctx.rect(0, -thPx / 2, len, thPx);
-              ctx.clip();
-
-              ctx.strokeStyle = isSelected ? 'rgba(2, 132, 199, 0.6)' : 'rgba(100, 116, 139, 0.45)';
-              ctx.lineWidth = 0.9;
-              const hatchSpacing = 9;
-              const maxSpan = len + thPx;
-              for (let hx = -thPx; hx < maxSpan; hx += hatchSpacing) {
-                ctx.beginPath();
-                ctx.moveTo(hx, -thPx / 2);
-                ctx.lineTo(hx - thPx, thPx / 2);
-                ctx.stroke();
-              }
-              ctx.restore();
-            }
-
-            // 3. Double-line Dark CAD Outer Border
-            ctx.strokeStyle = isSelected ? '#0284c7' : '#0f172a';
-            ctx.lineWidth = isSelected ? 2.5 : 1.6;
+            // 2. Crisp CAD Wall Border
+            ctx.strokeStyle = isSelected ? '#38bdf8' : '#000000';
+            ctx.lineWidth = isSelected ? 2.5 : 1.8;
             ctx.strokeRect(0, -thPx / 2, len, thPx);
 
             // Wall Length Dimension Callout
@@ -1811,7 +1884,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         }
 
         // ==========================================
-        // [Z-INDEX LAYER 5]: Room Badges & Text Notes
+        // [Z-INDEX LAYER 5]: Clean Architectural Room Typography (Image 2 Parity - NO BADGE BOXES)
         // ==========================================
         if (layers.rooms) {
           curRooms.forEach((room) => {
@@ -1827,37 +1900,61 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             const match = room.name.match(/^(.*?)\s*\(([^)]+)\)$/);
             if (match) {
               primaryName = match[1].trim().toUpperCase();
-              dimensionPart = match[2].trim();
+              dimensionPart = match[2].trim().toUpperCase();
             }
 
-            const areaStr = formatArea(room.areaSquareMeters || 12.5, unit);
-            const subtitle = dimensionPart ? `${dimensionPart}  •  ${areaStr}` : areaStr;
+            // Clean dimension string: e.g. "12' X 14'-6"" or calculated from bounding polygon
+            let dimText = dimensionPart;
+            if (!dimText) {
+              let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+              room.points.forEach((pt) => {
+                if (pt.x < minX) minX = pt.x;
+                if (pt.x > maxX) maxX = pt.x;
+                if (pt.y < minY) minY = pt.y;
+                if (pt.y > maxY) maxY = pt.y;
+              });
+              const wFt = Math.round((maxX - minX) / 30.48);
+              const dFt = Math.round((maxY - minY) / 30.48);
+              if (wFt > 0 && dFt > 0) {
+                dimText = `${wFt}' X ${dFt}'`;
+              } else {
+                dimText = formatArea(room.areaSquareMeters || 12.5, unit);
+              }
+            }
+
+            // Level text: e.g. "±2'0" LVL." or "+10'0" LVL."
+            const lvlText = flLevel > 0 ? `+${flLevel * 10}'0" LVL.` : `±2'0" LVL.`;
 
             ctx.save();
-            ctx.font = 'bold 9.5px system-ui';
-            const w1 = ctx.measureText(primaryName).width;
-            ctx.font = '8.5px monospace';
-            const w2 = ctx.measureText(subtitle).width;
-            const badgeW = Math.max(w1, w2) + 16;
-            const badgeH = 26;
-
-            ctx.fillStyle = isSelected ? 'rgba(238, 242, 255, 0.95)' : 'rgba(255, 255, 255, 0.92)';
-            ctx.strokeStyle = isSelected ? '#4f46e5' : 'rgba(203, 213, 225, 0.8)';
-            ctx.lineWidth = isSelected ? 2 : 1;
-            ctx.beginPath();
-            ctx.roundRect(screenAvg.x - badgeW / 2, screenAvg.y - badgeH / 2, badgeW, badgeH, 5);
-            ctx.fill();
-            ctx.stroke();
-
-            ctx.fillStyle = isSelected ? '#4338ca' : '#0f172a';
-            ctx.font = 'bold 9.5px system-ui';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(primaryName, screenAvg.x, screenAvg.y - 5);
+            ctx.lineJoin = 'round';
+            ctx.miterLimit = 2;
 
-            ctx.fillStyle = isSelected ? '#4f46e5' : '#0284c7';
-            ctx.font = 'bold 8.5px monospace';
-            ctx.fillText(subtitle, screenAvg.x, screenAvg.y + 5.5);
+            // 1. Primary Room Name (e.g. BEDROOM, HALL, KITCHEN, TOILET, PARKING)
+            ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3.5;
+            ctx.strokeText(primaryName, screenAvg.x, screenAvg.y - 8);
+            ctx.fillStyle = isSelected ? '#4338ca' : '#0f172a';
+            ctx.fillText(primaryName, screenAvg.x, screenAvg.y - 8);
+
+            // 2. Dimension Text (e.g. 12' X 14'-6")
+            ctx.font = 'bold 9px system-ui, monospace';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.strokeText(dimText, screenAvg.x, screenAvg.y + 4);
+            ctx.fillStyle = isSelected ? '#4f46e5' : '#334155';
+            ctx.fillText(dimText, screenAvg.x, screenAvg.y + 4);
+
+            // 3. Level Text (e.g. ±2'0" LVL.)
+            ctx.font = 'bold 8px monospace';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.strokeText(lvlText, screenAvg.x, screenAvg.y + 15);
+            ctx.fillStyle = isSelected ? '#e11d48' : '#e11d48'; // Clean architectural red level text
+            ctx.fillText(lvlText, screenAvg.x, screenAvg.y + 15);
+
             ctx.restore();
           });
         }
@@ -1917,6 +2014,44 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             ctx.textBaseline = 'middle';
             ctx.fillText(formatDistance(dist, unit), mid.x, mid.y);
           });
+        }
+
+        // Architectural Floor Title Block (Image 2 Parity: e.g. "GROUND FLOOR PLAN")
+        let fMinX = Infinity, fMaxX = -Infinity, fMaxY = -Infinity;
+        curWalls.forEach((w) => {
+          fMinX = Math.min(fMinX, w.xStart, w.xEnd);
+          fMaxX = Math.max(fMaxX, w.xStart, w.xEnd);
+          fMaxY = Math.max(fMaxY, w.yStart, w.yEnd);
+        });
+        curRooms.forEach((r) => {
+          r.points.forEach((pt) => {
+            fMinX = Math.min(fMinX, pt.x);
+            fMaxX = Math.max(fMaxX, pt.x);
+            fMaxY = Math.max(fMaxY, pt.y);
+          });
+        });
+
+        if (fMinX !== Infinity && fMaxY !== -Infinity && (curWalls.length > 0 || curRooms.length > 0)) {
+          const currentFlObj = plan.floors?.find((f) => f.level === flLevel);
+          const flName = (currentFlObj?.name || (flLevel === 0 ? 'GROUND FLOOR' : flLevel === 1 ? 'FIRST FLOOR' : `FLOOR ${flLevel}`)).toUpperCase();
+          const floorTitle = `${flName} PLAN`;
+          const titleScreen = planToScreen((fMinX + fMaxX) / 2, fMaxY + 45, flLevel);
+
+          ctx.save();
+          ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+          ctx.fillStyle = '#0f172a';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillText(floorTitle, titleScreen.x, titleScreen.y);
+
+          const tW = ctx.measureText(floorTitle).width;
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(titleScreen.x - tW / 2 - 8, titleScreen.y + 18);
+          ctx.lineTo(titleScreen.x + tW / 2 + 8, titleScreen.y + 18);
+          ctx.stroke();
+          ctx.restore();
         }
       });
 
@@ -2870,7 +3005,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
   };
 
   return (
-    <div className="relative w-full h-full bg-slate-100 flex flex-col overflow-hidden select-none">
+    <div className="relative w-full h-full bg-white flex flex-col overflow-hidden select-none">
       {/* CAD Top Engineering Toolbar (Hidden when controlled by Sweet Home 3D Ribbon) */}
       {!hideFloatingToolbar && (
         <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between gap-2 pointer-events-none select-none">

@@ -30,8 +30,8 @@ interface NavbarProps {
   plan: HomePlan;
   activeView: 'split' | '2d' | '3d' | 'customer' | 'dashboard';
   setActiveView: (v: 'split' | '2d' | '3d' | 'customer' | 'dashboard') => void;
-  studioLayout?: 'sweethome' | 'split' | '2d' | '3d' | 'tour';
-  setStudioLayout?: (layout: 'sweethome' | 'split' | '2d' | '3d' | 'tour') => void;
+  studioLayout?: 'sweethome' | 'split' | 'live' | '2d' | '3d' | 'tour';
+  setStudioLayout?: (layout: 'sweethome' | 'split' | 'live' | '2d' | '3d' | 'tour') => void;
   adminTab?: string;
   setAdminTab?: (t: any) => void;
   userRole: UserRole;
