@@ -253,6 +253,74 @@ export const GuidedFloorPlanBuilderModal: React.FC<GuidedFloorPlanBuilderModalPr
             />
           </div>
 
+          {/* Quick AI Multi-Room Templates */}
+          <div>
+            <Text strong className="text-xs uppercase tracking-wider text-slate-500 block mb-2 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+              Quick Multi-Room Apartment Presets
+            </Text>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                {
+                  id: '1bhk',
+                  name: '1 BHK Studio',
+                  area: '48 m²',
+                  rooms: { living: true, kitchen: true, dining: false, masterBed: true, guestBedCount: 0, bathCount: 1, office: false, balcony: true, utility: false, foyer: false },
+                  scale: 'compact' as const,
+                  floors: 1 as const,
+                },
+                {
+                  id: '2bhk',
+                  name: '2 BHK Modern',
+                  area: '86 m²',
+                  rooms: { living: true, kitchen: true, dining: true, masterBed: true, guestBedCount: 1, bathCount: 2, office: false, balcony: true, utility: false, foyer: true },
+                  scale: 'standard' as const,
+                  floors: 1 as const,
+                },
+                {
+                  id: '3bhk',
+                  name: '3 BHK Luxury Suite',
+                  area: '142 m²',
+                  rooms: { living: true, kitchen: true, dining: true, masterBed: true, guestBedCount: 2, bathCount: 3, office: true, balcony: true, utility: true, foyer: true },
+                  scale: 'spacious' as const,
+                  floors: 1 as const,
+                },
+                {
+                  id: 'duplex',
+                  name: 'Duplex Villa',
+                  area: '210 m²',
+                  rooms: { living: true, kitchen: true, dining: true, masterBed: true, guestBedCount: 2, bathCount: 3, office: true, balcony: true, utility: true, foyer: true },
+                  scale: 'spacious' as const,
+                  floors: 2 as const,
+                },
+              ].map((tpl) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => {
+                    setProjectName(tpl.name);
+                    setFloorsCount(tpl.floors);
+                    setScale(tpl.scale);
+                    setRooms(tpl.rooms);
+                  }}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    projectName === tpl.name
+                      ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/40 ring-1 ring-indigo-500 font-bold'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-xs font-bold text-slate-800 dark:text-white truncate">{tpl.name}</span>
+                    <span className="text-[10px] text-indigo-500 font-mono font-semibold">{tpl.area}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 block">
+                    {tpl.floors > 1 ? `${tpl.floors} Floors • Duplex` : 'Single Story'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* STEP 1: How many floors are you planning? */}
           <div>
             <div className="flex items-center justify-between mb-2.5">

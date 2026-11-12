@@ -28,6 +28,7 @@ import {
 import { HomePlan, Wall, FurnitureItem, Room, DimensionLine, TextNote, VisitorCameraState } from '../types/plan';
 import { formatDistance, formatArea } from '../services/unitConverter';
 import { isTabletopItem, autoAttachToTabletop } from '../services/tabletopAttachment';
+import { buildCADWallMesh } from '../services/cadWallMesh';
 
 interface PlanCanvas2DProps {
   plan: HomePlan;
@@ -647,7 +648,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
     setToolMode('select');
   };
 
-  // One-Click Toggle Auto-Dimension All Exterior Walls (Click to show, Click again to remove)
+  // One-Click Toggle Auto-Dimension All Exterior Walls & Overall Building Clearance
   const handleAutoDimension = () => {
     if (floorDimensionLines.length > 0) {
       // Toggle OFF: Remove dimensions from this active floor
@@ -659,30 +660,82 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       return;
     }
 
-    // Toggle ON: Auto generate exterior wall dimension lines
+    // Toggle ON: Auto generate outward exterior wall & overall building dimensions
     if (floorWalls.length === 0) return;
     const newDimensions: DimensionLine[] = [];
 
+    // 1. Calculate floor center to guarantee all dimension offsets push OUTWARD away from rooms
+    let sumX = 0, sumY = 0, ptCount = 0;
     floorWalls.forEach((w) => {
+      sumX += w.xStart + w.xEnd;
+      sumY += w.yStart + w.yEnd;
+      ptCount += 2;
+    });
+    const centerX = ptCount > 0 ? sumX / ptCount : 0;
+    const centerY = ptCount > 0 ? sumY / ptCount : 0;
+
+    let bMinX = Infinity, bMaxX = -Infinity, bMinY = Infinity, bMaxY = -Infinity;
+
+    floorWalls.forEach((w) => {
+      bMinX = Math.min(bMinX, w.xStart, w.xEnd);
+      bMaxX = Math.max(bMaxX, w.xStart, w.xEnd);
+      bMinY = Math.min(bMinY, w.yStart, w.yEnd);
+      bMaxY = Math.max(bMaxY, w.yStart, w.yEnd);
+
       const dx = w.xEnd - w.xStart;
       const dy = w.yEnd - w.yStart;
       const len = Math.hypot(dx, dy);
-      if (len < 30) return;
+      if (len < 40) return; // Skip sub-40cm micro fragments
 
-      const normX = -dy / len;
-      const normY = dx / len;
-      const offsetDist = 35; // 35cm exterior offset
+      let normX = -dy / len;
+      let normY = dx / len;
 
+      const midX = (w.xStart + w.xEnd) / 2;
+      const midY = (w.yStart + w.yEnd) / 2;
+
+      // Ensure normal vector points outward away from the building center
+      const testDist = 10;
+      const distPlus = Math.hypot(midX + normX * testDist - centerX, midY + normY * testDist - centerY);
+      const distMinus = Math.hypot(midX - normX * testDist - centerX, midY - normY * testDist - centerY);
+      if (distMinus > distPlus) {
+        normX = -normX;
+        normY = -normY;
+      }
+
+      const offsetDist = 45; // 45cm clear exterior offset
       newDimensions.push({
         id: 'dim_auto_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + '_' + w.id,
         xStart: Math.round(w.xStart + normX * offsetDist),
         yStart: Math.round(w.yStart + normY * offsetDist),
         xEnd: Math.round(w.xEnd + normX * offsetDist),
         yEnd: Math.round(w.yEnd + normY * offsetDist),
-        offset: 20,
+        offset: 15,
         floorLevel: activeFloor,
       });
     });
+
+    // 2. Add Overall Building Clearance Dimensions (Top Width & Left Length)
+    if (Number.isFinite(bMinX) && bMaxX - bMinX > 120 && bMaxY - bMinY > 120) {
+      const outerOffset = 95; // Positioned outside wall dimensions
+      newDimensions.push({
+        id: 'dim_overall_w_' + Date.now(),
+        xStart: Math.round(bMinX),
+        yStart: Math.round(bMinY - outerOffset),
+        xEnd: Math.round(bMaxX),
+        yEnd: Math.round(bMinY - outerOffset),
+        offset: 20,
+        floorLevel: activeFloor,
+      });
+      newDimensions.push({
+        id: 'dim_overall_h_' + Date.now(),
+        xStart: Math.round(bMinX - outerOffset),
+        yStart: Math.round(bMinY),
+        xEnd: Math.round(bMinX - outerOffset),
+        yEnd: Math.round(bMaxY),
+        offset: 20,
+        floorLevel: activeFloor,
+      });
+    }
 
     onUpdatePlan({
       ...plan,
@@ -921,12 +974,13 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       y: sheetCenterY + (y - centerY) * hdScale,
     });
 
-    // Draw Rooms
+    // Draw Rooms (Crisp White Floors CAD Style - Image 2)
     expRooms.forEach((room) => {
       if (room.points.length < 3) return;
-      ectx.fillStyle = room.floorColor || 'rgba(240, 249, 255, 0.7)';
-      ectx.strokeStyle = 'rgba(14, 165, 233, 0.5)';
-      ectx.lineWidth = 3;
+      const isDefaultFloor = !room.floorColor || room.floorColor === 'rgba(14, 165, 233, 0.06)' || room.floorColor === '#2c3e50' || room.floorColor === 'rgba(240, 249, 255, 0.7)';
+      ectx.fillStyle = isDefaultFloor ? '#ffffff' : room.floorColor;
+      ectx.strokeStyle = '#cbd5e1';
+      ectx.lineWidth = 2;
       ectx.beginPath();
       const p0 = toHDScreen(room.points[0].x, room.points[0].y);
       ectx.moveTo(p0.x, p0.y);
@@ -937,6 +991,29 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
       ectx.closePath();
       ectx.fill();
       ectx.stroke();
+
+      // Diagonal Cross 'X' for Open/Wash Area/Shaft/OTS/Balcony
+      const rUpper = room.name.toUpperCase();
+      if (rUpper.includes('WASH') || rUpper.includes('OPEN') || rUpper.includes('SHAFT') || rUpper.includes('OTS') || rUpper.includes('CUTOUT')) {
+        let rMinX = Infinity, rMinY = Infinity, rMaxX = -Infinity, rMaxY = -Infinity;
+        room.points.forEach((pt) => {
+          const sp = toHDScreen(pt.x, pt.y);
+          if (sp.x < rMinX) rMinX = sp.x;
+          if (sp.y < rMinY) rMinY = sp.y;
+          if (sp.x > rMaxX) rMaxX = sp.x;
+          if (sp.y > rMaxY) rMaxY = sp.y;
+        });
+        ectx.save();
+        ectx.strokeStyle = '#94a3b8';
+        ectx.lineWidth = 1.5;
+        ectx.beginPath();
+        ectx.moveTo(rMinX + 4, rMinY + 4);
+        ectx.lineTo(rMaxX - 4, rMaxY - 4);
+        ectx.moveTo(rMaxX - 4, rMinY + 4);
+        ectx.lineTo(rMinX + 4, rMaxY - 4);
+        ectx.stroke();
+        ectx.restore();
+      }
 
       const avgX = room.points.reduce((acc, p) => acc + p.x, 0) / room.points.length;
       const avgY = room.points.reduce((acc, p) => acc + p.y, 0) / room.points.length;
@@ -968,104 +1045,297 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         }
       }
 
+      const isSmallRoom = (room.areaSquareMeters || 12.5) < 7 || expPrimary.includes('TOILET') || expPrimary.includes('BATH') || expPrimary.includes('WASH');
+
+      // Measure room labels for crisp architectural white wipeout plate (100% legibility on any floor)
+      ectx.font = 'bold 15px "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      const expNameMetrics = ectx.measureText(expPrimary);
+      ectx.font = '600 12px "Inter", monospace, sans-serif';
+      const expDimMetrics = ectx.measureText(expDimStr);
+      let expMaxW = Math.max(expNameMetrics.width, expDimMetrics.width);
+      const expLvl = activeFloor > 0 ? `+${activeFloor * 10}'0" LVL.` : `±2'0" LVL.`;
+      if (!isSmallRoom) {
+        ectx.font = 'bold 10px monospace';
+        const expLvlMetrics = ectx.measureText(expLvl);
+        expMaxW = Math.max(expMaxW, expLvlMetrics.width);
+      }
+
+      const expPlateW = Math.max(expMaxW + 18, 64);
+      const expPlateH = isSmallRoom ? 38 : 56;
+      const expPlateX = roomCenter.x - expPlateW / 2;
+      const expPlateY = isSmallRoom ? roomCenter.y - 19 : roomCenter.y - 28;
+
+      ectx.save();
+      ectx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      ectx.strokeStyle = 'rgba(203, 213, 225, 0.85)';
+      ectx.lineWidth = 1.2;
+      ectx.beginPath();
+      ectx.roundRect(expPlateX, expPlateY, expPlateW, expPlateH, 5);
+      ectx.fill();
+      ectx.stroke();
+      ectx.restore();
+
       ectx.save();
       ectx.textAlign = 'center';
       ectx.textBaseline = 'middle';
       ectx.lineJoin = 'round';
       ectx.miterLimit = 2;
 
-      // 1. Room Name
-      ectx.font = 'bold 20px system-ui, -apple-system, sans-serif';
-      ectx.strokeStyle = '#ffffff';
-      ectx.lineWidth = 5;
-      ectx.strokeText(expPrimary, roomCenter.x, roomCenter.y - 14);
+      // 1. Room Name (Compact architectural typography)
+      ectx.font = 'bold 15px "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      const nameY = isSmallRoom ? roomCenter.y - 7 : roomCenter.y - 9;
       ectx.fillStyle = '#0f172a';
-      ectx.fillText(expPrimary, roomCenter.x, roomCenter.y - 14);
+      ectx.fillText(expPrimary, roomCenter.x, nameY);
 
       // 2. Dimension Text
-      ectx.font = 'bold 15px system-ui, monospace';
-      ectx.strokeStyle = '#ffffff';
-      ectx.lineWidth = 4;
-      ectx.strokeText(expDimStr, roomCenter.x, roomCenter.y + 7);
+      ectx.font = '600 12px "Inter", monospace, sans-serif';
+      const dimY = isSmallRoom ? roomCenter.y + 7 : roomCenter.y + 6;
       ectx.fillStyle = '#334155';
-      ectx.fillText(expDimStr, roomCenter.x, roomCenter.y + 7);
+      ectx.fillText(expDimStr, roomCenter.x, dimY);
 
-      // 3. Level Text
-      const expLvl = activeFloor > 0 ? `+${activeFloor * 10}'0" LVL.` : `±2'0" LVL.`;
-      ectx.font = 'bold 13px monospace';
-      ectx.strokeStyle = '#ffffff';
-      ectx.lineWidth = 4;
-      ectx.strokeText(expLvl, roomCenter.x, roomCenter.y + 24);
-      ectx.fillStyle = '#e11d48';
-      ectx.fillText(expLvl, roomCenter.x, roomCenter.y + 24);
+      // 3. Level Text (only shown on larger rooms, matching Image 2)
+      if (!isSmallRoom) {
+        ectx.font = 'bold 10px monospace';
+        ectx.fillStyle = '#e11d48';
+        ectx.fillText(expLvl, roomCenter.x, roomCenter.y + 19);
+      }
 
       ectx.restore();
     });
 
-    // Draw Walls
-    expWalls.forEach((w) => {
-      const p1 = toHDScreen(w.xStart, w.yStart);
-      const p2 = toHDScreen(w.xEnd, w.yEnd);
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const len = Math.hypot(dx, dy);
-      if (len === 0) return;
-      const angle = Math.atan2(dy, dx);
-      const thPx = Math.max(8, (w.thickness || 15) * scale * 2);
+    // Draw Walls (Solid Dark Charcoal CAD Core with Continuous Closed Corners)
+    if (expWalls.length > 0) {
+      const expMesh = buildCADWallMesh(expWalls, (x, y) => toHDScreen(x, y), hdScale);
 
-      ectx.save();
-      ectx.translate(p1.x, p1.y);
-      ectx.rotate(angle);
-      ectx.fillStyle = '#111827';
-      ectx.fillRect(0, -thPx / 2, len, thPx);
-      ectx.strokeStyle = '#000000';
-      ectx.lineWidth = 2.5;
-      ectx.strokeRect(0, -thPx / 2, len, thPx);
-      ectx.restore();
-    });
+      // 1. Solid Core Wall Fills
+      expMesh.wallVertexData.forEach((w) => {
+        ectx.save();
+        ectx.fillStyle = '#111827';
+        ectx.beginPath();
+        ectx.moveTo(w.startLeft.x, w.startLeft.y);
+        ectx.lineTo(w.endRight.x, w.endRight.y);
+        ectx.lineTo(w.endLeft.x, w.endLeft.y);
+        ectx.lineTo(w.startRight.x, w.startRight.y);
+        ectx.closePath();
+        ectx.fill();
+        ectx.restore();
+      });
 
-    // Draw Furniture
+      // 2. Junction Core Fills (Seamless monolithic joints)
+      expMesh.junctionFills.forEach((jf) => {
+        if (jf.corners.length < 2) return;
+        ectx.save();
+        ectx.fillStyle = '#111827';
+        ectx.beginPath();
+        jf.corners.forEach((pt, pIdx) => {
+          if (pIdx === 0) ectx.moveTo(pt.x, pt.y);
+          else ectx.lineTo(pt.x, pt.y);
+        });
+        ectx.closePath();
+        ectx.fill();
+        ectx.restore();
+      });
+
+      // 3. Crisp CAD Outer and Inner Perimeter Borders (Closed Corners)
+      expMesh.wallVertexData.forEach((w) => {
+        ectx.save();
+        ectx.strokeStyle = '#000000';
+        ectx.lineWidth = 2.8;
+        ectx.lineJoin = 'miter';
+        ectx.miterLimit = 3;
+
+        ectx.beginPath();
+        ectx.moveTo(w.startLeft.x, w.startLeft.y);
+        ectx.lineTo(w.endRight.x, w.endRight.y);
+
+        ectx.moveTo(w.startRight.x, w.startRight.y);
+        ectx.lineTo(w.endLeft.x, w.endLeft.y);
+
+        if (!w.hasStartJoin) {
+          ectx.moveTo(w.startLeft.x, w.startLeft.y);
+          ectx.lineTo(w.startRight.x, w.startRight.y);
+        }
+        if (!w.hasEndJoin) {
+          ectx.moveTo(w.endLeft.x, w.endLeft.y);
+          ectx.lineTo(w.endRight.x, w.endRight.y);
+        }
+        ectx.stroke();
+        ectx.restore();
+      });
+    }
+
+    // Draw Furniture (Architectural Blocks - Image 2 Parity)
     expFurniture.forEach((item) => {
       const sp = toHDScreen(item.x, item.y);
       const w = item.width * hdScale;
       const d = item.depth * hdScale;
+      const lowerName = (item.name || '').toLowerCase();
+      const lowerCat = (item.category || '').toLowerCase();
+
       ectx.save();
       ectx.translate(sp.x, sp.y);
       ectx.rotate(item.angle || 0);
 
-      const isDoor = item.catalogId === 'door' || item.category === 'Doors & Windows';
+      const isDoor = item.catalogId === 'door' || lowerCat === 'doors & windows' || lowerName.includes('door');
+      const isWindow = item.catalogId === 'window' || lowerName.includes('window');
+      const isStairs = lowerCat === 'stairs' || lowerName.includes('stair');
+
       if (isDoor) {
-        ectx.strokeStyle = '#0f172a';
-        ectx.lineWidth = 3;
+        ectx.fillStyle = '#ffffff';
+        ectx.fillRect(-w / 2, -d / 2, w, d);
+        ectx.strokeStyle = '#000000';
+        ectx.lineWidth = 2.5;
         ectx.strokeRect(-w / 2, -d / 2, w, d);
+
+        // 90 deg swing arc
         ectx.strokeStyle = '#0284c7';
         ectx.lineWidth = 2;
         ectx.setLineDash([6, 4]);
         ectx.beginPath();
         ectx.arc(-w / 2, d / 2, w, 0, -Math.PI / 2, true);
         ectx.stroke();
-      } else {
-        const primaryColor = item.partColors?.top || item.partColors?.seat || item.partColors?.cushions || item.partColors?.body || item.partColors?.bedding || item.color || '#f8fafc';
-        ectx.fillStyle = primaryColor;
-        ectx.strokeStyle = '#1e293b';
+        ectx.setLineDash([]);
+
+        // Door Leaf
+        ectx.strokeStyle = '#0f172a';
+        ectx.lineWidth = 3.5;
+        ectx.beginPath();
+        ectx.moveTo(-w / 2, d / 2);
+        ectx.lineTo(-w / 2, d / 2 - w);
+        ectx.stroke();
+      } else if (isWindow) {
+        ectx.fillStyle = '#ffffff';
+        ectx.fillRect(-w / 2, -d / 2, w, d);
+        ectx.strokeStyle = '#000000';
+        ectx.lineWidth = 2.5;
+        ectx.strokeRect(-w / 2, -d / 2, w, d);
+        // Glass Line
+        ectx.strokeStyle = '#0284c7';
+        ectx.lineWidth = 2;
+        ectx.beginPath();
+        ectx.moveTo(-w / 2 + 2, 0);
+        ectx.lineTo(w / 2 - 2, 0);
+        ectx.stroke();
+      } else if (isStairs) {
+        // Stairs: Treads & UP Arrow
+        ectx.fillStyle = '#ffffff';
+        ectx.strokeStyle = '#334155';
+        ectx.lineWidth = 2;
+        ectx.fillRect(-w / 2, -d / 2, w, d);
+        ectx.strokeRect(-w / 2, -d / 2, w, d);
+
+        const numTreads = 12;
+        const step = d / numTreads;
+        ectx.strokeStyle = '#64748b';
+        ectx.lineWidth = 1.2;
+        for (let t = 1; t < numTreads; t++) {
+          const ty = -d / 2 + t * step;
+          ectx.beginPath();
+          ectx.moveTo(-w / 2, ty);
+          ectx.lineTo(w / 2, ty);
+          ectx.stroke();
+        }
+        ectx.strokeStyle = '#0284c7';
+        ectx.lineWidth = 2.5;
+        ectx.beginPath();
+        ectx.moveTo(0, d / 2 - 16);
+        ectx.lineTo(0, -d / 2 + 20);
+        ectx.lineTo(-8, -d / 2 + 30);
+        ectx.moveTo(0, -d / 2 + 20);
+        ectx.lineTo(8, -d / 2 + 30);
+        ectx.stroke();
+        ectx.fillStyle = '#0284c7';
+        ectx.font = 'bold 12px system-ui';
+        ectx.textAlign = 'center';
+        ectx.fillText('UP', 0, d / 2 - 24);
+      } else if (lowerCat === 'bedroom' || lowerName.includes('bed')) {
+        // Bed Symbol: white mattress, dark headboard, sage green pillows, side nightstands (Image 2)
+        ectx.fillStyle = '#ffffff';
+        ectx.strokeStyle = '#334155';
         ectx.lineWidth = 2.5;
         ectx.beginPath();
         ectx.roundRect(-w / 2, -d / 2, w, d, 6);
         ectx.fill();
         ectx.stroke();
 
-        // Only draw label in HD export if furniture is large enough
-        if (w >= 75 && d >= 40) {
-          ectx.fillStyle = '#475569';
-          ectx.font = 'bold 12px system-ui';
-          ectx.textAlign = 'center';
-          ectx.textBaseline = 'middle';
-          const hdName = item.name.length > 20 ? item.name.slice(0, 18) + '…' : item.name;
-          ectx.fillText(hdName, 0, 0);
-        }
+        // Headboard
+        const hbThick = Math.max(4, d * 0.15);
+        ectx.fillStyle = '#1e293b';
+        ectx.fillRect(-w / 2, -d / 2, w, hbThick);
+
+        // Nightstands
+        const nsW = Math.max(6, w * 0.2);
+        const nsD = Math.max(6, d * 0.22);
+        ectx.fillStyle = '#ffffff';
+        ectx.strokeStyle = '#64748b';
+        ectx.lineWidth = 1.5;
+        ectx.fillRect(-w / 2 - nsW, -d / 2, nsW, nsD);
+        ectx.strokeRect(-w / 2 - nsW, -d / 2, nsW, nsD);
+        ectx.fillRect(w / 2, -d / 2, nsW, nsD);
+        ectx.strokeRect(w / 2, -d / 2, nsW, nsD);
+
+        // Sage green pillows (Image 2)
+        const pW = (w - 14) / 2;
+        const pH = Math.max(8, d * 0.22);
+        const pY = -d / 2 + hbThick + 4;
+        ectx.fillStyle = '#84cc16';
+        ectx.strokeStyle = '#4d7c0f';
+        ectx.lineWidth = 1.5;
+        ectx.beginPath();
+        ectx.roundRect(-w / 2 + 5, pY, pW, pH, 3);
+        ectx.roundRect(w / 2 - pW - 5, pY, pW, pH, 3);
+        ectx.fill();
+        ectx.stroke();
+      } else if (lowerName.includes('wardrobe') || lowerName.includes('closet') || lowerCat === 'storage') {
+        // Wardrobe Symbol with "WARDROBE" text (Image 2)
+        ectx.fillStyle = '#ffffff';
+        ectx.strokeStyle = '#334155';
+        ectx.lineWidth = 2.5;
+        ectx.beginPath();
+        ectx.rect(-w / 2, -d / 2, w, d);
+        ectx.fill();
+        ectx.stroke();
+        ectx.strokeStyle = '#94a3b8';
+        ectx.lineWidth = 1.5;
+        ectx.beginPath();
+        ectx.moveTo(0, -d / 2);
+        ectx.lineTo(0, d / 2);
+        ectx.stroke();
+        ectx.fillStyle = '#475569';
+        ectx.font = 'bold 12px system-ui, sans-serif';
+        ectx.textAlign = 'center';
+        ectx.textBaseline = 'middle';
+        ectx.fillText('WARDROBE', 0, 0);
+      } else {
+        // General Architectural Furniture
+        const primaryColor = item.partColors?.top || item.partColors?.seat || item.partColors?.body || item.color || '#ffffff';
+        ectx.fillStyle = primaryColor;
+        ectx.strokeStyle = '#334155';
+        ectx.lineWidth = 2.5;
+        ectx.beginPath();
+        ectx.roundRect(-w / 2, -d / 2, w, d, 6);
+        ectx.fill();
+        ectx.stroke();
       }
       ectx.restore();
     });
+
+    // Floor Title Under Floor Plan (Image 2: e.g. "GROUND FLOOR PLAN" with underline)
+    const floorPlanTitle = `${floorDisplayName.toUpperCase()} PLAN`;
+    const titleY = Math.min(height - 180, sheetCenterY + (planH / 2) * hdScale + 60);
+    ectx.save();
+    ectx.font = 'bold 26px "Inter", system-ui, sans-serif';
+    ectx.fillStyle = '#0f172a';
+    ectx.textAlign = 'center';
+    ectx.fillText(floorPlanTitle, sheetCenterX, titleY);
+    const titleWidth = ectx.measureText(floorPlanTitle).width;
+    ectx.strokeStyle = '#0f172a';
+    ectx.lineWidth = 3;
+    ectx.beginPath();
+    ectx.moveTo(sheetCenterX - titleWidth / 2 - 16, titleY + 14);
+    ectx.lineTo(sheetCenterX + titleWidth / 2 + 16, titleY + 14);
+    ectx.stroke();
+    ectx.restore();
 
     // Title Block
     const stampW = 760;
@@ -1631,49 +1901,86 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         }
 
         // ==========================================
-        // [Z-INDEX LAYER 3]: Architectural Walls (DecoFrog 3D Hatched CAD Style)
+        // [Z-INDEX LAYER 3]: Architectural Walls (Continuous Closed Miter CAD Style)
         // ==========================================
-        if (layers.walls) {
-          curWalls.forEach((wall) => {
-            const isSelected = selectedId === wall.id || selectedIds.includes(wall.id);
-            const p1 = planToScreen(wall.xStart, wall.yStart, flLevel);
-            const p2 = planToScreen(wall.xEnd, wall.yEnd, flLevel);
+        if (layers.walls && curWalls.length > 0) {
+          const mesh = buildCADWallMesh(curWalls, (x, y) => planToScreen(x, y, flLevel), scale);
 
-            const dx = p2.x - p1.x;
-            const dy = p2.y - p1.y;
-            const len = Math.hypot(dx, dy);
-            if (len === 0) return;
-            const angle = Math.atan2(dy, dx);
-            const thPx = Math.max(5, (wall.thickness || 15) * scale);
+          // 1. Solid Core Wall Fills: Display the actual applied wall color (or default charcoal #111827)
+          mesh.wallVertexData.forEach((w, wIdx) => {
+            const wall = curWalls[wIdx];
 
             ctx.save();
-            ctx.translate(p1.x, p1.y);
-            ctx.rotate(angle);
+            ctx.fillStyle = wall?.color || '#111827';
 
-            // 1. Solid Dark Architectural Wall Core (Image 2 Parity)
-            if (isSelected) {
-              ctx.fillStyle = '#0284c7';
-            } else if (wall.color && wall.color !== '#334155' && wall.color !== '#f8fafc' && wall.color !== '#f1f5f9') {
-              ctx.fillStyle = wall.color;
-            } else {
-              ctx.fillStyle = '#111827'; // Crisp solid dark charcoal architectural walls (Image 2)
-            }
-            ctx.fillRect(0, -thPx / 2, len, thPx);
+            ctx.beginPath();
+            ctx.moveTo(w.startLeft.x, w.startLeft.y);
+            ctx.lineTo(w.endRight.x, w.endRight.y);
+            ctx.lineTo(w.endLeft.x, w.endLeft.y);
+            ctx.lineTo(w.startRight.x, w.startRight.y);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          });
 
-            // 2. Crisp CAD Wall Border
+          // 2. Junction Core Fills (Seamless monolithic joints - zero corner notches)
+          mesh.junctionFills.forEach((jf) => {
+            if (jf.corners.length < 2) return;
+            ctx.save();
+            ctx.fillStyle = jf.color || '#111827';
+            ctx.beginPath();
+            jf.corners.forEach((pt, pIdx) => {
+              if (pIdx === 0) ctx.moveTo(pt.x, pt.y);
+              else ctx.lineTo(pt.x, pt.y);
+            });
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          });
+
+          // 3. Crisp CAD Wall Border Strokes (Continuous Closed Outer and Inner Edges)
+          mesh.wallVertexData.forEach((w, wIdx) => {
+            const wall = curWalls[wIdx];
+            const isSelected = selectedId === wall?.id || (wall?.id ? selectedIds.includes(wall.id) : false);
+
+            ctx.save();
             ctx.strokeStyle = isSelected ? '#38bdf8' : '#000000';
             ctx.lineWidth = isSelected ? 2.5 : 1.8;
-            ctx.strokeRect(0, -thPx / 2, len, thPx);
+            ctx.lineJoin = 'miter';
+            ctx.miterLimit = 3;
 
-            // Wall Length Dimension Callout
-            const lengthCm = Math.round(Math.hypot(wall.xEnd - wall.xStart, wall.yEnd - wall.yStart));
-            const dimStr = formatDistance(lengthCm, unit);
+            ctx.beginPath();
+            // Side 1 (left/outer edge)
+            ctx.moveTo(w.startLeft.x, w.startLeft.y);
+            ctx.lineTo(w.endRight.x, w.endRight.y);
 
-            // Wall Length Dimension Callout (clean CAD view: show when selected, in wall tool, or when toggled)
-            if (len > 60 && (isSelected || layers.wallDimensions || toolMode === 'drawWall')) {
+            // Side 2 (right/inner edge)
+            ctx.moveTo(w.startRight.x, w.startRight.y);
+            ctx.lineTo(w.endLeft.x, w.endLeft.y);
+
+            // End-caps only on free standing endpoints
+            if (!w.hasStartJoin) {
+              ctx.moveTo(w.startLeft.x, w.startLeft.y);
+              ctx.lineTo(w.startRight.x, w.startRight.y);
+            }
+            if (!w.hasEndJoin) {
+              ctx.moveTo(w.endLeft.x, w.endLeft.y);
+              ctx.lineTo(w.endRight.x, w.endRight.y);
+            }
+            ctx.stroke();
+
+            // Wall Length Dimension Callout (clean CAD view)
+            if (wall && w.len > 60 && (isSelected || layers.wallDimensions || toolMode === 'drawWall')) {
+              const lengthCm = Math.round(Math.hypot(wall.xEnd - wall.xStart, wall.yEnd - wall.yStart));
+              const dimStr = formatDistance(lengthCm, unit);
+              const midX = (w.p1.x + w.p2.x) / 2;
+              const midY = (w.p1.y + w.p2.y) / 2;
+
               ctx.save();
-              ctx.translate(len / 2, 0);
-              if (Math.abs(angle) > Math.PI / 2) ctx.rotate(Math.PI);
+              ctx.translate(midX, midY);
+              let labelAngle = w.angle;
+              if (Math.abs(labelAngle) > Math.PI / 2) labelAngle += Math.PI;
+              ctx.rotate(labelAngle);
 
               ctx.fillStyle = isSelected ? '#4f46e5' : 'rgba(255, 255, 255, 0.95)';
               ctx.strokeStyle = isSelected ? '#4338ca' : '#94a3b8';
@@ -1690,6 +1997,7 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
               ctx.fillText(dimStr, 0, 0);
               ctx.restore();
             }
+
             ctx.restore();
           });
         }
@@ -1931,29 +2239,60 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
             ctx.lineJoin = 'round';
             ctx.miterLimit = 2;
 
-            // 1. Primary Room Name (e.g. BEDROOM, HALL, KITCHEN, TOILET, PARKING)
-            ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 3.5;
-            ctx.strokeText(primaryName, screenAvg.x, screenAvg.y - 8);
+            const isSmallRoom = (room.areaSquareMeters || 12.5) < 7 || primaryName.includes('TOILET') || primaryName.includes('BATH') || primaryName.includes('WASH');
+
+            // Measure room labels for crisp architectural white wipeout mask (100% legibility on dark floors & furniture)
+            ctx.font = 'bold 8.5px "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+            const nameMetrics = ctx.measureText(primaryName);
+            ctx.font = '600 7.5px "Inter", monospace, sans-serif';
+            const dimMetrics = ctx.measureText(dimText);
+            let maxTextW = Math.max(nameMetrics.width, dimMetrics.width);
+            if (!isSmallRoom) {
+              ctx.font = 'bold 7px monospace';
+              const lvlMetrics = ctx.measureText(lvlText);
+              maxTextW = Math.max(maxTextW, lvlMetrics.width);
+            }
+
+            const plateW = Math.max(maxTextW + 10, 36);
+            const plateH = isSmallRoom ? 22 : 32;
+            const plateX = screenAvg.x - plateW / 2;
+            const plateY = isSmallRoom ? screenAvg.y - 11 : screenAvg.y - 16;
+
+            // Crisp Architectural White Wipeout Plate (Guarantees razor-sharp readability on dark floors & furniture)
+            ctx.save();
+            ctx.fillStyle = isSelected ? 'rgba(238, 242, 255, 0.96)' : 'rgba(255, 255, 255, 0.95)';
+            ctx.strokeStyle = isSelected ? '#6366f1' : 'rgba(203, 213, 225, 0.85)';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.roundRect(plateX, plateY, plateW, plateH, 3.5);
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.lineJoin = 'round';
+            ctx.miterLimit = 2;
+
+            // 1. Primary Room Name (e.g. BEDROOM, HALL, KITCHEN, TOILET) - Compact Architectural Typography
+            ctx.font = 'bold 8.5px "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+            const nameY = isSmallRoom ? screenAvg.y - 4.5 : screenAvg.y - 6;
             ctx.fillStyle = isSelected ? '#4338ca' : '#0f172a';
-            ctx.fillText(primaryName, screenAvg.x, screenAvg.y - 8);
+            ctx.fillText(primaryName, screenAvg.x, nameY);
 
-            // 2. Dimension Text (e.g. 12' X 14'-6")
-            ctx.font = 'bold 9px system-ui, monospace';
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 3;
-            ctx.strokeText(dimText, screenAvg.x, screenAvg.y + 4);
+            // 2. Dimension Text (e.g. 12' X 14'-6" or 4' X 7')
+            ctx.font = '600 7.5px "Inter", monospace, sans-serif';
+            const dimY = isSmallRoom ? screenAvg.y + 4.5 : screenAvg.y + 3;
             ctx.fillStyle = isSelected ? '#4f46e5' : '#334155';
-            ctx.fillText(dimText, screenAvg.x, screenAvg.y + 4);
+            ctx.fillText(dimText, screenAvg.x, dimY);
 
-            // 3. Level Text (e.g. ±2'0" LVL.)
-            ctx.font = 'bold 8px monospace';
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 3;
-            ctx.strokeText(lvlText, screenAvg.x, screenAvg.y + 15);
-            ctx.fillStyle = isSelected ? '#e11d48' : '#e11d48'; // Clean architectural red level text
-            ctx.fillText(lvlText, screenAvg.x, screenAvg.y + 15);
+            // 3. Level Text (e.g. ±2'0" LVL.) - Only shown on larger rooms (matching Image 2)
+            if (!isSmallRoom) {
+              ctx.font = 'bold 7px monospace';
+              ctx.fillStyle = isSelected ? '#e11d48' : '#e11d48';
+              ctx.fillText(lvlText, screenAvg.x, screenAvg.y + 11.5);
+            }
 
             ctx.restore();
           });
@@ -3179,6 +3518,15 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
                 </div>
               )}
             </div>
+            {/* Download Clean Architectural Floor Plan (PNG) */}
+            <button
+              onClick={handleExportHDImage}
+              className="px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-xs cursor-pointer"
+              title="Download Clean Architectural 2D Floor Plan (Ultra-HD PNG)"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download Plan</span>
+            </button>
           </div>
         </div>
       )}
@@ -3292,6 +3640,15 @@ export const PlanCanvas2D: React.FC<PlanCanvas2DProps> = ({
         >
           <Maximize2 className="w-3 h-3 text-amber-600" />
           <span>Fit</span>
+        </button>
+        <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
+        <button
+          onClick={handleExportHDImage}
+          className="flex items-center gap-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded text-[11px] font-bold transition cursor-pointer shadow-xs"
+          title="Download Clean Architectural 2D Floor Plan (Ultra-HD PNG)"
+        >
+          <Download className="w-3 h-3 text-white" />
+          <span>Download</span>
         </button>
       </div>
     </div>

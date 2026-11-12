@@ -58,6 +58,7 @@ import {
   Download,
   Printer,
   FileCode,
+  Building2,
 } from 'lucide-react';
 import { HomePlan } from '../types/plan';
 import { ToolMode, CADLayers } from './PlanCanvas2D';
@@ -458,8 +459,36 @@ export const SweetHomeRibbon: React.FC<SweetHomeRibbonProps> = ({
             </Space>
           </div>
 
-          {/* Ant Design Segmented Layout Switcher */}
+          {/* Multi-Floor Level Switcher & Layout Controls */}
           <div className="flex items-center gap-2">
+            {(() => {
+              const allFloors = plan.floors && plan.floors.length > 0 ? plan.floors : [
+                { level: 0, name: 'Ground Floor' },
+                { level: 1, name: '1st Floor' },
+              ];
+              if (allFloors.length <= 1 || !onFloorChange) return null;
+              return (
+                <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 shrink-0">
+                  <Building2 className="w-3 h-3 text-indigo-500 ml-1 mr-0.5 shrink-0" />
+                  {allFloors.map((fl) => (
+                    <button
+                      key={fl.level}
+                      onClick={() => onFloorChange(fl.level)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                        activeFloor === fl.level
+                          ? 'bg-indigo-600 text-white shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                      title={`Switch active floor to ${fl.name || `Floor ${fl.level}`}`}
+                    >
+                      {fl.name ? (fl.name.length > 14 ? fl.name.slice(0, 12) + '..' : fl.name) : (fl.level === 0 ? 'Ground' : fl.level === 1 ? '1st' : `${fl.level}nd`)}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* Ant Design Segmented Layout Switcher */}
             <Segmented
               size="small"
               value={studioLayout}

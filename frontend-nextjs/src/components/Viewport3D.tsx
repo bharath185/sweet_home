@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
   Sun,
+  Sunset,
+  Moon,
   Rotate3d,
   Maximize2,
   Camera,
@@ -468,6 +470,76 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const meshesGroupRef = useRef<THREE.Group | null>(null);
   const dirLightRef = useRef<THREE.DirectionalLight | null>(null);
   const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
+  const bounceLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const groundMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
+
+  type LightingAtmosphere = 'daylight' | 'sunset' | 'night' | 'studio';
+  const [atmosphere, setAtmosphere] = useState<LightingAtmosphere>('daylight');
+
+  // Dynamically update lighting atmosphere (Daylight, Sunset, Night, Studio)
+  useEffect(() => {
+    const dirLight = dirLightRef.current;
+    const hemiLight = hemiLightRef.current;
+    const bounceLight = bounceLightRef.current;
+    const groundMat = groundMatRef.current;
+    const renderer = rendererRef.current;
+
+    if (!dirLight || !hemiLight || !bounceLight) return;
+
+    if (atmosphere === 'daylight') {
+      dirLight.color.setHex(0xfff8eb);
+      dirLight.intensity = 1.75;
+      dirLight.position.set(16, 28, 16);
+      dirLight.shadow.radius = 2.6;
+      hemiLight.color.setHex(0xdbeafe);
+      hemiLight.groundColor.setHex(0x94a3b8);
+      hemiLight.intensity = 0.78;
+      bounceLight.color.setHex(0xffeedb);
+      bounceLight.intensity = 0.45;
+      bounceLight.position.set(-15, 20, -15);
+      if (groundMat) groundMat.color.setHex(0x487922);
+      if (renderer) renderer.toneMappingExposure = 1.08;
+    } else if (atmosphere === 'sunset') {
+      dirLight.color.setHex(0xfb923c); // Warm golden sunset
+      dirLight.intensity = 2.4;
+      dirLight.position.set(30, 11, 20); // Low horizon angle for long soft shadows
+      dirLight.shadow.radius = 4.2;
+      hemiLight.color.setHex(0xfbcfe8); // Lavender/rose evening sky
+      hemiLight.groundColor.setHex(0x7c2d12); // Deep amber earth
+      hemiLight.intensity = 0.85;
+      bounceLight.color.setHex(0xfdba74);
+      bounceLight.intensity = 0.65;
+      bounceLight.position.set(-15, 12, -15);
+      if (groundMat) groundMat.color.setHex(0x526b24);
+      if (renderer) renderer.toneMappingExposure = 1.15;
+    } else if (atmosphere === 'night') {
+      dirLight.color.setHex(0x38bdf8); // Moonlight
+      dirLight.intensity = 0.35;
+      dirLight.position.set(12, 35, 12);
+      dirLight.shadow.radius = 2.0;
+      hemiLight.color.setHex(0x0f172a); // Midnight sky
+      hemiLight.groundColor.setHex(0x020617);
+      hemiLight.intensity = 0.28;
+      bounceLight.color.setHex(0x1e293b);
+      bounceLight.intensity = 0.12;
+      bounceLight.position.set(-10, 15, -10);
+      if (groundMat) groundMat.color.setHex(0x14280f); // Dark nighttime grass
+      if (renderer) renderer.toneMappingExposure = 1.35;
+    } else if (atmosphere === 'studio') {
+      dirLight.color.setHex(0xffffff); // Neutral 5500K key light
+      dirLight.intensity = 1.6;
+      dirLight.position.set(15, 25, 15);
+      dirLight.shadow.radius = 2.4;
+      hemiLight.color.setHex(0xf8fafc);
+      hemiLight.groundColor.setHex(0x94a3b8);
+      hemiLight.intensity = 0.9;
+      bounceLight.color.setHex(0xffffff);
+      bounceLight.intensity = 0.6;
+      bounceLight.position.set(-15, 20, -15);
+      if (groundMat) groundMat.color.setHex(0x334155); // Neutral architectural slate
+      if (renderer) renderer.toneMappingExposure = 1.0;
+    }
+  }, [atmosphere]);
 
   const planRef = useRef<HomePlan>(plan);
   planRef.current = plan;
@@ -615,11 +687,47 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const activeFloorRef = useRef(activeFloor);
   activeFloorRef.current = activeFloor;
 
-  const getFloor3DOffset = (level: number = 0, currentFloorMode = floor3DModeRef.current) => {
-    const allFloors = planRef.current.floors && planRef.current.floors.length > 0 ? planRef.current.floors : [
-      { level: 0, name: 'Ground Floor', height: 250, elevation: 0 },
-      { level: 1, name: '1st Floor', height: 250, elevation: 250 },
-    ];
+  const getFloorHeightM = (lvl: number, p = planRef.current): number => {
+    const fl = p.floors?.find((f) => f.level === lvl);
+    if (fl?.height && fl.height >= 180) return fl.height * CM;
+    const lvlWalls = (p.walls || []).filter((w) => (w.floorLevel ?? 0) === lvl);
+    if (lvlWalls.length > 0) {
+      const maxH = Math.max(...lvlWalls.map((w) => w.height || 280));
+      if (maxH >= 180) return maxH * CM;
+    }
+    const lvlRooms = (p.rooms || []).filter((r) => (r.floorLevel ?? 0) === lvl);
+    if (lvlRooms.length > 0) {
+      const maxCeil = Math.max(...lvlRooms.map((r) => r.ceilingHeight || 280));
+      if (maxCeil >= 180) return maxCeil * CM;
+    }
+    return 2.8; // default standard 2.8m story height
+  };
+
+  const getFloor3DOffset = (
+    level: number = 0,
+    currentFloorMode = floor3DModeRef.current,
+    gap = nextFloorGapRef.current || 0,
+    currentPlan = planRef.current
+  ) => {
+    const rawFloors = currentPlan.floors && currentPlan.floors.length > 0 ? currentPlan.floors : [];
+    let allFloors = rawFloors;
+    if (allFloors.length === 0) {
+      const distinctLevels = Array.from(
+        new Set([
+          0,
+          ...(currentPlan.walls || []).map((w) => w.floorLevel ?? 0),
+          ...(currentPlan.rooms || []).map((r) => r.floorLevel ?? 0),
+          ...(currentPlan.furniture || []).map((f) => f.floorLevel ?? 0),
+        ])
+      ).sort((a, b) => a - b);
+      allFloors = distinctLevels.map((lvl) => ({
+        level: lvl,
+        name: lvl === 0 ? 'Ground Floor' : `${lvl === 1 ? '1st' : lvl === 2 ? '2nd' : `${lvl}th`} Floor`,
+        height: 280,
+        elevation: lvl * 280,
+      }));
+    }
+
     if (currentFloorMode === 'isolated') {
       return { x: 0, y: 0, z: 0 };
     } else if (currentFloorMode === 'sideBySide') {
@@ -628,9 +736,16 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const mid = (allFloors.length - 1) / 2;
       return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
     } else {
-      const baseH = 2.5;
-      const gap = nextFloorGapRef.current || 0;
-      return { x: 0, y: level * (baseH + gap), z: 0 };
+      // Multi-story stacked: accumulate the exact heights of all floors below this level + gap
+      const lowerLevels = allFloors
+        .map((f) => f.level)
+        .filter((l) => l < level)
+        .sort((a, b) => a - b);
+      let elevation = 0;
+      for (const lvl of lowerLevels) {
+        elevation += getFloorHeightM(lvl, currentPlan) + gap;
+      }
+      return { x: 0, y: elevation, z: 0 };
     }
   };
 
@@ -721,6 +836,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const bounceLight = new THREE.DirectionalLight(0xffeedb, 0.45);
     bounceLight.position.set(-15, 20, -15);
     scene.add(bounceLight);
+    bounceLightRef.current = bounceLight;
 
     const dirLight = new THREE.DirectionalLight(0xfff8eb, 1.6);
     dirLight.position.set(15, 25, 15);
@@ -744,6 +860,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       roughness: 0.95,
       metalness: 0.01,
     });
+    groundMatRef.current = groundMat;
     const ground = new THREE.Mesh(groundGeom, groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.01;
@@ -1146,16 +1263,19 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           ) {
             // Progress from bottom to top along stair flight
             const stairProgress = Math.max(0, Math.min(1, (nextZ - sMinZ) / Math.max(0.1, sMaxZ - sMinZ)));
-            const floorHeightGap = 2.5 + (nextFloorGapRef.current || 0);
-            targetGroundY = stairProgress * floorHeightGap;
+            const stairLevel = st.floorLevel ?? 0;
+            const startElevation = getFloor3DOffset(stairLevel, floor3DModeRef.current, nextFloorGapRef.current).y;
+            const nextFloorElevation = getFloor3DOffset(stairLevel + 1, floor3DModeRef.current, nextFloorGapRef.current).y;
+            const stairRise = Math.max(0.5, nextFloorElevation - startElevation);
+            targetGroundY = startElevation + stairProgress * stairRise;
 
-            // Automatically switch active floor level when reaching upper mezzanine or ground floor
-            if (stairProgress >= 0.82 && activeFloorRef.current !== 1) {
-              activeFloorRef.current = 1;
-              if (onFloorChange) onFloorChange(1);
-            } else if (stairProgress <= 0.18 && activeFloorRef.current !== 0) {
-              activeFloorRef.current = 0;
-              if (onFloorChange) onFloorChange(0);
+            // Automatically switch active floor level when reaching upper floor or lower floor
+            if (stairProgress >= 0.82 && activeFloorRef.current !== stairLevel + 1) {
+              activeFloorRef.current = stairLevel + 1;
+              if (onFloorChange) onFloorChange(stairLevel + 1);
+            } else if (stairProgress <= 0.18 && activeFloorRef.current !== stairLevel) {
+              activeFloorRef.current = stairLevel;
+              if (onFloorChange) onFloorChange(stairLevel);
             }
             break;
           }
@@ -1482,26 +1602,46 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const CM = 0.01;
     const targetFloor = activeFloor ?? 0;
 
-    const allFloors = plan.floors && plan.floors.length > 0 ? plan.floors : [
-      { level: 0, name: 'Ground Floor', height: 250, elevation: 0 },
-      { level: 1, name: '1st Floor', height: 250, elevation: 250 },
-    ];
+    const rawFloors = plan.floors && plan.floors.length > 0 ? plan.floors : [];
+    let allFloors = rawFloors;
+    if (allFloors.length === 0) {
+      const distinctLevels = Array.from(
+        new Set([
+          0,
+          ...(plan.walls || []).map((w) => w.floorLevel ?? 0),
+          ...(plan.rooms || []).map((r) => r.floorLevel ?? 0),
+          ...(plan.furniture || []).map((f) => f.floorLevel ?? 0),
+        ])
+      ).sort((a, b) => a - b);
+      allFloors = distinctLevels.map((lvl) => ({
+        level: lvl,
+        name: lvl === 0 ? 'Ground Floor' : `${lvl === 1 ? '1st' : lvl === 2 ? '2nd' : `${lvl}th`} Floor`,
+        height: 280,
+        elevation: lvl * 280,
+      }));
+    }
 
-    // Helper for 3D floor placement: side-by-side horizontal positioning or stacked
+    // Helper for 3D floor placement using dynamic multi-floor heights & stacked elevation
     const getFloor3DOffset = (level: number = 0) => {
+      const currentPlan = planRef.current || plan;
       if (floor3DMode === 'isolated') {
         return { x: 0, y: 0, z: 0 };
       } else if (floor3DMode === 'sideBySide') {
         const floorIdx = allFloors.findIndex((fl) => fl.level === level);
         const validIdx = floorIdx >= 0 ? floorIdx : 0;
         const mid = (allFloors.length - 1) / 2;
-        // 13.0 meters horizontal spacing side-by-side on ground level
         return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
       } else {
-        // Stacked vertically: default elevation 2.5m + adjustable next-floor gap
-        const baseH = 2.5;
+        const lowerLevels = allFloors
+          .map((f) => f.level)
+          .filter((l) => l < level)
+          .sort((a, b) => a - b);
+        let elevation = 0;
         const gap = nextFloorGap || 0;
-        return { x: 0, y: level * (baseH + gap), z: 0 };
+        for (const lvl of lowerLevels) {
+          elevation += getFloorHeightM(lvl, currentPlan) + gap;
+        }
+        return { x: 0, y: elevation, z: 0 };
       }
     };
 
@@ -1536,11 +1676,21 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       });
 
       if (minX === Infinity) {
+        if (fl.level > 0) return; // Skip empty upper floors so they don't produce floating boxes in the sky
         minX = -3.5; maxX = 3.5; minZ = -3.5; maxZ = 3.5;
       }
 
-      const padW = Math.max(7, (maxX - minX) + 2.0);
-      const padD = Math.max(7, (maxZ - minZ) + 2.0);
+      const isGround = fl.level === 0;
+      const isStacked = floor3DMode === 'stacked';
+      const hasGap = (nextFloorGap || 0) > 0;
+
+      // Clean architectural foundation plinth vs inter-floor slab:
+      // Ground floor: 0.5m perimeter apron border (25cm around exterior)
+      // Upper floors stacked flush (gap === 0): 0.08m (subtle 4cm drip edge / belt course)
+      // Upper floors exploded (gap > 0) or isolated: 0.2m clean plate margin
+      const margin = isGround ? 0.5 : (isStacked && !hasGap ? 0.08 : 0.2);
+      const padW = (maxX - minX) + margin;
+      const padD = (maxZ - minZ) + margin;
       const centerX = (minX + maxX) / 2 + offset.x;
       const centerZ = (minZ + maxZ) / 2 + offset.z;
 
@@ -1906,18 +2056,28 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       floorMesh.userData = { id: room.id, type: 'roomFloor', floorLevel: roomLevel };
       group.add(floorMesh);
 
-      // Warm Interior Ambient Bounce Light (simulates natural home room illumination)
+      // Atmosphere-Aware Interior Ambient Room Light (glows warmly through windows at night)
       const roomPointsLen = room.points.length;
       if (roomPointsLen > 0) {
         const cx = (room.points.reduce((sum, p) => sum + p.x, 0) / roomPointsLen) * CM;
         const cz = (room.points.reduce((sum, p) => sum + p.y, 0) / roomPointsLen) * CM;
-        const roomLight = new THREE.PointLight(0xfff3e3, 0.45, 9, 1.4);
+        const isNight = atmosphere === 'night';
+        const isSunset = atmosphere === 'sunset';
+        const roomLightColor = isNight ? 0xffd54f : isSunset ? 0xffe082 : 0xfff3e3;
+        const roomLightIntensity = isNight ? 1.85 : isSunset ? 0.75 : 0.45;
+        const roomLightDist = isNight ? 14 : 9;
+        const roomLight = new THREE.PointLight(roomLightColor, roomLightIntensity, roomLightDist, 1.4);
         roomLight.position.set(cx + offset.x, offset.y + 2.1, cz + offset.z);
         group.add(roomLight);
       }
 
       // --- DecoFrog 3D Architectural Ceiling (Top View Option: Removed vs Kept) ---
-      const shouldRenderCeiling = showCeiling || cameraMode === 'visitor';
+      const maxFloorLevel = Math.max(...allFloors.map((f) => f.level));
+      const isTopFloor = roomLevel === maxFloorLevel;
+      const shouldRenderCeiling =
+        showCeiling ||
+        cameraMode === 'visitor' ||
+        (floor3DMode === 'stacked' && !isTopFloor && (nextFloorGap || 0) === 0);
       if (shouldRenderCeiling) {
         const ceilShape = new THREE.Shape();
         ceilShape.moveTo(room.points[0].x * CM, -room.points[0].y * CM);
@@ -1949,7 +2109,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           color: room.ceilingColor ? new THREE.Color(room.ceilingColor) : 0xf8fafc,
           roughness: 0.9,
           metalness: 0.02,
-          side: cameraMode === 'visitor' ? THREE.DoubleSide : THREE.BackSide,
+          side: THREE.DoubleSide,
         });
         const ceilMesh = new THREE.Mesh(ceilGeom, ceilMat);
         ceilMesh.rotation.x = -Math.PI / 2;
@@ -1958,6 +2118,58 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         group.add(ceilMesh);
       }
     });
+
+    // Helper to generate seamless, continuous world-metric UVs for wall BoxGeometries.
+    // Fixes stretching, squishing, and pattern distortion around door & window cutouts.
+    const applyMetricUVsToWallBox = (
+      geom: THREE.BoxGeometry,
+      startX: number,
+      boxWidth: number,
+      startY: number,
+      boxHeight: number,
+      thickness: number,
+      scale: number = 1.2
+    ) => {
+      const pos = geom.attributes.position;
+      const norm = geom.attributes.normal;
+      const uv = geom.attributes.uv;
+      if (!pos || !norm || !uv) return;
+
+      for (let i = 0; i < pos.count; i++) {
+        const px = pos.getX(i);
+        const py = pos.getY(i);
+        const pz = pos.getZ(i);
+        const nx = norm.getX(i);
+        const ny = norm.getY(i);
+        const nz = norm.getZ(i);
+
+        let u = 0;
+        let v = 0;
+
+        if (Math.abs(nz) > 0.5) {
+          // Front and Back wall surfaces (along wall span X and height Y)
+          const wallX = startX + (px + boxWidth / 2);
+          const wallY = startY + (py + boxHeight / 2);
+          u = wallX * scale;
+          v = wallY * scale;
+        } else if (Math.abs(nx) > 0.5) {
+          // Left and Right end faces / window & door jambs (along thickness Z and height Y)
+          const wallZ = pz + thickness / 2;
+          const wallY = startY + (py + boxHeight / 2);
+          u = wallZ * scale;
+          v = wallY * scale;
+        } else {
+          // Top and Bottom faces / sill top and lintel soffit (along wall span X and thickness Z)
+          const wallX = startX + (px + boxWidth / 2);
+          const wallZ = pz + thickness / 2;
+          u = wallX * scale;
+          v = wallZ * scale;
+        }
+
+        uv.setXY(i, u, v);
+      }
+      uv.needsUpdate = true;
+    };
 
     // 2. Build Walls with Architectural Openings / Cutouts for Doors & Windows
     plan.walls.filter((w) => isFloorVisible(w.floorLevel ?? 0)).forEach((wall) => {
@@ -1978,9 +2190,9 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       const wallTex = wall.texture
         ? getProceduralTexture(wall.texture, wall.color)
-        : getProceduralTexture('matte_wall_paint', wall.color || '#f8fafc');
+        : getProceduralTexture('matte_wall_paint');
       if (wallTex) {
-        wallTex.repeat.set(Math.max(1.5, length * 1.5), Math.max(1.5, height * 1.5));
+        wallTex.repeat.set(1, 1);
       }
 
       const isWallTexture = Boolean(wall.texture);
@@ -1988,14 +2200,15 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       const isRoyalPly = wall.texture?.includes('royal_ply');
       const isBrick = wall.texture?.includes('brick') || wall.texture?.includes('stone');
 
+      // Preserve actual wall finish and color even when selected (selection is indicated via wireframe edges)
+      const wallMatColor = isWallTexture
+        ? 0xffffff
+        : wall.color
+        ? new THREE.Color(wall.color)
+        : 0xf8fafc;
+
       const mat = new THREE.MeshStandardMaterial({
-        color: isSelected
-          ? 0x38bdf8
-          : isWallTexture
-          ? 0xffffff
-          : wall.color
-          ? new THREE.Color(wall.color)
-          : 0xf8fafc,
+        color: wallMatColor,
         roughness: isRoyale ? 0.45 : isRoyalPly ? 0.38 : isBrick ? 0.92 : 0.88,
         metalness: isRoyale ? 0.12 : isRoyalPly ? 0.04 : 0.01,
         map: wallTex || undefined,
@@ -2041,6 +2254,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       if (wallOpenings.length === 0) {
         // Solid wall segment
         const geom = new THREE.BoxGeometry(length, height, thickness);
+        applyMetricUVsToWallBox(geom, 0, length, 0, height, thickness);
         const wallMesh = new THREE.Mesh(geom, wallMaterials);
         wallMesh.position.set(
           (x1 + x2) / 2 + offset.x,
@@ -2083,11 +2297,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           const leftLen = op.start - curPos;
           if (leftLen > 0.05) {
             const leftGeom = new THREE.BoxGeometry(leftLen, height, thickness);
+            applyMetricUVsToWallBox(leftGeom, curPos, leftLen, 0, height, thickness);
             const leftMesh = new THREE.Mesh(leftGeom, wallMaterials);
             leftMesh.position.set(curPos + leftLen / 2, height / 2, 0);
             leftMesh.castShadow = true;
             leftMesh.receiveShadow = true;
-            attachWallEdges(leftMesh);
             wallGroup.add(leftMesh);
           }
 
@@ -2096,22 +2310,29 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           const lintelH = Math.max(0, height - (op.elevation + op.height));
           if (lintelH > 0.04 && openLen > 0.05) {
             const lintelGeom = new THREE.BoxGeometry(openLen, lintelH, thickness);
+            applyMetricUVsToWallBox(
+              lintelGeom,
+              op.start,
+              openLen,
+              op.elevation + op.height,
+              lintelH,
+              thickness
+            );
             const lintelMesh = new THREE.Mesh(lintelGeom, wallMaterials);
             lintelMesh.position.set(op.start + openLen / 2, (op.elevation + op.height) + lintelH / 2, 0);
             lintelMesh.castShadow = true;
             lintelMesh.receiveShadow = true;
-            attachWallEdges(lintelMesh);
             wallGroup.add(lintelMesh);
           }
 
           // Bottom Sill (for windows with elevation above floor)
           if (op.elevation > 0.05 && openLen > 0.05) {
             const sillGeom = new THREE.BoxGeometry(openLen, op.elevation, thickness);
+            applyMetricUVsToWallBox(sillGeom, op.start, openLen, 0, op.elevation, thickness);
             const sillMesh = new THREE.Mesh(sillGeom, wallMaterials);
             sillMesh.position.set(op.start + openLen / 2, op.elevation / 2, 0);
             sillMesh.castShadow = true;
             sillMesh.receiveShadow = true;
-            attachWallEdges(sillMesh);
             wallGroup.add(sillMesh);
           }
 
@@ -2122,12 +2343,27 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         const remLen = length - curPos;
         if (remLen > 0.05) {
           const remGeom = new THREE.BoxGeometry(remLen, height, thickness);
+          applyMetricUVsToWallBox(remGeom, curPos, remLen, 0, height, thickness);
           const remMesh = new THREE.Mesh(remGeom, wallMaterials);
           remMesh.position.set(curPos + remLen / 2, height / 2, 0);
           remMesh.castShadow = true;
           remMesh.receiveShadow = true;
-          attachWallEdges(remMesh);
           wallGroup.add(remMesh);
+        }
+
+        // Selection highlight for partitioned wall: single outer perimeter bounding box, zero internal seam lines
+        if (isSelected) {
+          const overallGeom = new THREE.BoxGeometry(length, height, thickness);
+          const edgesGeom = new THREE.EdgesGeometry(overallGeom);
+          const edgeMat = new THREE.LineBasicMaterial({
+            color: 0x0284c7,
+            linewidth: 2,
+            transparent: true,
+            opacity: 0.95,
+          });
+          const edgeLines = new THREE.LineSegments(edgesGeom, edgeMat);
+          edgeLines.position.set(length / 2, height / 2, 0);
+          wallGroup.add(edgeLines);
         }
 
         group.add(wallGroup);
@@ -2179,12 +2415,13 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
         const cornerTex = primary.texture
           ? getProceduralTexture(primary.texture, primary.color)
-          : getProceduralTexture('matte_wall_paint', primary.color || '#f8fafc');
+          : getProceduralTexture('matte_wall_paint');
+        if (cornerTex) {
+          cornerTex.repeat.set(1, 1);
+        }
 
         const cornerMat = new THREE.MeshStandardMaterial({
-          color: hasSelected
-            ? 0x38bdf8
-            : primary.texture
+          color: primary.texture
             ? 0xffffff
             : primary.color
             ? new THREE.Color(primary.color)
@@ -2205,6 +2442,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         });
 
         const cornerGeom = new THREE.BoxGeometry(maxThickness, maxHeight, maxThickness);
+        applyMetricUVsToWallBox(cornerGeom, 0, maxThickness, 0, maxHeight, maxThickness);
         const cornerMesh = new THREE.Mesh(cornerGeom, cornerMat);
         cornerMesh.position.set(cv.x + offset.x, offset.y + maxHeight / 2, cv.z + offset.z);
         cornerMesh.castShadow = true;
@@ -2518,9 +2756,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       }
 
       if (item.category === 'Lighting' && !isColliding) {
-        const lightColorHex = item.lightColor || '#fef08a';
-        const lightIntensityVal = item.lightIntensity !== undefined ? item.lightIntensity : 1.2;
-        const spot = new THREE.PointLight(new THREE.Color(lightColorHex), lightIntensityVal, 8);
+        const isNight = atmosphere === 'night';
+        const lightColorHex = item.lightColor || (isNight ? '#f59e0b' : '#fef08a');
+        const defaultIntensity = isNight ? 2.4 : atmosphere === 'sunset' ? 1.6 : 1.2;
+        const lightIntensityVal = item.lightIntensity !== undefined ? item.lightIntensity : defaultIntensity;
+        const spotDist = isNight ? 12 : 8;
+        const spot = new THREE.PointLight(new THREE.Color(lightColorHex), lightIntensityVal, spotDist);
         // Ceiling lights shine downwards from the bottom of the fixture
         spot.position.y = isCeiling ? Math.max(0.08, (effectiveHeight * CM) * 0.25) : effectiveHeight * CM + 0.15;
         spot.castShadow = true;
@@ -2529,7 +2770,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       group.add(itemGroup);
     });
-  }, [plan, collidingItemIds, activeFloor, floor3DMode, showCeiling, cameraMode, nextFloorGap]);
+  }, [plan, collidingItemIds, activeFloor, floor3DMode, showCeiling, cameraMode, nextFloorGap, atmosphere]);
 
   // Update Selection & Hover highlights smoothly in 3D without tearing down the scene graph
   useEffect(() => {
@@ -2558,7 +2799,11 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           const isHovered = hoveredId === targetId;
           const isColliding = current?.userData?.isColliding;
 
-          if (isColliding) {
+          if (targetType === 'wall') {
+            // Walls show selection via outer perimeter CAD wireframe edges, NEVER tint with emissive glow
+            mat.emissive.setHex(0x000000);
+            mat.emissiveIntensity = 0;
+          } else if (isColliding) {
             mat.emissive.setHex(0xef4444);
             mat.emissiveIntensity = 0.35;
           } else if (isSelected) {
@@ -3025,24 +3270,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, cameraRef.current);
 
-    const allFloors = planRef.current.floors && planRef.current.floors.length > 0 ? planRef.current.floors : [
-      { level: 0, name: 'Ground Floor' },
-      { level: 1, name: '1st Floor' },
-    ];
-    const getFloor3DOffset = (level: number = 0) => {
-      if (floor3DMode === 'isolated') {
-        return { x: 0, y: 0, z: 0 };
-      } else if (floor3DMode === 'sideBySide') {
-        const floorIdx = allFloors.findIndex((fl) => fl.level === level);
-        const validIdx = floorIdx >= 0 ? floorIdx : 0;
-        const mid = (allFloors.length - 1) / 2;
-        return { x: (validIdx - mid) * 13.0, y: 0, z: 0 };
-      } else {
-        return { x: 0, y: level * 2.5, z: 0 };
-      }
-    };
-
-    const offset = getFloor3DOffset(activeFloor || 0);
+    const offset = getFloor3DOffset(activeFloor || 0, floor3DMode, nextFloorGap, planRef.current);
     const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -offset.y);
     const hitPoint = new THREE.Vector3();
 
@@ -3298,15 +3526,19 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     const maxSpan = Math.max(spanX, spanZ, 4.0);
 
     // Optimal viewing radius in meters for isometric 3D perspective
-    const optimalRadius = Math.max(8.0, Math.min(32.0, maxSpan * 1.45));
+    const allFloors = plan.floors && plan.floors.length > 0 ? plan.floors : [{ level: 0 }];
+    const totalFloors = floor3DMode === 'stacked' ? Math.max(1, allFloors.length) : 1;
+    const buildingHeightM = totalFloors * 2.8;
+    const targetY = floor3DMode === 'stacked' && totalFloors > 1 ? buildingHeightM * 0.42 : 1.0;
+    const optimalRadius = Math.max(8.0, Math.min(42.0, Math.max(maxSpan * 1.45, buildingHeightM * 1.75)));
 
     sphericalRef.current = {
       radius: optimalRadius,
       theta: Math.PI / 4,
       phi: Math.PI / 3.2,
     };
-    targetRef.current.set(centerX, 1.0, centerZ);
-  }, [plan]);
+    targetRef.current.set(centerX, targetY, centerZ);
+  }, [plan, floor3DMode]);
 
   useEffect(() => {
     if (plan.id !== lastFitted3DPlanIdRef.current) {
@@ -3497,128 +3729,30 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       )}
 
       {/* Top 3D Viewport Controls (Hidden in Customer Presentation Tour) */}
-      {!isCustomerMode && (
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm text-xs font-semibold">
-        {cameraMode === 'visitor' ? (
-          /* Sleek Minimal Bar in PUBG Tour: Orbit Return & Duplex */
-          <>
-            <button
-              onClick={() => setCameraMode('aerial')}
-              className="px-2.5 py-1 rounded-lg text-[11px] bg-sky-600 text-white font-bold shadow-2xs hover:bg-sky-500 transition flex items-center gap-1 cursor-pointer"
-              title="Return to Aerial Orbit View"
-            >
-              <Rotate3d className="w-3 h-3" />
-              <span>Orbit View</span>
-            </button>
-            <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
-            <button
-              onClick={() => setFloor3DMode(floor3DMode === 'stacked' ? 'isolated' : 'stacked')}
-              className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 font-medium cursor-pointer ${
-                floor3DMode === 'stacked'
-                  ? 'bg-indigo-600 text-white font-bold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
-              }`}
-              title="Duplex multi-story mode"
-            >
-              <Building2 className="w-3 h-3" />
-              <span>{floor3DMode === 'stacked' ? 'Duplex: ON' : 'Duplex: OFF'}</span>
-            </button>
-            <button
-              onClick={() => setShowCeiling((prev) => !prev)}
-              className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 font-medium cursor-pointer ${
-                showCeiling
-                  ? 'bg-indigo-600 text-white font-bold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
-              }`}
-              title={showCeiling ? "Remove Top (Cutaway open interior view)" : "Keep Top (Enclose ceiling & roof)"}
-            >
-              <Layers className="w-3 h-3" />
-              <span>{showCeiling ? 'Top: ON' : 'Top: OFF'}</span>
-            </button>
-          </>
-        ) : (
-          /* Full Controls in Orbit Mode */
-          <>
-            {/* 3D Tool Mode: Select vs Free Hand Pan (Hidden in Split/SweetHome mode to prevent clutter) */}
-            {!isSplitMode && (
-              <>
-                <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <button
-                    onClick={() => setToolMode('select')}
-                    className={`px-2 py-1 rounded-md text-[11px] transition flex items-center gap-1 cursor-pointer ${
-                      toolMode === 'select'
-                        ? 'bg-sky-600 text-white font-bold shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 dark:text-slate-300'
-                    }`}
-                    title="Select & Move 3D Items (V)"
-                  >
-                    <MousePointer className="w-3 h-3" />
-                    <span>Select</span>
-                  </button>
-                  <button
-                    onClick={() => setToolMode('pan')}
-                    className={`px-2 py-1 rounded-md text-[11px] transition flex items-center gap-1 cursor-pointer ${
-                      toolMode === 'pan'
-                        ? 'bg-sky-600 text-white font-bold shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 dark:text-slate-300'
-                    }`}
-                    title="Free Hand / Pan View Tool (H or Hold Space)"
-                  >
-                    <Hand className="w-3 h-3" />
-                    <span>Hand</span>
-                  </button>
-                </div>
-                <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
-              </>
-            )}
+      {!isCustomerMode && (() => {
+        const floorsCount = plan.floors && plan.floors.length > 0 ? plan.floors.length : 2;
+        const isMultiFloor = floorsCount >= 3;
+        const buildingModeLabel = isMultiFloor
+          ? (floor3DMode === 'stacked' ? `Multi-Story (${floorsCount}F): ON` : `Multi-Story (${floorsCount}F): OFF`)
+          : (floor3DMode === 'stacked' ? 'Duplex: ON' : 'Duplex: OFF');
+        const buildingModeTitle = isMultiFloor
+          ? `Stack all ${floorsCount} floors into a complete multi-story building`
+          : 'Attach Floors in 3D: Duplex multi-story mode';
 
-            {/* Camera Mode Switcher (Live 3D Top-Down, 3D Orbit, First-Person Walk Tour) */}
-            <div className="flex items-center gap-0.5">
+        return (
+        <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm text-xs font-semibold">
+          {cameraMode === 'visitor' ? (
+            /* Sleek Minimal Bar in PUBG Tour: Orbit Return & Duplex */
+            <>
               <button
-                onClick={() => {
-                  sphericalRef.current.theta = 0;
-                  sphericalRef.current.phi = 0.06;
-                  sphericalRef.current.radius = Math.max(14, sphericalRef.current.radius);
-                  setCameraMode('topdown');
-                }}
-                className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer font-bold ${
-                  cameraMode === 'topdown'
-                    ? 'bg-sky-600 text-white shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
-                }`}
-                title="Live 3D Mode (Image 3: Top-Down Plan, Pan & Zoom Only)"
-              >
-                <Layers className="w-3 h-3" />
-                <span>Live 3D</span>
-              </button>
-              <button
-                onClick={() => {
-                  setCameraMode('aerial');
-                }}
-                className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer font-bold ${
-                  cameraMode === 'aerial'
-                    ? 'bg-sky-600 text-white shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
-                }`}
-                title="Aerial Orbit View (Rotate & Tilt)"
+                onClick={() => setCameraMode('aerial')}
+                className="px-2.5 py-1 rounded-lg text-[11px] bg-sky-600 text-white font-bold shadow-2xs hover:bg-sky-500 transition flex items-center gap-1 cursor-pointer"
+                title="Return to Aerial Orbit View"
               >
                 <Rotate3d className="w-3 h-3" />
-                <span>Orbit</span>
+                <span>Orbit View</span>
               </button>
-              <button
-                onClick={handleSwitchToVisitor}
-                className="px-2.5 py-1 rounded-lg text-[11px] transition flex items-center gap-1.5 font-bold cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300"
-                title="Walk Tour (WASD Walk, Shift Sprint, Mouse-Look)"
-              >
-                <Gamepad2 className="w-3.5 h-3.5 text-slate-950" />
-                <span>Walk Tour</span>
-              </button>
-            </div>
-
-            <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
-
-            {/* Duplex Multi-Story Stack */}
-            <div className="flex items-center gap-0.5">
+              <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
               <button
                 onClick={() => setFloor3DMode(floor3DMode === 'stacked' ? 'isolated' : 'stacked')}
                 className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 font-medium cursor-pointer ${
@@ -3626,26 +3760,134 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
                     ? 'bg-indigo-600 text-white font-bold shadow-2xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
                 }`}
-                title="Attach Floors in 3D: Duplex multi-story mode"
+                title={buildingModeTitle}
               >
                 <Building2 className="w-3 h-3" />
-                <span>{floor3DMode === 'stacked' ? 'Duplex: ON' : 'Duplex: OFF'}</span>
+                <span>{buildingModeLabel}</span>
               </button>
-
-              {floor3DMode === 'stacked' && (
-                <button
-                  onClick={() => setNextFloorGap((prev) => (prev === 0 ? 0.8 : prev === 0.8 ? 1.6 : 0))}
-                  className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 font-semibold cursor-pointer ${
-                    nextFloorGap > 0
-                      ? 'bg-amber-500 text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
-                  }`}
-                  title="Next Floor Attachment Gap View"
-                >
-                  <span>{nextFloorGap === 0 ? '0m' : `+${nextFloorGap.toFixed(1)}m`}</span>
-                </button>
+              <button
+                onClick={() => setShowCeiling((prev) => !prev)}
+                className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 font-medium cursor-pointer ${
+                  showCeiling
+                    ? 'bg-indigo-600 text-white font-bold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
+                }`}
+                title={showCeiling ? "Remove Top (Cutaway open interior view)" : "Keep Top (Enclose ceiling & roof)"}
+              >
+                <Layers className="w-3 h-3" />
+                <span>{showCeiling ? 'Top: ON' : 'Top: OFF'}</span>
+              </button>
+            </>
+          ) : (
+            /* Full Controls in Orbit Mode */
+            <>
+              {/* 3D Tool Mode: Select vs Free Hand Pan (Hidden in Split/SweetHome mode to prevent clutter) */}
+              {!isSplitMode && (
+                <>
+                  <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <button
+                      onClick={() => setToolMode('select')}
+                      className={`px-2 py-1 rounded-md text-[11px] transition flex items-center gap-1 cursor-pointer ${
+                        toolMode === 'select'
+                          ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 dark:text-slate-300'
+                      }`}
+                      title="Select & Move 3D Items (V)"
+                    >
+                      <MousePointer className="w-3 h-3" />
+                      <span>Select</span>
+                    </button>
+                    <button
+                      onClick={() => setToolMode('pan')}
+                      className={`px-2 py-1 rounded-md text-[11px] transition flex items-center gap-1 cursor-pointer ${
+                        toolMode === 'pan'
+                          ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 dark:text-slate-300'
+                      }`}
+                      title="Free Hand / Pan View Tool (H or Hold Space)"
+                    >
+                      <Hand className="w-3 h-3" />
+                      <span>Hand</span>
+                    </button>
+                  </div>
+                  <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
+                </>
               )}
-            </div>
+
+              {/* Camera Mode Switcher (Live 3D Top-Down, 3D Orbit, First-Person Walk Tour) */}
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={() => {
+                    sphericalRef.current.theta = 0;
+                    sphericalRef.current.phi = 0.06;
+                    sphericalRef.current.radius = Math.max(14, sphericalRef.current.radius);
+                    setCameraMode('topdown');
+                  }}
+                  className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer font-bold ${
+                    cameraMode === 'topdown'
+                      ? 'bg-sky-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
+                  }`}
+                  title="Live 3D Mode (Image 3: Top-Down Plan, Pan & Zoom Only)"
+                >
+                  <Layers className="w-3 h-3" />
+                  <span>Live 3D</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setCameraMode('aerial');
+                  }}
+                  className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer font-bold ${
+                    cameraMode === 'aerial'
+                      ? 'bg-sky-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
+                  }`}
+                  title="Aerial Orbit View (Rotate & Tilt)"
+                >
+                  <Rotate3d className="w-3 h-3" />
+                  <span>Orbit</span>
+                </button>
+                <button
+                  onClick={handleSwitchToVisitor}
+                  className="px-2.5 py-1 rounded-lg text-[11px] transition flex items-center gap-1.5 font-bold cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300"
+                  title="Walk Tour (WASD Walk, Shift Sprint, Mouse-Look)"
+                >
+                  <Gamepad2 className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Walk Tour</span>
+                </button>
+              </div>
+
+              <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
+
+              {/* Duplex Multi-Story Stack */}
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={() => setFloor3DMode(floor3DMode === 'stacked' ? 'isolated' : 'stacked')}
+                  className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 font-medium cursor-pointer ${
+                    floor3DMode === 'stacked'
+                      ? 'bg-indigo-600 text-white font-bold shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300'
+                  }`}
+                  title={buildingModeTitle}
+                >
+                  <Building2 className="w-3 h-3" />
+                  <span>{buildingModeLabel}</span>
+                </button>
+
+                {floor3DMode === 'stacked' && (
+                  <button
+                    onClick={() => setNextFloorGap((prev) => (prev === 0 ? 0.8 : prev === 0.8 ? 1.6 : 0))}
+                    className={`px-2 py-1 rounded-lg text-[11px] transition flex items-center gap-1 font-semibold cursor-pointer ${
+                      nextFloorGap > 0
+                        ? 'bg-amber-500 text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                    }`}
+                    title="Next Floor Attachment Gap View"
+                  >
+                    <span>{nextFloorGap === 0 ? '0m' : `+${nextFloorGap.toFixed(1)}m`}</span>
+                  </button>
+                )}
+              </div>
 
             <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
 
@@ -3662,6 +3904,60 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
               <Layers className="w-3 h-3" />
               <span>{showCeiling ? 'Top: ON' : 'Top: OFF'}</span>
             </button>
+
+            <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
+
+            {/* Atmosphere Lighting Preset Switcher */}
+            <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200/80 dark:border-slate-700/80">
+              <button
+                onClick={() => setAtmosphere('daylight')}
+                className={`px-2 py-1 rounded-md text-[11px] font-semibold transition flex items-center gap-1 cursor-pointer ${
+                  atmosphere === 'daylight'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+                }`}
+                title="Bright Daylight (Natural midday sun & clear sky)"
+              >
+                <Sun className="w-3 h-3" />
+                <span>Day</span>
+              </button>
+              <button
+                onClick={() => setAtmosphere('sunset')}
+                className={`px-2 py-1 rounded-md text-[11px] font-semibold transition flex items-center gap-1 cursor-pointer ${
+                  atmosphere === 'sunset'
+                    ? 'bg-orange-500 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+                }`}
+                title="Golden Hour Sunset (Warm amber sun, dramatic soft shadows)"
+              >
+                <Sunset className="w-3 h-3" />
+                <span>Sunset</span>
+              </button>
+              <button
+                onClick={() => setAtmosphere('night')}
+                className={`px-2 py-1 rounded-md text-[11px] font-semibold transition flex items-center gap-1 cursor-pointer ${
+                  atmosphere === 'night'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+                }`}
+                title="Cozy Evening Night (Moonlight with warm glowing interior room lights)"
+              >
+                <Moon className="w-3 h-3" />
+                <span>Night</span>
+              </button>
+              <button
+                onClick={() => setAtmosphere('studio')}
+                className={`px-2 py-1 rounded-md text-[11px] font-semibold transition flex items-center gap-1 cursor-pointer ${
+                  atmosphere === 'studio'
+                    ? 'bg-slate-700 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+                }`}
+                title="Architectural Studio (Neutral balanced 5500K lighting)"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>Studio</span>
+              </button>
+            </div>
 
             <div className="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
 
@@ -3733,7 +4029,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           </>
         )}
       </div>
-      )}
+      );
+      })()}
 
       {/* Room Jump Pills in Visitor Mode (Placed at bottom-24 right-4 above D-pad, never overlapping top bar) */}
       {!isCustomerMode && cameraMode === 'visitor' && plan.rooms.length > 0 && (

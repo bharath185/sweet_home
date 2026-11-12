@@ -84,17 +84,27 @@ export function getProceduralTexture(textureType: string, tintHex?: string): THR
     return textureCache.get(cacheKey)!;
   }
 
-  // Check if texture is an explicit image URL or Royale Play preset mapping
-  const rpPreset = ROYALE_PLAY_WALL_PRESETS.find((p) => p.id === textureType);
-  const imageUrl = rpPreset ? rpPreset.url : textureType.startsWith('/') ? textureType : null;
+  // Check if texture is an explicit image URL (e.g. uploaded data URI, blob, or asset path)
+  const imageUrl =
+    textureType.startsWith('/') ||
+    textureType.startsWith('data:') ||
+    textureType.startsWith('blob:') ||
+    textureType.startsWith('http://') ||
+    textureType.startsWith('https://')
+      ? textureType
+      : null;
 
   if (imageUrl) {
-    const loadedTex = textureLoader.load(imageUrl);
+    const loadedTex = textureLoader.load(imageUrl, (tex) => {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.generateMipmaps = true;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.needsUpdate = true;
+    });
     loadedTex.wrapS = THREE.RepeatWrapping;
     loadedTex.wrapT = THREE.RepeatWrapping;
-    loadedTex.repeat.set(3, 3);
-    loadedTex.generateMipmaps = true;
-    loadedTex.minFilter = THREE.LinearMipmapLinearFilter;
+    loadedTex.repeat.set(1, 1);
     textureCache.set(cacheKey, loadedTex);
     return loadedTex;
   }
@@ -402,39 +412,6 @@ export function getProceduralTexture(textureType: string, tintHex?: string): THR
       break;
     }
 
-    case 'royale_play_blue':
-    case 'royale_play_azure':
-    case 'royale_play_green':
-    case 'royale_play_ochre':
-    case 'royale_play_salmon':
-    case 'royale_play_yellow': {
-      const baseColors: Record<string, string> = {
-        royale_play_blue: '#1e3a8a',
-        royale_play_azure: '#0284c7',
-        royale_play_green: '#065f46',
-        royale_play_ochre: '#78350f',
-        royale_play_salmon: '#9a3412',
-        royale_play_yellow: '#ca8a04',
-      };
-      const baseColor = tintHex || baseColors[textureType] || '#0284c7';
-      ctx.fillStyle = baseColor;
-      ctx.fillRect(0, 0, 1024, 1024);
-
-      for (let i = 0; i < 4000; i++) {
-        const sx = Math.random() * 1024;
-        const sy = Math.random() * 1024;
-        const radius = 6 + Math.random() * 18;
-        const grad = ctx.createRadialGradient(sx, sy, 1, sx, sy, radius);
-        grad.addColorStop(0, Math.random() > 0.5 ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.28)');
-        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      break;
-    }
-
     case 'royal_ply':
     case 'royal_ply_teak':
     case 'royal_ply_walnut':
@@ -559,15 +536,60 @@ export function getProceduralTexture(textureType: string, tintHex?: string): THR
       break;
     }
 
-    case 'matte_wall_paint': {
-      ctx.fillStyle = tintHex || '#f8fafc';
+    case 'royale_play':
+    case 'royale_play_blue':
+    case 'royale_play_azure':
+    case 'royale_play_green':
+    case 'royale_play_ochre':
+    case 'royale_play_salmon':
+    case 'royale_play_yellow': {
+      const rpPreset = ROYALE_PLAY_WALL_PRESETS.find((p) => p.id === textureType);
+      const baseTone = tintHex || rpPreset?.color || '#065f46';
+      ctx.fillStyle = baseTone;
       ctx.fillRect(0, 0, 1024, 1024);
 
-      // Fine architectural eggshell roller stippling
+      // Multi-layer Organic Asian Paints Royale Play Sponge Stippling
+      // Layer A: Darker porous sponge dabs
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+      for (let i = 0; i < 4500; i++) {
+        const sx = Math.random() * 1024;
+        const sy = Math.random() * 1024;
+        const sr = 3 + Math.random() * 9;
+        ctx.beginPath();
+        ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Layer B: Lighter sponge highlights
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
+      for (let i = 0; i < 4000; i++) {
+        const sx = Math.random() * 1024;
+        const sy = Math.random() * 1024;
+        const sr = 2 + Math.random() * 7;
+        ctx.beginPath();
+        ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Layer C: Fine porous spatter micro-texture
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.10)';
+      for (let i = 0; i < 9000; i++) {
+        const sx = Math.random() * 1024;
+        const sy = Math.random() * 1024;
+        ctx.fillRect(sx, sy, 2, 2);
+      }
+      break;
+    }
+
+    case 'matte_wall_paint': {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      // Fine architectural eggshell roller stippling (neutral white stipple map)
       for (let i = 0; i < 28000; i++) {
         const nx = Math.random() * 1024;
         const ny = Math.random() * 1024;
-        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.035)';
+        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)';
         ctx.fillRect(nx, ny, 1.5, 1.5);
       }
       break;

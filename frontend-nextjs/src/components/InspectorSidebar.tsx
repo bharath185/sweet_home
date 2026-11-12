@@ -455,6 +455,53 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
     onUpdatePlan({ ...plan, rooms: updated, updatedAt: new Date().toISOString() });
   };
 
+  const extractAverageColor = (dataUrl: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve('#64748b');
+        ctx.drawImage(img, 0, 0, 1, 1);
+        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+        const hex = '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        resolve(hex);
+      };
+      img.onerror = () => resolve('#64748b');
+      img.src = dataUrl;
+    });
+  };
+
+  const handleUploadWallTexture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedWall) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (!dataUrl) return;
+      const avgColor = await extractAverageColor(dataUrl);
+      updateWall({ texture: dataUrl, color: avgColor });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleUploadRoomFloorTexture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedRoom) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (!dataUrl) return;
+      const avgColor = await extractAverageColor(dataUrl);
+      updateRoom({ floorTexture: dataUrl, floorColor: avgColor });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   const handleDuplicate = () => {
     if (selectedFurniture) {
       const copy: FurnitureItem = {
@@ -831,6 +878,34 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                       />
                     </div>
                   </div>
+
+                  {/* Upload Custom Floor Tile / Marble Image */}
+                  <div className="pt-2 border-t border-inherit space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1">
+                        <Upload className="w-3.5 h-3.5 text-indigo-400" />
+                        Custom Floor Tile / Marble
+                      </label>
+                      {selectedRoom.floorTexture?.startsWith('data:') && (
+                        <button
+                          onClick={() => updateRoom({ floorTexture: undefined })}
+                          className="text-[10px] text-rose-400 hover:underline cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <label className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 bg-slate-50 dark:bg-slate-900/50 hover:bg-indigo-50/20 transition cursor-pointer text-slate-600 dark:text-slate-300">
+                      <Upload className="w-4 h-4 text-indigo-500" />
+                      <span className="text-xs font-semibold">Upload Tile / Marble Image</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleUploadRoomFloorTexture}
+                      />
+                    </label>
+                  </div>
                 </div>
               ) : selectedWall ? (
                 /* Wall PBR Material & Paint Customizer */
@@ -851,31 +926,38 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1">
-                        <Trees className="w-3 h-3 text-amber-500" />
+                        <Trees className="w-3.5 h-3.5 text-amber-500" />
                         Royal Ply & Wood Paneling
                       </label>
                       <span className="text-[9px] font-semibold text-slate-400">Architectural Veneer</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {ROYAL_PLY_WALL_PRESETS.map((ply) => (
-                        <button
-                          key={ply.id}
-                          onClick={() => updateWall({ texture: ply.id, color: ply.color })}
-                          className={`p-2 rounded-xl border text-left flex items-center gap-2 transition cursor-pointer ${
-                            selectedWall.texture === ply.id
-                              ? 'border-amber-500 ring-1 ring-amber-500 bg-amber-950/40 font-bold text-amber-300'
-                              : isDark
-                              ? 'bg-slate-900/60 hover:bg-slate-800 border-slate-800 text-slate-300'
-                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                          }`}
-                        >
-                          <span
-                            className="w-4 h-4 rounded-full border border-white/30 shrink-0 shadow-2xs"
-                            style={{ backgroundColor: ply.color }}
-                          />
-                          <span className="text-[10px] truncate leading-tight">{ply.name}</span>
-                        </button>
-                      ))}
+                    <div className="grid grid-cols-3 gap-2">
+                      {ROYAL_PLY_WALL_PRESETS.map((ply) => {
+                        const isPlySelected = selectedWall.texture === ply.id;
+                        return (
+                          <button
+                            key={ply.id}
+                            onClick={() => updateWall({ texture: ply.id, color: ply.color })}
+                            title={ply.name}
+                            className={`relative h-14 rounded-xl border-2 transition-all cursor-pointer overflow-hidden shadow-xs hover:scale-[1.03] ${
+                              isPlySelected
+                                ? 'border-amber-400 ring-2 ring-amber-400/80 shadow-md scale-[1.02]'
+                                : 'border-slate-300 dark:border-slate-700/80 hover:border-amber-400/70'
+                            }`}
+                            style={{
+                              backgroundColor: ply.color,
+                              backgroundImage:
+                                'linear-gradient(135deg, rgba(255,255,255,0.14) 0%, transparent 40%, rgba(0,0,0,0.22) 100%), repeating-linear-gradient(90deg, transparent, transparent 13px, rgba(0,0,0,0.18) 13px, rgba(0,0,0,0.18) 15px)',
+                            }}
+                          >
+                            {isPlySelected && (
+                              <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-md">
+                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -883,65 +965,75 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                   <div className="space-y-1.5 pt-2 border-t border-inherit">
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
-                        <Sparkles className="w-3 h-3 text-sky-400" />
+                        <Sparkles className="w-3.5 h-3.5 text-sky-400" />
                         Royale Play Sponge Paints
                       </label>
                       <span className="text-[9px] font-semibold text-slate-400">Asian Paints</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {ROYALE_PLAY_WALL_PRESETS.map((rp) => (
-                        <button
-                          key={rp.id}
-                          onClick={() => updateWall({ texture: rp.id, color: rp.color })}
-                          className={`p-2 rounded-xl border text-left flex items-center gap-2 transition cursor-pointer ${
-                            selectedWall.texture === rp.id
-                              ? 'border-sky-500 ring-1 ring-sky-500 bg-sky-950/40 font-bold text-sky-300'
-                              : isDark
-                              ? 'bg-slate-900/60 hover:bg-slate-800 border-slate-800 text-slate-300'
-                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                          }`}
-                        >
-                          <span
-                            className="w-4 h-4 rounded-full border border-white/30 shrink-0 shadow-2xs"
-                            style={{ backgroundColor: rp.color }}
-                          />
-                          <span className="text-[10px] truncate leading-tight">{rp.name}</span>
-                        </button>
-                      ))}
+                    <div className="grid grid-cols-3 gap-2">
+                      {ROYALE_PLAY_WALL_PRESETS.map((rp) => {
+                        const isRpSelected = selectedWall.texture === rp.id;
+                        return (
+                          <button
+                            key={rp.id}
+                            onClick={() => updateWall({ texture: rp.id, color: rp.color })}
+                            title={rp.name}
+                            className={`relative h-14 rounded-xl border-2 transition-all cursor-pointer overflow-hidden shadow-xs hover:scale-[1.03] ${
+                              isRpSelected
+                                ? 'border-sky-400 ring-2 ring-sky-400/80 shadow-md scale-[1.02]'
+                                : 'border-slate-300 dark:border-slate-700/80 hover:border-sky-400/70'
+                            }`}
+                            style={{
+                              backgroundColor: rp.color,
+                              backgroundImage: `url(${rp.url})`,
+                              backgroundSize: 'cover',
+                              backgroundPosition: 'center',
+                            }}
+                          >
+                            {isRpSelected && (
+                              <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-sky-500 text-white flex items-center justify-center shadow-md">
+                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
                   {/* Exposed Brick & Architectural Cladding */}
                   <div className="space-y-1.5 pt-2 border-t border-inherit">
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                      <Box className="w-3 h-3 text-red-400" />
+                      <Box className="w-3.5 h-3.5 text-red-400" />
                       Realistic Bricks & Cladding
                     </label>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {[
-                        { id: '', name: 'Smooth Matte Wall', color: '#f8fafc' },
-                        ...BRICK_WALL_PRESETS,
-                        { id: 'concrete_loft', name: 'Raw Architectural Concrete', color: '#94a3b8' },
-                        { id: 'marble_carrara', name: 'Carrara Marble Wall', color: '#f8fafc' },
-                      ].map((tex) => (
-                        <button
-                          key={tex.id}
-                          onClick={() => updateWall({ texture: tex.id || undefined, color: tex.color })}
-                          className={`p-2 rounded-xl border text-left flex items-center gap-2 transition cursor-pointer ${
-                            (selectedWall.texture || '') === tex.id
-                              ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-950/30 font-bold text-indigo-300'
-                              : isDark
-                              ? 'bg-slate-900/60 hover:bg-slate-800 border-slate-800 text-slate-300'
-                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                          }`}
-                        >
-                          <span
-                            className="w-4 h-4 rounded-full border border-white/30 shrink-0 shadow-2xs"
-                            style={{ backgroundColor: tex.color }}
-                          />
-                          <span className="text-[10px] truncate leading-tight">{tex.name}</span>
-                        </button>
-                      ))}
+                    <div className="grid grid-cols-3 gap-2">
+                      {BRICK_WALL_PRESETS.map((tex) => {
+                        const isBrickSelected = (selectedWall.texture || '') === tex.id;
+                        return (
+                          <button
+                            key={tex.id}
+                            onClick={() => updateWall({ texture: tex.id || undefined, color: tex.color })}
+                            title={tex.name}
+                            className={`relative h-14 rounded-xl border-2 transition-all cursor-pointer overflow-hidden shadow-xs hover:scale-[1.03] ${
+                              isBrickSelected
+                                ? 'border-indigo-400 ring-2 ring-indigo-400/80 shadow-md scale-[1.02]'
+                                : 'border-slate-300 dark:border-slate-700/80 hover:border-indigo-400/70'
+                            }`}
+                            style={{
+                              backgroundColor: tex.color,
+                              backgroundImage:
+                                'repeating-linear-gradient(0deg, rgba(255,255,255,0.22) 0px, rgba(255,255,255,0.22) 1.5px, transparent 1.5px, transparent 12px), repeating-linear-gradient(90deg, rgba(0,0,0,0.22) 0px, rgba(0,0,0,0.22) 1.5px, transparent 1.5px, transparent 20px)',
+                            }}
+                          >
+                            {isBrickSelected && (
+                              <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-indigo-500 text-white flex items-center justify-center shadow-md">
+                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -959,30 +1051,33 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                       )}
                     </label>
 
-                    {/* Designer Paint Swatches */}
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {DESIGNER_PAINT_PRESETS.map((swatch) => (
-                        <button
-                          key={swatch.name}
-                          onClick={() => updateWall({ color: swatch.color })}
-                          title={swatch.name}
-                          className={`p-1.5 rounded-lg border text-center flex flex-col items-center gap-1 transition cursor-pointer ${
-                            selectedWall.color === swatch.color && !selectedWall.texture
-                              ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-950/20'
-                              : isDark
-                              ? 'bg-slate-900/60 hover:bg-slate-800 border-slate-800'
-                              : 'bg-white hover:bg-slate-50 border-slate-200'
-                          }`}
-                        >
-                          <span
-                            className="w-4 h-4 rounded-full border border-black/20 shadow-xs"
+                    {/* Designer Paint Swatches - Big Solid Color Tiles */}
+                    <div className="grid grid-cols-4 gap-2">
+                      {DESIGNER_PAINT_PRESETS.map((swatch) => {
+                        const isSwatchSelected =
+                          selectedWall.color === swatch.color && !selectedWall.texture;
+                        return (
+                          <button
+                            key={swatch.name}
+                            onClick={() => updateWall({ color: swatch.color, texture: undefined })}
+                            title={swatch.name}
+                            className={`relative h-11 rounded-lg border-2 transition-all cursor-pointer shadow-xs hover:scale-[1.04] ${
+                              isSwatchSelected
+                                ? 'border-indigo-400 ring-2 ring-indigo-400/80 shadow-md scale-[1.02]'
+                                : 'border-slate-300 dark:border-slate-700/80 hover:border-indigo-400/60'
+                            }`}
                             style={{ backgroundColor: swatch.color }}
-                          />
-                          <span className="text-[9px] truncate w-full leading-tight font-medium">
-                            {swatch.name}
-                          </span>
-                        </button>
-                      ))}
+                          >
+                            {isSwatchSelected && (
+                              <span className="absolute inset-0 flex items-center justify-center text-white drop-shadow-md">
+                                <span className="w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                                  <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                </span>
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
 
                     <div className="flex items-center gap-2 pt-1">
@@ -1003,6 +1098,34 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                         }`}
                       />
                     </div>
+                  </div>
+
+                  {/* Upload Custom Wallpaper / Pattern Image */}
+                  <div className="pt-2 border-t border-inherit space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
+                        <Upload className="w-3.5 h-3.5 text-sky-400" />
+                        Custom Wallpaper / Tile Image
+                      </label>
+                      {selectedWall.texture?.startsWith('data:') && (
+                        <button
+                          onClick={() => updateWall({ texture: undefined })}
+                          className="text-[10px] text-rose-400 hover:underline cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <label className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-sky-500 bg-slate-50 dark:bg-slate-900/50 hover:bg-sky-50/20 transition cursor-pointer text-slate-600 dark:text-slate-300">
+                      <Upload className="w-4 h-4 text-sky-500" />
+                      <span className="text-xs font-semibold">Upload Wallpaper / Texture</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleUploadWallTexture}
+                      />
+                    </label>
                   </div>
                 </div>
               ) : (
@@ -1985,31 +2108,38 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <label className="text-[10px] font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1">
-                          <Trees className="w-3 h-3 text-amber-500" />
+                          <Trees className="w-3.5 h-3.5 text-amber-500" />
                           Royal Ply & Paneling
                         </label>
                         <span className="text-[9px] text-slate-400">Architectural Veneer</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {ROYAL_PLY_WALL_PRESETS.map((ply) => (
-                          <button
-                            key={ply.id}
-                            onClick={() => updateWall({ texture: ply.id, color: ply.color })}
-                            className={`p-1.5 rounded-lg border text-left flex items-center gap-1.5 transition cursor-pointer ${
-                              selectedWall?.texture === ply.id
-                                ? 'border-amber-500 ring-1 ring-amber-500 bg-amber-950/40 font-bold text-amber-300'
-                                : isDark
-                                ? 'bg-slate-900/60 hover:bg-slate-800 border-slate-800 text-slate-300'
-                                : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                            }`}
-                          >
-                            <span
-                              className="w-3.5 h-3.5 rounded-full border border-white/30 shrink-0 shadow-2xs"
-                              style={{ backgroundColor: ply.color }}
-                            />
-                            <span className="text-[10px] truncate leading-tight">{ply.name}</span>
-                          </button>
-                        ))}
+                      <div className="grid grid-cols-3 gap-2">
+                        {ROYAL_PLY_WALL_PRESETS.map((ply) => {
+                          const isPlySelected = selectedWall?.texture === ply.id;
+                          return (
+                            <button
+                              key={ply.id}
+                              onClick={() => updateWall({ texture: ply.id, color: ply.color })}
+                              title={ply.name}
+                              className={`relative h-14 rounded-xl border-2 transition-all cursor-pointer overflow-hidden shadow-xs hover:scale-[1.03] ${
+                                isPlySelected
+                                  ? 'border-amber-400 ring-2 ring-amber-400/80 shadow-md scale-[1.02]'
+                                  : 'border-slate-300 dark:border-slate-700/80 hover:border-amber-400/70'
+                              }`}
+                              style={{
+                                backgroundColor: ply.color,
+                                backgroundImage:
+                                  'linear-gradient(135deg, rgba(255,255,255,0.14) 0%, transparent 40%, rgba(0,0,0,0.22) 100%), repeating-linear-gradient(90deg, transparent, transparent 13px, rgba(0,0,0,0.18) 13px, rgba(0,0,0,0.18) 15px)',
+                              }}
+                            >
+                              {isPlySelected && (
+                                <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-md">
+                                  <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -2017,30 +2147,37 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                     <div className="space-y-1.5 pt-2 border-t border-inherit">
                       <div className="flex items-center justify-between">
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                          <Box className="w-3 h-3 text-red-400" />
+                          <Box className="w-3.5 h-3.5 text-red-400" />
                           Realistic Bricks & Stone
                         </label>
                       </div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {BRICK_WALL_PRESETS.map((tex) => (
-                          <button
-                            key={tex.id}
-                            onClick={() => updateWall({ texture: tex.id, color: tex.color })}
-                            className={`p-1.5 rounded-lg border text-left flex items-center gap-1.5 transition cursor-pointer ${
-                              selectedWall?.texture === tex.id
-                                ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-950/30 font-bold text-indigo-300'
-                                : isDark
-                                ? 'bg-slate-900/60 hover:bg-slate-800 border-slate-800 text-slate-300'
-                                : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                            }`}
-                          >
-                            <span
-                              className="w-3.5 h-3.5 rounded-full border border-white/30 shrink-0 shadow-2xs"
-                              style={{ backgroundColor: tex.color }}
-                            />
-                            <span className="text-[10px] truncate leading-tight">{tex.name}</span>
-                          </button>
-                        ))}
+                      <div className="grid grid-cols-3 gap-2">
+                        {BRICK_WALL_PRESETS.map((tex) => {
+                          const isBrickSelected = selectedWall?.texture === tex.id;
+                          return (
+                            <button
+                              key={tex.id}
+                              onClick={() => updateWall({ texture: tex.id, color: tex.color })}
+                              title={tex.name}
+                              className={`relative h-14 rounded-xl border-2 transition-all cursor-pointer overflow-hidden shadow-xs hover:scale-[1.03] ${
+                                isBrickSelected
+                                  ? 'border-indigo-400 ring-2 ring-indigo-400/80 shadow-md scale-[1.02]'
+                                  : 'border-slate-300 dark:border-slate-700/80 hover:border-indigo-400/70'
+                              }`}
+                              style={{
+                                backgroundColor: tex.color,
+                                backgroundImage:
+                                  'repeating-linear-gradient(0deg, rgba(255,255,255,0.22) 0px, rgba(255,255,255,0.22) 1.5px, transparent 1.5px, transparent 12px), repeating-linear-gradient(90deg, rgba(0,0,0,0.22) 0px, rgba(0,0,0,0.22) 1.5px, transparent 1.5px, transparent 20px)',
+                              }}
+                            >
+                              {isBrickSelected && (
+                                <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-indigo-500 text-white flex items-center justify-center shadow-md">
+                                  <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -2048,31 +2185,39 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                     <div className="space-y-1.5 pt-2 border-t border-inherit">
                       <div className="flex items-center justify-between">
                         <label className="text-[10px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
-                          <Sparkles className="w-3 h-3 text-sky-400" />
+                          <Sparkles className="w-3.5 h-3.5 text-sky-400" />
                           Royale Play Paints
                         </label>
                         <span className="text-[9px] text-slate-400">Asian Paints</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {ROYALE_PLAY_WALL_PRESETS.map((rp) => (
-                          <button
-                            key={rp.id}
-                            onClick={() => updateWall({ texture: rp.id, color: rp.color })}
-                            className={`p-1.5 rounded-lg border text-left flex items-center gap-1.5 transition cursor-pointer ${
-                              selectedWall?.texture === rp.id
-                                ? 'border-sky-500 ring-1 ring-sky-500 bg-sky-950/40 font-bold text-sky-300'
-                                : isDark
-                                ? 'bg-slate-900/60 hover:bg-slate-800 border-slate-800 text-slate-300'
-                                : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                            }`}
-                          >
-                            <span
-                              className="w-3.5 h-3.5 rounded-full border border-white/30 shrink-0 shadow-2xs"
-                              style={{ backgroundColor: rp.color }}
-                            />
-                            <span className="text-[10px] truncate leading-tight">{rp.name}</span>
-                          </button>
-                        ))}
+                      <div className="grid grid-cols-3 gap-2">
+                        {ROYALE_PLAY_WALL_PRESETS.map((rp) => {
+                          const isRpSelected = selectedWall?.texture === rp.id;
+                          return (
+                            <button
+                              key={rp.id}
+                              onClick={() => updateWall({ texture: rp.id, color: rp.color })}
+                              title={rp.name}
+                              className={`relative h-14 rounded-xl border-2 transition-all cursor-pointer overflow-hidden shadow-xs hover:scale-[1.03] ${
+                                isRpSelected
+                                  ? 'border-sky-400 ring-2 ring-sky-400/80 shadow-md scale-[1.02]'
+                                  : 'border-slate-300 dark:border-slate-700/80 hover:border-sky-400/70'
+                              }`}
+                              style={{
+                                backgroundColor: rp.color,
+                                backgroundImage: `url(${rp.url})`,
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center',
+                              }}
+                            >
+                              {isRpSelected && (
+                                <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-sky-500 text-white flex items-center justify-center shadow-md">
+                                  <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -2092,50 +2237,83 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                         )}
                       </div>
 
-                      {/* Popular Designer Paint Swatches */}
-                      <div className="grid grid-cols-4 gap-1">
-                        {DESIGNER_PAINT_PRESETS.map((swatch) => (
-                          <button
-                            key={swatch.name}
-                            onClick={() => updateWall({ color: swatch.color, texture: undefined })}
-                            title={swatch.name}
-                            className={`p-1 rounded-md border text-center flex flex-col items-center gap-0.5 transition cursor-pointer ${
-                              selectedWall?.color === swatch.color && !selectedWall?.texture
-                                ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-950/20'
-                                : isDark
-                                ? 'bg-slate-900/60 hover:bg-slate-800 border-slate-800'
-                                : 'bg-white hover:bg-slate-50 border-slate-200'
-                            }`}
-                          >
-                            <span
-                              className="w-3.5 h-3.5 rounded-full border border-black/20 shadow-2xs"
+                      {/* Popular Designer Paint Swatches - Big Solid Color Tiles */}
+                      <div className="grid grid-cols-4 gap-2">
+                        {DESIGNER_PAINT_PRESETS.map((swatch) => {
+                          const isSwatchSelected =
+                            selectedWall?.color === swatch.color && !selectedWall?.texture;
+                          return (
+                            <button
+                              key={swatch.name}
+                              onClick={() => updateWall({ color: swatch.color, texture: undefined })}
+                              title={swatch.name}
+                              className={`relative h-11 rounded-lg border-2 transition-all cursor-pointer shadow-xs hover:scale-[1.04] ${
+                                isSwatchSelected
+                                  ? 'border-indigo-400 ring-2 ring-indigo-400/80 shadow-md scale-[1.02]'
+                                  : 'border-slate-300 dark:border-slate-700/80 hover:border-indigo-400/60'
+                              }`}
                               style={{ backgroundColor: swatch.color }}
-                            />
-                            <span className="text-[8px] truncate w-full leading-tight font-medium">
-                              {swatch.name}
-                            </span>
-                          </button>
-                        ))}
+                            >
+                              {isSwatchSelected && (
+                                <span className="absolute inset-0 flex items-center justify-center text-white drop-shadow-md">
+                                  <span className="w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                  </span>
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
 
                       <div className="flex items-center gap-2 pt-1">
                         <input
                           type="color"
                           value={selectedWall?.color || '#f8fafc'}
-                          onChange={(e) => updateWall({ color: e.target.value })}
-                          className="w-8 h-8 rounded-sm border-0 cursor-pointer bg-transparent"
+                          onChange={(e) => updateWall({ color: e.target.value, texture: undefined })}
+                          className="w-9 h-9 rounded-lg border border-slate-300 dark:border-slate-700 cursor-pointer p-0.5 bg-transparent"
+                          title="Custom Color Picker"
                         />
                         <input
                           type="text"
                           value={selectedWall?.color || '#f8fafc'}
-                          onChange={(e) => updateWall({ color: e.target.value })}
-                          className={`flex-1 px-2.5 py-1 text-xs font-mono rounded-sm border focus:outline-none ${
+                          onChange={(e) => updateWall({ color: e.target.value, texture: undefined })}
+                          className={`flex-1 px-3 py-1.5 text-xs font-mono rounded-lg border focus:outline-none ${
                             isDark
                               ? 'bg-slate-900 border-slate-800 text-white'
                               : 'bg-white border-slate-200 text-slate-900'
                           }`}
+                          placeholder="#HEX Color"
                         />
                       </div>
+                    </div>
+
+                    {/* Custom Wallpaper Upload in Floating Modal */}
+                    <div className="pt-2 border-t border-inherit space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
+                          <Upload className="w-3.5 h-3.5 text-sky-400" />
+                          Custom Wallpaper / Texture Image
+                        </label>
+                        {selectedWall?.texture?.startsWith('data:') && (
+                          <button
+                            onClick={() => updateWall({ texture: undefined })}
+                            className="text-[9px] text-rose-400 hover:underline cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      <label className="flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 hover:border-sky-500 bg-slate-50 dark:bg-slate-900/50 hover:bg-sky-50/20 transition cursor-pointer text-slate-600 dark:text-slate-300">
+                        <Upload className="w-3.5 h-3.5 text-sky-500" />
+                        <span className="text-[11px] font-semibold">Upload Wallpaper Image</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleUploadWallTexture}
+                        />
+                      </label>
                     </div>
                   </div>
 
